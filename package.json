@@ -22,6 +22,7 @@
     "firebase": "^12.3.0",
     "firebase-admin": "^13.6.0",
     "framer-motion": "^6.5.1",
+    "git-filter-repo": "^0.0.30",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "pg": "^8.16.3",
