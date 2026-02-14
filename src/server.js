@@ -226,7 +226,7 @@ app.post("/api/mfa/reset", async (req, res) => {
    ============================================================ */
 const contabilidadRoutes = require("./routes/contabilidad.routes");
 const mantenimientoRoutes = require("./routes/mantenimiento.routes");
-const seguridadRoutes = require("./routes/Seguridad.routes");
+const seguridadRoutes = require("./routes/seguridad.routes");
 const bitacoraRoutes = require("./routes/bitacora.routes");
 const ventasRoutes = require("./routes/ventas.routes");
 const comprasRoutes = require("./routes/compras.routes");
