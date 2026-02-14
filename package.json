@@ -1,0 +1,76 @@
+{
+  "name": "mi-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@chakra-ui/accordion": "^2.3.1",
+    "@chakra-ui/icons": "^2.2.4",
+    "@chakra-ui/react": "^2.10.9",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.12.2",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "file-saver": "^2.0.5",
+    "firebase": "^12.3.0",
+    "firebase-admin": "^13.6.0",
+    "framer-motion": "^6.5.1",
+    "git-filter-repo": "^0.0.30",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^6.28.0",
+    "react-scripts": "5.0.1",
+    "recharts": "^3.1.2",
+    "speakeasy": "^2.0.0",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5",
+    "xlsx-style": "^0.8.13"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "server": "cross-env API_PORT=4000 nodemon src/server.js",
+    "dev": "npm run kill-ports && concurrently -n WEB,API -c cyan,yellow \"cross-env PORT=3001 react-scripts start\" \"cross-env API_PORT=4000 nodemon src/server.js\"",
+    "kill-ports": "npx kill-port 3001 4000"
+  },
+  "proxy": "http://localhost:4000",
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "kill-port": "^2.0.1",
+    "nodemon": "^3.1.11"
+  }
+}
