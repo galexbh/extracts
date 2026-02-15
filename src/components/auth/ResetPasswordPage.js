@@ -3,7 +3,7 @@ import {
   Box, Flex, Heading, FormControl, FormLabel, Input, Button,
   Text, useToast, Image, Stack, FormHelperText, useColorModeValue
 } from "@chakra-ui/react";
-import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { confirmPasswordReset, verifyPasswordResetCode, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";
 import { traducirErrorFirebase } from "../../utils/firebaseErrors"; // ✅ Importar traducciones
 import { API_URL } from "../../config";
@@ -59,6 +59,24 @@ export default function ResetPasswordPage() {
 
     try {
       setLoading(true);
+
+      // 🔒 Verificar que la nueva contraseña sea diferente a la actual
+      try {
+        await signInWithEmailAndPassword(auth, email, pwd1);
+        // Si el login fue exitoso, la contraseña es la misma
+        await auth.signOut(); // Cerrar sesión inmediatamente
+        toast({
+          title: "Contraseña repetida",
+          description: "La nueva contraseña debe ser diferente a la actual. Por favor ingresa una contraseña nueva.",
+          status: "error",
+          duration: 5000,
+        });
+        setLoading(false);
+        return; // No continuar con el restablecimiento
+      } catch (signInError) {
+        // Si falla el login, significa que la contraseña es diferente → continuar ✅
+        console.log("✅ La nueva contraseña es diferente a la actual");
+      }
 
       // 1️⃣ Restablecer contraseña en Firebase
       await confirmPasswordReset(auth, code, pwd1);
