@@ -38,7 +38,7 @@ import {
 import { auth } from "../../firebase";
 import signInLogo from "./log.png";
 import { mfaGenerate, mfaVerify } from "../auth/mfaClient";
-
+import { traducirErrorFirebase } from "../../utils/firebaseErrors";
 import { API_URL } from "../../config";
 
 export default function Login() {
@@ -67,14 +67,18 @@ export default function Login() {
   useEffect(() => {
     const savedRemember = localStorage.getItem("rememberMe") === "true";
     const savedEmail = localStorage.getItem("rememberEmail") || "";
+    const savedPass = localStorage.getItem("rememberPass") || "";
     setRememberMe(savedRemember);
-    if (savedRemember && savedEmail) setUser(savedEmail);
+    if (savedRemember && savedEmail) {
+      setUser(savedEmail);
+      if (savedPass) setPass(atob(savedPass)); // decodificar base64
+    }
   }, []);
 
   const safeEmail = (s) => (s || "").trim().toLowerCase();
 
   const showErr = (e, fallback) => {
-    const msg = e?.message || fallback || "Error desconocido";
+    const msg = traducirErrorFirebase(e?.code, e?.message) || fallback || "Error desconocido";
     setError(msg);
     toast({
       title: "Error",
@@ -111,14 +115,21 @@ export default function Login() {
       // ✅ Guardar UID y correo (para Sidebar y backend)
       localStorage.setItem("uid", userUid);
       localStorage.setItem("userEmail", email);
-      console.log("✅ UID guardado en localStorage:", userUid);
-      console.log("📧 Correo guardado correctamente:", email);
 
-      // ✅ Definir almacenamiento persistente
+      // 💾 Recordar dispositivo: guardar o limpiar email + contraseña
+      if (rememberMe) {
+        localStorage.setItem("rememberMe", "true");
+        localStorage.setItem("rememberEmail", email);
+        localStorage.setItem("rememberPass", btoa(pass)); // Base64
+      } else {
+        localStorage.removeItem("rememberMe");
+        localStorage.removeItem("rememberEmail");
+        localStorage.removeItem("rememberPass");
+      }
+
+      // Token: en localStorage si recuerda, en sessionStorage si no
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem("idToken", idToken);
-      storage.setItem("rememberMe", rememberMe ? "true" : "false");
-      storage.setItem("rememberEmail", email);
 
       // ✅ Guardar datos básicos del usuario
       localStorage.setItem(
@@ -208,7 +219,7 @@ export default function Login() {
     } catch (e) {
       toast({
         title: "Error",
-        description: e.message,
+        description: traducirErrorFirebase(e?.code, e?.message),
         status: "error",
       });
     }

@@ -71,6 +71,7 @@ export default function CrudTabla({
   );
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sanitizeWarn, setSanitizeWarn] = useState({}); // ⚠️ aviso de carácter bloqueado
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -84,10 +85,10 @@ export default function CrudTabla({
         f.type === "boolean"
           ? false
           : f.type === "number"
-          ? 0
-          : f.type === "date" || f.type === "datetime"
-          ? null
-          : "",
+            ? 0
+            : f.type === "date" || f.type === "datetime"
+              ? null
+              : "",
     }),
     { [idKey]: null }
   );
@@ -111,9 +112,12 @@ export default function CrudTabla({
     }
   }, [abrirModal, proveedorBloqueado, onOpen, setEditing]);
 
-  // ============================================================
-  // RECARGAR DATOS
-  // ============================================================
+  const handleOnClose = () => {
+    setEditing(blankObj);
+    setErrors({});
+    setSanitizeWarn({});
+    onClose();
+  };
   const reloadData = async () => {
     try {
       setLoading(true);
@@ -162,7 +166,7 @@ export default function CrudTabla({
 
       await api[method](url, editing);
       toast({ title: "✅ Registro guardado correctamente", status: "success" });
-      onClose();
+      handleOnClose();
       await reloadData();
     } catch (err) {
       console.error("❌ Error al guardar:", err);
@@ -201,7 +205,19 @@ export default function CrudTabla({
   // CAMBIO EN CAMPOS — CON VALIDACIÓN EN VIVO
   // ============================================================
   const handleChangeField = (f, rawVal) => {
-    const newVal = rawVal?.target ? rawVal.target.value : rawVal;
+    let newVal = rawVal?.target ? rawVal.target.value : rawVal;
+    const original = newVal;
+
+    // 🧹 Filtrar caracteres no permitidos en tiempo real
+    if (f.sanitize && typeof f.sanitize === "function") {
+      newVal = f.sanitize(newVal);
+      if (newVal !== original) {
+        setSanitizeWarn((prev) => ({ ...prev, [f.name]: true }));
+        setTimeout(() => {
+          setSanitizeWarn((prev) => ({ ...prev, [f.name]: false }));
+        }, 2500);
+      }
+    }
 
     setEditing((prev) => ({ ...prev, [f.name]: newVal }));
 
@@ -262,19 +278,27 @@ export default function CrudTabla({
             onChange={(e) => handleChangeField(f, e)}
             isInvalid={!!error}
             errorBorderColor="red.500"
+            autoComplete={f.name === "username" || f.name === "password" ? "off" : "default"}
           />
         );
         break;
     }
 
+    // Mensaje: aviso de caracter tiene prioridad sobre error de validación
+    const warnActive = sanitizeWarn[f.name];
+
     return (
       <>
         {inputField}
-        {error && (
+        {warnActive ? (
+          <Text color="orange.500" fontSize="xs" mt={1} fontWeight="medium">
+            ⚠️ Solo se permiten letras y espacios. No se admiten números ni caracteres especiales.
+          </Text>
+        ) : error ? (
           <Text color="red.500" fontSize="sm" mt={1}>
             {error}
           </Text>
-        )}
+        ) : null}
       </>
     );
   };
@@ -321,7 +345,15 @@ export default function CrudTabla({
           </Menu>
         ) : (
           <>
-            <Button colorScheme="green" size="sm" onClick={onOpen}>
+            <Button 
+              colorScheme="green" 
+              size="sm" 
+              onClick={() => {
+                setEditing(blankObj);
+                setErrors({});
+                onOpen();
+              }}
+            >
               + Agregar
             </Button>
             <IconButton
@@ -416,9 +448,9 @@ export default function CrudTabla({
                       onClick={
                         i === 0
                           ? () => {
-                              setEditing({ ...blankObj, ...r });
-                              onOpen();
-                            }
+                            setEditing({ ...blankObj, ...r });
+                            onOpen();
+                          }
                           : undefined
                       }
                     >
@@ -433,7 +465,7 @@ export default function CrudTabla({
       </Box>
 
       {/* Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
+      <Modal isOpen={isOpen} onClose={handleOnClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent mx="auto" w={{ base: "90%", md: "600px" }} bg={modalBg}>
           <ModalHeader>{editing[idKey] ? "Editar" : "Agregar"}</ModalHeader>
@@ -449,13 +481,13 @@ export default function CrudTabla({
 
           <ModalFooter>
             {typeof customButtons === "function" ? (
-              customButtons(editing, onClose, handleSave)
+              customButtons(editing, handleOnClose, handleSave)
             ) : (
               <>
                 <Button colorScheme="green" onClick={handleSave} isLoading={loading}>
                   Guardar
                 </Button>
-                <Button variant="ghost" ml={3} onClick={onClose}>
+                <Button variant="ghost" ml={3} onClick={handleOnClose}>
                   Cancelar
                 </Button>
               </>

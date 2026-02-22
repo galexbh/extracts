@@ -31,8 +31,8 @@ import {
   validarRequerido,
   validarEmailSeguridad,
   validarLongitudMinima,
-  // Necesitamos una función para validar contraseñas si aplica
-} from "../../utils/validaciones"; // Asume esta ruta
+  validarPassword,
+} from "../../utils/validaciones";
 
 export default function Usuarios() {
   const toast = useToast();
@@ -109,71 +109,67 @@ export default function Usuarios() {
   const fields = [
     {
       name: "nombre_usuario",
-      label: "Nombre del Usuario",
+      label: "Nombre del Usuario",
       type: "text",
-      required: true,
-       // Requerido + Mínimo 3 caracteres
-      validate: (valor) => 
-        validarRequerido(valor, "El Nombre de Usuario") || 
-        validarLongitudMinima(valor, "El Nombre de Usuario", 3),
-      placeholderText: "Ej. Juan Perez"
-    },
-    {
-      name: "username",
-      label: "Correo",
-      type: "text",
-      required: true,
-      // Requerido + Mínimo 3 caracteres + Formato de Email (tu versión)
-      validate: (valor) =>
-        validarRequerido(valor, "El Correo") || 
-        validarLongitudMinima(valor, "El Correo", 3) || 
-        validarEmailSeguridad(valor), // ✅ ¡Aquí está el cambio!
-      placeholderText: "Ej. usuario@dominio.com",
-    },
+      required: true,
+      // Solo letras (con acentos y ñ), espacios, guion y punto
+      sanitize: (val) => val.replace(/[^A-Za-zÀ-ÖØ-öø-ɏ\s.'-]/g, ""),
+      validate: (valor) =>
+        validarRequerido(valor, "El nombre de usuario") ||
+        validarLongitudMinima(valor, "El nombre de usuario", 3) ||
+        (valor?.trim().length > 80 ? "El nombre no puede superar 80 caracteres." : null),
+      placeholderText: "Ej. Juan Pérez",
+    },
+    {
+      name: "username",
+      label: "Correo electrónico",
+      type: "text",
+      required: true,
+      validate: (valor) =>
+        validarRequerido(valor, "El correo electrónico") ||
+        validarEmailSeguridad(valor),
+      placeholderText: "Ej. usuario@dominio.com",
+    },
     {
       name: "password",
       label: "Contraseña",
       type: "password",
       required: false,
-      // ✅ VALIDACIÓN
       validate: (valor, form) => {
-        // Si estamos creando un nuevo usuario (sin id), la contraseña es obligatoria
-        if (!form.id_usuario && !valor) {
-          return "La Contraseña es obligatoria al crear un nuevo usuario.";
+        const esNuevo = !form?.id_usuario;
+        if (esNuevo) {
+          // Creación: obligatoria + complejidad completa
+          return validarPassword(valor, true);
         }
-        // Opcional: Agregar aquí una validación de complejidad (mínimo 8 caracteres, etc.)
-        return null;
+        // Edición: solo validar si escribió algo
+        if (!valor || valor.trim() === "") return null;
+        return validarPassword(valor, false);
       },
-      // ✅ PLACEHOLDER
-      placeholderText: "Ingrese una contraseña (mín. 8 caracteres)",
+      placeholderText: "Mín. 8 caracteres, mayúscula, número y símbolo",
     },
     {
       name: "id_rol",
       label: "Rol",
       type: "select",
       required: true,
-      // ✅ VALIDACIÓN: Requerido para Select
-      validate: (valor) => validarRequerido(valor, "El Rol"),
+      validate: (valor) => validarRequerido(valor, "El rol"),
       options: roles.map((r) => ({
         label: r.nombre_rol,
         value: r.id_rol,
       })),
-      // ✅ PLACEHOLDER
-      placeholderText: "Seleccione un Rol",
+      placeholderText: "Seleccione un rol",
     },
     {
       name: "id_estado_usuario",
       label: "Estado",
       type: "select",
       required: true,
-      // ✅ VALIDACIÓN: Requerido para Select
-      validate: (valor) => validarRequerido(valor, "El Estado"),
+      validate: (valor) => validarRequerido(valor, "El estado"),
       options: estados.map((e) => ({
         label: e.nombre_estado,
         value: e.id_estado_usuario ?? e.id_estado_usuar,
       })),
-      // ✅ PLACEHOLDER
-      placeholderText: "Seleccione un Estado",
+      placeholderText: "Seleccione un estado",
     },
   ];
 
@@ -195,8 +191,8 @@ export default function Usuarios() {
     "Fecha Creación": (r) =>
       r.fecha_creacion
         ? new Date(r.fecha_creacion).toLocaleString("es-HN", {
-            timeZone: "America/Tegucigalpa",
-          })
+          timeZone: "America/Tegucigalpa",
+        })
         : "—",
   };
 
@@ -240,7 +236,7 @@ export default function Usuarios() {
            ✅ DASHBOARD
       ====================================================== */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
-        
+
         {/* Total */}
         <Box
           bg={cardBg}

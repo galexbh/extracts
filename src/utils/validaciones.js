@@ -57,9 +57,9 @@ export const validarEmail = (email) => {
 // ==========================
 export const validarLongitudMinima = (valor, campo = "Campo", min = 3) => {
   if (valor === null || valor === undefined) return null; // Ya lo maneja validarRequerido
-  
+
   const texto = String(valor).trim();
-  
+
   if (texto.length > 0 && texto.length < min) {
     return `${campo} debe tener al menos ${min} caracteres.`;
   }
@@ -67,16 +67,34 @@ export const validarLongitudMinima = (valor, campo = "Campo", min = 3) => {
 };
 
 // ==========================
+// ==========================
 // Validar Email Seguridad 
 // ==========================
 export const validarEmailSeguridad = (email) => {
   if (email === null || email === undefined) return null;
-  const emailLimpio = String(email).trim(); 
+  const emailLimpio = String(email).trim();
   if (emailLimpio === "") return null;
-
-  const regex =
-    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com|hn|net|org|edu|info|gob)$/;
-  if (!regex.test(emailLimpio)) return "Debe ingresar un correo válido.";
+  const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!regex.test(emailLimpio)) return "Debe ingresar un correo válido (ej. usuario@dominio.com).";
   return null;
 };
 
+// ==========================
+// 🔐 Validar Contraseña
+// ==========================
+export const validarPassword = (password, requerida = true) => {
+  if (!password || password.trim() === "") {
+    return requerida ? "La contraseña es obligatoria." : null;
+  }
+  if (password.length < 8)
+    return "La contraseña debe tener al menos 8 caracteres.";
+  if (!/[A-Z]/.test(password))
+    return "La contraseña debe incluir al menos una letra mayúscula.";
+  if (!/[a-z]/.test(password))
+    return "La contraseña debe incluir al menos una letra minúscula.";
+  if (!/[0-9]/.test(password))
+    return "La contraseña debe incluir al menos un número.";
+  if (!/[^A-Za-z0-9]/.test(password))
+    return "La contraseña debe incluir al menos un carácter especial (ej. @, #, !).";
+  return null;
+};
