@@ -95,8 +95,7 @@ export default function Login() {
 
     try {
       setLoadingLogin(true);
-      setLoadingLogin(true);
-      // 🔥 Forzar persistencia LOCAL siempre
+      // 🔥 Persistencia LOCAL siempre
       await setPersistence(auth, browserLocalPersistence);
 
       const cred = await signInWithEmailAndPassword(auth, email, pass);

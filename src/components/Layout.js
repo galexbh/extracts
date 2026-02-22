@@ -2,7 +2,7 @@
 // 📁 src/components/Layout.jsx — FINAL OPTIMIZADO
 // ============================================================
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Flex, Box, useDisclosure, useColorModeValue } from "@chakra-ui/react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
@@ -10,8 +10,13 @@ import { Outlet } from "react-router-dom";
 
 export default function Layout() {
   const sidebar = useDisclosure();
-  const isMobile = window.innerWidth < 768;
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   return (
     <Flex minH="100vh">
       {/* Sidebar fijo */}
