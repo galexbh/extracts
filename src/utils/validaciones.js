@@ -5,7 +5,10 @@ export const validarRequerido = (valor, campo = "Campo") => {
   if (valor === null || valor === undefined) {
     return `${campo} es obligatorio.`;
   }
-  //ya no devuelve un valor vacio 
+  // Rechazar 0 numérico o "0" string (selects sin seleccionar)
+  if (valor === 0 || valor === "0") {
+    return `${campo} es obligatorio.`;
+  }
   if (String(valor).trim() === "") {
     return `${campo} es obligatorio.`;
   }
@@ -22,7 +25,7 @@ export const soloLetras = (txt) =>
 // 📞 Validar teléfono
 // ==========================
 export const validarTelefono = (tel) => {
-  const limpio = tel.replace("-", "");
+  const limpio = tel.replace(/-/g, ""); // ✅ /g para quitar TODOS los guiones
   if (!/^[0-9]{8}$/.test(limpio)) return "Debe tener 8 dígitos (9999-9999)";
   return null;
 };

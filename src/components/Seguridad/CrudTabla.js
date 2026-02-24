@@ -53,6 +53,7 @@ export default function CrudTabla({
   customButtons,
   abrirModal = false,
   proveedorBloqueado = null,
+  preprocessSave,
 }) {
   const toast = useToast();
 
@@ -164,7 +165,11 @@ export default function CrudTabla({
       const method = editing[idKey] ? "put" : "post";
       const url = editing[idKey] ? `${apiUrl}/${editing[idKey]}` : apiUrl;
 
-      await api[method](url, editing);
+      // ✅ Aplicar preprocessSave si está definido (ej: convertir accesos a JSON string)
+      const payload =
+        typeof preprocessSave === "function" ? preprocessSave(editing) : editing;
+
+      await api[method](url, payload);
       toast({ title: "✅ Registro guardado correctamente", status: "success" });
       handleOnClose();
       await reloadData();
@@ -345,9 +350,9 @@ export default function CrudTabla({
           </Menu>
         ) : (
           <>
-            <Button 
-              colorScheme="green" 
-              size="sm" 
+            <Button
+              colorScheme="green"
+              size="sm"
               onClick={() => {
                 setEditing(blankObj);
                 setErrors({});

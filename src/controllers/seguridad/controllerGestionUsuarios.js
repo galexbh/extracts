@@ -230,12 +230,19 @@ const updateUsuario = async (req, res) => {
       }
     }
 
+    // 🔹 Hashear contraseña si se envió una nueva (no hashear si ya es un hash bcrypt)
+    let finalPassword = null;
+    if (password && !password.startsWith("$2") && password.length <= 50) {
+      finalPassword = await bcrypt.hash(password, 10);
+      console.log("[API] 🔐 Contraseña hasheada para actualización");
+    }
+
     await pool.query(
       `CALL seguridad.sp_usuarios_update($1,$2,$3,$4,$5,$6,$7);`,
       [
         id_usuario,
         username,
-        password || "",
+        finalPassword,        // null si no hay cambio de contraseña
         id_rol,
         id_estado_usuario,
         mfa_secret,

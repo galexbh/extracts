@@ -56,16 +56,43 @@ module.exports = async function verifyRoleAccess(req, res, next) {
     // ------------------------------------------------------------
     let accesos = [];
 
-    if (typeof user.accesos === "string") {
-      accesos = user.accesos
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
+    if (Array.isArray(user.accesos)) {
+      // Ya vino como array JS
+      accesos = user.accesos.map((s) => s.trim().toLowerCase());
+    } else if (typeof user.accesos === "string") {
+      // Puede ser JSON string (["Ventas","Seguridad"]) o CSV plano
+      const raw = user.accesos.trim();
+      if (raw.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(raw);
+          accesos = parsed.map((s) => String(s).trim().toLowerCase());
+        } catch {
+          // Fallback: limpiar corchetes/comillas y dividir por coma
+          accesos = raw
+            .replace(/[\[\]"]/g, "")
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+        }
+      } else {
+        accesos = raw
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+      }
     }
 
     console.log(
       `👤 Usuario: ${user.username} | Rol: ${user.nombre_rol} | Accesos: [${accesos.join(", ")}]`
     );
+
+    // ------------------------------------------------------------
+    // 🔑 Acceso "Todos" → permit everything
+    // ------------------------------------------------------------
+    if (accesos.includes("todos")) {
+      console.log(`✅ Acceso total (Todos): ${user.username}`);
+      return next();
+    }
 
     // ------------------------------------------------------------
     // 🔍 Verificar permiso para el módulo solicitado

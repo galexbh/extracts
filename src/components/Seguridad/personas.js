@@ -87,19 +87,20 @@ export default function Personas() {
     pais: "",
   });
 
-//aqui poner codigo de las validaciones ----------------------------------------------------
+  //aqui poner codigo de las validaciones ----------------------------------------------------
 
-// ============================================================
+  // ============================================================
   // VALIDACIONES (Mejoradas)
   // ============================================================
   const validarFormulario = () => {
     // Expresión para letras, tildes, ñ, Ñ, espacios y guiones/puntos (para nombres compuestos)
-    const soloLetrasConExtras = /^[A-Za-záéíóúÁÉÍÓÚñÑ\s\-'.]{3,100}$/; 
+    const soloLetrasConExtras = /^[A-Za-záéíóúÁÉÍÓÚñÑ\s\-'.]{3,100}$/;
     const dniRegex = /^(\d{13}|\d{4}-\d{4}-\d{5})$/;
-    const telefonoRegex = /^[23789]\d{7}$/;
+    // ✅ Acepta número sin guion (99999999) O con guion (9999-9999)
+    const telefonoRegex = /^[23789]\d{3}-?\d{4}$/;
     const correoRegex = /^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/;
     // Texto seguro para direcciones: letras, números, espacios, puntos, comas, guiones, almohadillas
-    const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/; 
+    const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
 
     // Helper corregido: se asegura que el valor sea una cadena ANTES de usar .trim()
     const esVacio = (valor) => !valor || (typeof valor === 'string' && valor.trim() === "");
@@ -141,11 +142,11 @@ export default function Personas() {
       return false;
     }
     if (form.identificacion.trim().length > 50) {
-        toast({ title: "Identificación inválida", description: "No puede exceder 50 caracteres (BD).", status: "warning" });
-        return false;
+      toast({ title: "Identificación inválida", description: "No puede exceder 50 caracteres (BD).", status: "warning" });
+      return false;
     }
     // Mantengo la RegEx específica del usuario si es por formato local
-    if (!dniRegex.test(form.identificacion.trim())) { 
+    if (!dniRegex.test(form.identificacion.trim())) {
       toast({
         title: "Identificación inválida",
         description: "Debe ser 13 dígitos o formato 0000-0000-00000.",
@@ -163,22 +164,20 @@ export default function Personas() {
     }
     const fecha = new Date(form.fecha_nacimiento);
     const hoy = new Date();
-    // Validar que no sea una fecha inválida (e.g. 30 de febrero)
     if (isNaN(fecha)) {
-        toast({ title: "Fecha inválida", description: "Verifique el formato de la fecha.", status: "warning" });
-        return false;
-    }
-    // Validar No Futura (como se había indicado)
-    if (fecha > hoy) {
-      toast({
-        title: "Fecha inválida",
-        description: "No puede ser futura.",
-        status: "warning",
-      });
+      toast({ title: "Fecha inválida", description: "Verifique el formato de la fecha.", status: "warning" });
       return false;
     }
-    const edad = hoy.getFullYear() - fecha.getFullYear();
-    // Ajuste de edad mínima
+    if (fecha > hoy) {
+      toast({ title: "Fecha inválida", description: "No puede ser futura.", status: "warning" });
+      return false;
+    }
+    // ✅ Cálculo exacto: verificar si el cumpleaños ya pasó este año
+    let edad = hoy.getFullYear() - fecha.getFullYear();
+    const mesDif = hoy.getMonth() - fecha.getMonth();
+    if (mesDif < 0 || (mesDif === 0 && hoy.getDate() < fecha.getDate())) {
+      edad--; // El cumpleaños aún no ha pasado este año
+    }
     if (edad < 18) {
       toast({ title: "Edad mínima: 18 años", status: "warning" });
       return false;
@@ -206,8 +205,8 @@ export default function Personas() {
     // Teléfono
     // ----------------------------------------------------
     if (esVacio(form.telefono)) {
-        toast({ title: "El Teléfono es requerido", status: "warning" });
-        return false;
+      toast({ title: "El Teléfono es requerido", status: "warning" });
+      return false;
     }
     if (!telefonoRegex.test(form.telefono.trim())) {
       toast({
@@ -222,8 +221,8 @@ export default function Personas() {
     // Correo
     // ----------------------------------------------------
     if (esVacio(form.correo)) {
-        toast({ title: "El Correo es requerido", status: "warning" });
-        return false;
+      toast({ title: "El Correo es requerido", status: "warning" });
+      return false;
     }
     if (!correoRegex.test(form.correo.trim())) {
       toast({ title: "Correo inválido", status: "warning" });
@@ -234,8 +233,8 @@ export default function Personas() {
     // Dirección
     // ----------------------------------------------------
     if (esVacio(form.direccion)) {
-        toast({ title: "La Dirección es requerida", status: "warning" });
-        return false;
+      toast({ title: "La Dirección es requerida", status: "warning" });
+      return false;
     }
     if (!textoSeguro.test(form.direccion.trim())) {
       toast({ title: "Dirección inválida", description: "Mínimo 3, máximo 255 caracteres permitidos.", status: "warning" });
@@ -247,15 +246,15 @@ export default function Personas() {
     // ----------------------------------------------------
     // Se recomienda usar el RegEx 'soloLetrasConExtras' también para estos campos
     const validacionDireccion = (field, label) => {
-        if (esVacio(form[field])) {
-            toast({ title: `${label} es obligatorio`, status: "warning" });
-            return false;
-        }
-        if (!soloLetrasConExtras.test(form[field].trim())) {
-            toast({ title: `${label} inválido`, status: "warning" });
-            return false;
-        }
-        return true;
+      if (esVacio(form[field])) {
+        toast({ title: `${label} es obligatorio`, status: "warning" });
+        return false;
+      }
+      if (!soloLetrasConExtras.test(form[field].trim())) {
+        toast({ title: `${label} inválido`, status: "warning" });
+        return false;
+      }
+      return true;
     };
 
     if (!validacionDireccion('ciudad', 'Ciudad')) return false;
@@ -331,10 +330,10 @@ export default function Personas() {
     });
   };
 
-// ============================================================
-// ✅ Editar (CORREGIDO)
-// ============================================================
-const editar = (emp) => {
+  // ============================================================
+  // ✅ Editar (CORREGIDO)
+  // ============================================================
+  const editar = (emp) => {
     setModoEdicion(true);
 
     setIdPersonaEdit(emp.id_persona);
@@ -343,44 +342,44 @@ const editar = (emp) => {
     setIdDireccionEdit(emp.direccion?.id_direccion || null);
 
     setForm({
-        // Campos que siempre existen en la persona: usar || "" si no son seguros
-        nombre: emp.nombre || "",
-        apellido: emp.apellido || "",
-        identificacion: emp.identificacion || "", // 👈 ASEGURAR SI ES OPCIONAL EN BD
-        fecha_nacimiento: emp.fecha_nacimiento?.split("T")[0] || "",
-        genero: emp.genero || "", 
-        tipo_persona: emp.tipo_persona || "", // Usar string vacío para el Select si es nulo
+      // Campos que siempre existen en la persona: usar || "" si no son seguros
+      nombre: emp.nombre || "",
+      apellido: emp.apellido || "",
+      identificacion: emp.identificacion || "", // 👈 ASEGURAR SI ES OPCIONAL EN BD
+      fecha_nacimiento: emp.fecha_nacimiento?.split("T")[0] || "",
+      genero: emp.genero || "",
+      tipo_persona: emp.tipo_persona || "", // Usar string vacío para el Select si es nulo
 
-        // Campos de tablas relacionadas (teléfono, correo, dirección):
-        // Ya usas el encadenamiento opcional (?.) seguido de || ""
-        telefono: emp.telefono?.numero || "",
-        correo: emp.correo?.correo || "",
-        direccion: emp.direccion?.direccion || "",
-        ciudad: emp.direccion?.ciudad || "",
-        departamento: emp.direccion?.departamento || "",
-        pais: emp.direccion?.pais || "",
+      // Campos de tablas relacionadas (teléfono, correo, dirección):
+      // Ya usas el encadenamiento opcional (?.) seguido de || ""
+      telefono: emp.telefono?.numero || "",
+      correo: emp.correo?.correo || "",
+      direccion: emp.direccion?.direccion || "",
+      ciudad: emp.direccion?.ciudad || "",
+      departamento: emp.direccion?.departamento || "",
+      pais: emp.direccion?.pais || "",
     });
-};
+  };
 
-// ============================================================
-// ✅ Guardar nuevo (MODIFICADO)
-// ============================================================
-const guardarNuevo = async () => {
-  // 👈 PRIMER PASO: Llamar a la validación
-  if (!validarFormulario()) {
-    return; // Si la validación falla, detiene la función y el Toast se mostró dentro de validarFormulario
-  }
+  // ============================================================
+  // ✅ Guardar nuevo (MODIFICADO)
+  // ============================================================
+  const guardarNuevo = async () => {
+    // 👈 PRIMER PASO: Llamar a la validación
+    if (!validarFormulario()) {
+      return; // Si la validación falla, detiene la función y el Toast se mostró dentro de validarFormulario
+    }
 
-  try {
-    // El resto de tu lógica de envío (solo si es válido)
-    const res = await api.post("/seguridad/personas", {
-      nombre: form.nombre,
-      apellido: form.apellido,
-      identificacion: form.identificacion,
-      fecha_nacimiento: form.fecha_nacimiento,
-      genero: form.genero,
-      tipo_persona: Number(form.tipo_persona),
-    });
+    try {
+      // El resto de tu lógica de envío (solo si es válido)
+      const res = await api.post("/seguridad/personas", {
+        nombre: form.nombre,
+        apellido: form.apellido,
+        identificacion: form.identificacion,
+        fecha_nacimiento: form.fecha_nacimiento,
+        genero: form.genero,
+        tipo_persona: Number(form.tipo_persona),
+      });
 
       const id = res.data.id_persona;
 
@@ -412,27 +411,33 @@ const guardarNuevo = async () => {
   };
 
   // ============================================================
-// ✅ Actualizar empleado (MODIFICADO)
-// ============================================================
-const actualizar = async () => {
-  // 👈 PRIMER PASO: Llamar a la validación
-  if (!validarFormulario()) {
-    return; // 🛑 Si la validación falla, detiene la función.
-  }
-  
-  try {
-    // El resto de tu lógica de envío (solo si es válido)
-    await api.put(`/seguridad/personas/${idPersonaEdit}`, {
-      nombre: form.nombre,
-      apellido: form.apellido,
-      identificacion: form.identificacion,
-      fecha_nacimiento: form.fecha_nacimiento,
-      genero: form.genero,
-      tipo_persona: Number(form.tipo_persona),
-    });
+  // ✅ Actualizar empleado (MODIFICADO)
+  // ============================================================
+  const actualizar = async () => {
+    // 👈 PRIMER PASO: Llamar a la validación
+    if (!validarFormulario()) {
+      return; // 🛑 Si la validación falla, detiene la función.
+    }
+
+    try {
+      // El resto de tu lógica de envío (solo si es válido)
+      await api.put(`/seguridad/personas/${idPersonaEdit}`, {
+        nombre: form.nombre,
+        apellido: form.apellido,
+        identificacion: form.identificacion,
+        fecha_nacimiento: form.fecha_nacimiento,
+        genero: form.genero,
+        tipo_persona: Number(form.tipo_persona),
+      });
 
       if (idTelefonoEdit)
         await api.put(`/seguridad/telefonos/${idTelefonoEdit}`, {
+          id_persona: idPersonaEdit,
+          numero: form.telefono,
+          id_tipo_telefono: 1,
+        });
+      else if (form.telefono)
+        await api.post(`/seguridad/telefonos`, {
           id_persona: idPersonaEdit,
           numero: form.telefono,
           id_tipo_telefono: 1,
@@ -443,9 +448,22 @@ const actualizar = async () => {
           id_persona: idPersonaEdit,
           correo: form.correo,
         });
+      else if (form.correo)
+        await api.post(`/seguridad/correos`, {
+          id_persona: idPersonaEdit,
+          correo: form.correo,
+        });
 
       if (idDireccionEdit)
         await api.put(`/seguridad/direcciones/${idDireccionEdit}`, {
+          id_persona: idPersonaEdit,
+          direccion: form.direccion,
+          ciudad: form.ciudad,
+          departamento: form.departamento,
+          pais: form.pais,
+        });
+      else if (form.direccion)
+        await api.post(`/seguridad/direcciones`, {
           id_persona: idPersonaEdit,
           direccion: form.direccion,
           ciudad: form.ciudad,
