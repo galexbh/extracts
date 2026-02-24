@@ -9,6 +9,37 @@ const bcrypt = require("bcryptjs");
 console.log("[FIREBASE] ✅ Admin inicializado correctamente");
 
 // ============================================================
+// 🌐 Traducir errores de Firebase Admin al español
+// ============================================================
+function traducirError(err) {
+  const code = err?.errorInfo?.code || err?.code || "";
+  const msg = err?.message || "";
+
+  switch (code) {
+    case "auth/email-already-exists":
+      return "Este correo electrónico ya está registrado en el sistema.";
+    case "auth/invalid-email":
+      return "El formato del correo electrónico no es válido.";
+    case "auth/invalid-password":
+      return "La contraseña no cumple los requisitos (mínimo 6 caracteres).";
+    case "auth/user-not-found":
+      return "No se encontró el usuario en Firebase.";
+    case "auth/uid-already-exists":
+      return "Ya existe un usuario con ese identificador.";
+    case "auth/insufficient-permission":
+      return "Sin permisos suficientes para realizar esta operación.";
+    default:
+      if (msg.includes("already in use") || msg.includes("already exists"))
+        return "Este correo electrónico ya está registrado en el sistema.";
+      if (msg.includes("TOO_SHORT") || msg.includes("too short"))
+        return "La contraseña es demasiado corta (mínimo 6 caracteres).";
+      if (msg.includes("invalid") && msg.includes("email"))
+        return "El formato del correo electrónico no es válido.";
+      return "Error al procesar la solicitud. Inténtalo de nuevo.";
+  }
+}
+
+// ============================================================
 // 🔹 LISTAR USUARIOS (con accesos incluidos)
 // ============================================================
 const getUsuarios = async (_req, res) => {
@@ -145,7 +176,7 @@ const insertUsuario = async (req, res) => {
     res.json({ message: "✅ Usuario creado en Firebase y PostgreSQL" });
   } catch (err) {
     console.error("[API] ❌ Error creando usuario:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: traducirError(err) });
   }
 };
 
@@ -219,7 +250,7 @@ const updateUsuario = async (req, res) => {
     });
   } catch (err) {
     console.error("[API] ❌ Error actualizando usuario:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: traducirError(err) });
   }
 };
 
@@ -262,7 +293,7 @@ const deleteUsuario = async (req, res) => {
     });
   } catch (err) {
     console.error("[API] ❌ Error eliminando usuario:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: traducirError(err) });
   }
 };
 

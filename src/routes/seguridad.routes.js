@@ -22,6 +22,36 @@ const objetosCtrl = require("../controllers/seguridad/Objectos.controller");
 // 👥 USUARIOS
 // ============================================================
 router.get("/usuarios", usuariosCtrl.getUsuarios);
+
+// 🔐 Verificar estado del usuario para el login (va ANTES de :id)
+router.get("/usuarios/estado-login", async (req, res) => {
+  const { uid } = req.query;
+  if (!uid) return res.status(400).json({ error: "UID requerido" });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.nombre_estado
+       FROM seguridad.tbl_usuarios u
+       LEFT JOIN mantenimiento.tbl_estado_usuario e
+         ON e.id_estado_usuario = u.id_estado_usuario
+       WHERE u.uid_firebase = $1
+       LIMIT 1;`,
+      [uid]
+    );
+
+    if (!rows.length)
+      return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const estado = (rows[0].nombre_estado || "").toLowerCase().trim();
+    const permitido = estado === "activo";
+
+    return res.json({ permitido, estado: rows[0].nombre_estado });
+  } catch (err) {
+    console.error("[API] \u274c Error verificando estado de login:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
 router.get("/usuarios/:id", usuariosCtrl.getUsuarioById);
 router.post("/usuarios", usuariosCtrl.insertUsuario);
 router.put("/usuarios/:id_usuario", usuariosCtrl.updateUsuario);

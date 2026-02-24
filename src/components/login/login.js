@@ -34,6 +34,7 @@ import {
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence,
+  signOut,
 } from "firebase/auth";
 import { auth } from "../../firebase";
 import signInLogo from "./log.png";
@@ -134,11 +135,37 @@ export default function Login() {
       // ✅ Guardar datos básicos del usuario
       localStorage.setItem(
         "usuario",
-        JSON.stringify({
-          id_usuario: userUid,
-          correo: email,
-        })
+        JSON.stringify({ id_usuario: userUid, correo: email })
       );
+
+      // 🔒 Verificar estado del usuario en la base de datos
+      const estadoRes = await fetch(
+        `${API_URL}/seguridad/usuarios/estado-login?uid=${encodeURIComponent(userUid)}`
+      );
+      const estadoData = await estadoRes.json();
+
+      if (!estadoData.permitido) {
+        // Cerrar sesión de Firebase inmediatamente
+        await signOut(auth);
+        // Limpiar storage (respetando rememberMe)
+        const keep = ["rememberMe", "rememberEmail", "rememberPass"];
+        Object.keys(localStorage).forEach((k) => {
+          if (!keep.includes(k)) localStorage.removeItem(k);
+        });
+        sessionStorage.clear();
+
+        const nombreEstado = estadoData.estado || "Inactivo";
+        const mensajes = {
+          inactivo: "Tu cuenta está inactiva. Contacta al administrador.",
+          bloqueado: "Tu cuenta está bloqueada. Contacta al administrador.",
+        };
+        const msg = mensajes[nombreEstado.toLowerCase()] ||
+          `Tu cuenta se encuentra en estado "${nombreEstado}". Contacta al administrador.`;
+
+        setError(msg);
+        toast({ title: "Acceso denegado", description: msg, status: "error", duration: 5000, isClosable: true });
+        return;
+      }
 
       // 🔹 Verificar si el usuario ya tiene MFA activado
       const statusRes = await fetch(
