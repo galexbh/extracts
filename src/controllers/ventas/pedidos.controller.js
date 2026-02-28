@@ -3,6 +3,29 @@
 // ============================================================
 const { pool } = require("../../db");
 
+// ____________________________________________________________
+// 🔧 Helper: obtener rol del usuario por email
+// Devuelve: { id_usuario, nombre_rol, accesos }
+// ____________________________________________________________
+async function getRolUsuario(client, email) {
+  const r = await client.query(
+    `SELECT u.id_usuario, r.nombre_rol, r.accesos
+     FROM seguridad.tbl_usuarios u
+     JOIN seguridad.tbl_roles r ON r.id_rol = u.id_rol
+     WHERE LOWER(u.username) = LOWER($1) AND u.id_estado_usuario = 1
+     LIMIT 1`,
+    [email]
+  );
+  return r.rows[0] || null;
+}
+
+// Helper: saber si el rol es administrador
+function esAdmin(nombre_rol) {
+  if (!nombre_rol) return false;
+  const rol = nombre_rol.trim().toLowerCase();
+  return rol === "administrador" || rol === "admin" || rol === "todos";
+}
+
 // ============================================================
 // 🔹 LISTAR CLIENTES
 // ============================================================
@@ -44,28 +67,67 @@ exports.getProductos = async (_req, res) => {
 
 // ============================================================
 // 🔹 LISTAR TODOS LOS PEDIDOS
+// Regla: Admin → ve todos | Otro rol → solo sus propios pedidos
 // ============================================================
-exports.getPedidos = async (_req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        p.id_pedido,
-        c.nombre_cliente,
-        p.fecha_reserva,
-        p.fecha_entrega,
-        p.observaciones,
-        p.total,
-        p.id_estado_pedido,
-        COALESCE(e.nombre, 'Desconocido') AS estado_pedido
-      FROM ventasyreserva.tbl_pedidos p
-      LEFT JOIN ventasyreserva.clientes c 
-        ON c.id_cliente = p.id_cliente
-      LEFT JOIN mantenimiento.tbl_estado_pedido e 
-        ON e.id_estado_pedido = p.id_estado_pedido
-      ORDER BY p.id_pedido DESC;
-    `);
+exports.getPedidos = async (req, res) => {
+  const email = req.headers["x-user-email"];
 
+  try {
+    // Determinar el rol del usuario actual
+    const usuario = email ? await getRolUsuario(pool, email) : null;
+    const admin = esAdmin(usuario?.nombre_rol);
+
+    let query;
+    let params;
+
+    if (admin || !email) {
+      // Administrador o sin email → todos los pedidos
+      query = `
+        SELECT 
+          p.id_pedido,
+          c.nombre_cliente,
+          p.fecha_reserva,
+          p.fecha_entrega,
+          p.observaciones,
+          p.total,
+          p.id_estado_pedido,
+          p.creado_por,
+          COALESCE(e.nombre, 'Desconocido') AS estado_pedido
+        FROM ventasyreserva.tbl_pedidos p
+        LEFT JOIN ventasyreserva.clientes c 
+          ON c.id_cliente = p.id_cliente
+        LEFT JOIN mantenimiento.tbl_estado_pedido e 
+          ON e.id_estado_pedido = p.id_estado_pedido
+        ORDER BY p.id_pedido DESC;
+      `;
+      params = [];
+    } else {
+      // Vendedor u otro rol → solo sus pedidos
+      query = `
+        SELECT 
+          p.id_pedido,
+          c.nombre_cliente,
+          p.fecha_reserva,
+          p.fecha_entrega,
+          p.observaciones,
+          p.total,
+          p.id_estado_pedido,
+          p.creado_por,
+          COALESCE(e.nombre, 'Desconocido') AS estado_pedido
+        FROM ventasyreserva.tbl_pedidos p
+        LEFT JOIN ventasyreserva.clientes c 
+          ON c.id_cliente = p.id_cliente
+        LEFT JOIN mantenimiento.tbl_estado_pedido e 
+          ON e.id_estado_pedido = p.id_estado_pedido
+        WHERE LOWER(p.creado_por) = LOWER($1)
+        ORDER BY p.id_pedido DESC;
+      `;
+      params = [email];
+    }
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
+
   } catch (error) {
     console.error("❌ [GET pedidos] error:", error);
     res.status(500).json({ error: "Error al obtener pedidos" });
@@ -114,7 +176,8 @@ exports.getPedidoById = async (req, res) => {
 };
 
 // ============================================================
-// 🔹 CREAR NUEVO PEDIDO (con copia REAL del precio)
+// 🔹 CREAR NUEVO PEDIDO
+// Ahora guarda `creado_por` con el email del usuario que lo crea
 // ============================================================
 exports.insertPedido = async (req, res) => {
   const client = await pool.connect();
@@ -130,23 +193,28 @@ exports.insertPedido = async (req, res) => {
       productos = [],
     } = req.body;
 
+    // Email del vendedor que crea el pedido
+    const creado_por = req.headers["x-user-email"] || null;
+
     if (!Array.isArray(productos) || productos.length === 0)
       throw new Error("Debe incluir al menos un producto en el pedido");
 
     await client.query("BEGIN");
 
-    // Insertar encabezado
+    // Insertar encabezado con creado_por
     const insertPedido = await client.query(
       `INSERT INTO ventasyreserva.tbl_pedidos
-       (id_cliente, fecha_reserva, fecha_entrega, observaciones, id_metodo_pago, id_estado_pedido, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       (id_cliente, fecha_reserva, fecha_entrega, observaciones,
+        id_metodo_pago, id_estado_pedido, creado_por, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
        RETURNING id_pedido;`,
-      [id_cliente, fecha_reserva, fecha_entrega, observaciones, id_metodo_pago, id_estado_pedido]
+      [id_cliente, fecha_reserva, fecha_entrega, observaciones,
+        id_metodo_pago, id_estado_pedido, creado_por]
     );
 
     const id_pedido = insertPedido.rows[0].id_pedido;
 
-    // Insertar detalle (SIEMPRE COPIANDO DESDE PRODUCCIÓN)
+    // Insertar detalle copiando precios desde producción
     for (const p of productos) {
       const prod = await client.query(
         `SELECT precio_unitario, unidad_medida 
@@ -165,18 +233,11 @@ exports.insertPedido = async (req, res) => {
         `INSERT INTO ventasyreserva.tbl_detalle_pedidos
          (id_pedido, id_producto, cantidad, precio_unitario, subtotal, unidad_medida)
          VALUES ($1, $2, $3, $4, $5, $6);`,
-        [
-          id_pedido,
-          p.id_producto,
-          p.cantidad,
-          precio,
-          p.cantidad * precio,
-          unidad,
-        ]
+        [id_pedido, p.id_producto, p.cantidad, precio, p.cantidad * precio, unidad]
       );
     }
 
-    // Total
+    // Recalcular total del pedido
     await client.query(
       `SELECT ventasyreserva.fn_actualiza_total_pedido($1);`,
       [id_pedido]
@@ -184,7 +245,7 @@ exports.insertPedido = async (req, res) => {
 
     await client.query("COMMIT");
 
-    res.status(201).json({ id_pedido });
+    res.status(201).json({ id_pedido, creado_por });
 
   } catch (error) {
     await client.query("ROLLBACK");
@@ -197,7 +258,7 @@ exports.insertPedido = async (req, res) => {
 };
 
 // ============================================================
-// 🔹 ACTUALIZAR PEDIDO (RE-CALCULANDO PRECIOS REALES)
+// 🔹 ACTUALIZAR PEDIDO
 // ============================================================
 exports.updatePedido = async (req, res) => {
   const { id_pedido } = req.params;
@@ -216,7 +277,7 @@ exports.updatePedido = async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Actualizar encabezado
+    // Actualizar encabezado (no se cambia el creado_por)
     await client.query(
       `UPDATE ventasyreserva.tbl_pedidos
        SET id_cliente=$1,
@@ -227,15 +288,8 @@ exports.updatePedido = async (req, res) => {
            id_estado_pedido=$6,
            updated_at=NOW()
        WHERE id_pedido=$7`,
-      [
-        id_cliente,
-        fecha_reserva,
-        fecha_entrega,
-        observaciones,
-        id_metodo_pago,
-        id_estado_pedido,
-        id_pedido
-      ]
+      [id_cliente, fecha_reserva, fecha_entrega, observaciones,
+        id_metodo_pago, id_estado_pedido, id_pedido]
     );
 
     // Reemplazar detalles
@@ -244,7 +298,6 @@ exports.updatePedido = async (req, res) => {
       [id_pedido]
     );
 
-    // Insertar nuevamente copiando precios reales
     for (const p of productos) {
       const prod = await client.query(
         `SELECT precio_unitario, unidad_medida 
@@ -253,6 +306,9 @@ exports.updatePedido = async (req, res) => {
         [p.id_producto]
       );
 
+      if (prod.rowCount === 0)
+        throw new Error(`Producto ID ${p.id_producto} no existe`);
+
       const precio = parseFloat(prod.rows[0].precio_unitario);
       const unidad = prod.rows[0].unidad_medida;
 
@@ -260,18 +316,11 @@ exports.updatePedido = async (req, res) => {
         `INSERT INTO ventasyreserva.tbl_detalle_pedidos
          (id_pedido, id_producto, cantidad, precio_unitario, subtotal, unidad_medida)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          id_pedido,
-          p.id_producto,
-          p.cantidad,
-          precio,
-          p.cantidad * precio,
-          unidad
-        ]
+        [id_pedido, p.id_producto, p.cantidad, precio, p.cantidad * precio, unidad]
       );
     }
 
-    // Total
+    // Recalcular total
     await client.query(
       `SELECT ventasyreserva.fn_actualiza_total_pedido($1);`,
       [id_pedido]
@@ -317,11 +366,28 @@ exports.deletePedido = async (req, res) => {
     res.json({ message: "Pedido eliminado correctamente" });
 
   } catch (error) {
-    await client.query("ROLLROLLBACK");
+    await client.query("ROLLBACK");
     console.error("❌ [DELETE pedido] error:", error);
     res.status(500).json({ error: error.message });
 
   } finally {
     client.release();
+  }
+};
+
+// ============================================================
+// 🔹 LISTAR ESTADOS DE PEDIDO
+// ============================================================
+exports.getEstadosPedido = async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id_estado_pedido, nombre
+      FROM mantenimiento.tbl_estado_pedido
+      ORDER BY id_estado_pedido;
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("❌ [GET estados-pedido] error:", error);
+    res.status(500).json({ error: "Error al obtener estados de pedido" });
   }
 };

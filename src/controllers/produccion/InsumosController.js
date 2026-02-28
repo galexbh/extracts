@@ -6,13 +6,17 @@ const { pool } = require("../../db");
 
 // ============================================================
 // 🔹 LISTAR INSUMOS
+// Bug fix: el cursor tenía nombre fijo 'p_cursor' — con peticiones
+// concurrentes colisionaba. Ahora usa un nombre único por llamada.
 // ============================================================
 exports.getInsumos = async (req, res) => {
   const client = await pool.connect();
+  // Nombre de cursor único por request para evitar colisiones en concurrencia
+  const cursorName = `cur_insumos_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
   try {
     await client.query("BEGIN");
-    await client.query(`CALL produccion.sp_insumo_listar('p_cursor');`);
-    const result = await client.query(`FETCH ALL IN "p_cursor";`);
+    await client.query(`CALL produccion.sp_insumo_listar('${cursorName}');`);
+    const result = await client.query(`FETCH ALL IN "${cursorName}";`);
     await client.query("COMMIT");
     res.json(result.rows);
   } catch (error) {
@@ -25,7 +29,7 @@ exports.getInsumos = async (req, res) => {
 };
 
 // ============================================================
-// 🔹 INSERTAR INSUMO (actualizado con stock mínimo y máximo)
+// 🔹 INSERTAR INSUMO
 // ============================================================
 exports.insertInsumo = async (req, res) => {
   try {
@@ -58,7 +62,7 @@ exports.insertInsumo = async (req, res) => {
 };
 
 // ============================================================
-// 🔹 EDITAR INSUMO (actualizado con stock mínimo y máximo)
+// 🔹 EDITAR INSUMO
 // ============================================================
 exports.updateInsumo = async (req, res) => {
   try {
@@ -93,7 +97,7 @@ exports.updateInsumo = async (req, res) => {
 };
 
 // ============================================================
-// 🔹 ELIMINAR INSUMO (sin cambios)
+// 🔹 ELIMINAR INSUMO
 // ============================================================
 exports.deleteInsumo = async (req, res) => {
   try {

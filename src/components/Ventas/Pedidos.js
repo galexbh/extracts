@@ -1,9 +1,9 @@
 // ============================================================
 // 📁 src/components/Ventas/Pedidos.js
-// 💎 ERP - Pedidos (Ventas & Reservas) — VERSIÓN CORREGIDA
+// 💎 ERP - Pedidos (Ventas & Reservas) — VERSIÓN MEJORADA
 // ============================================================
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Heading,
@@ -37,6 +37,10 @@ import {
   Tag,
   TagLabel,
   SimpleGrid,
+  InputGroup,
+  InputLeftElement,
+  FormLabel,
+  FormControl,
 } from "@chakra-ui/react";
 import {
   FaPlus,
@@ -48,6 +52,9 @@ import {
   FaFileExcel,
   FaTimes,
   FaArrowLeft,
+  FaSearch,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 
 import { useNavigate } from "react-router-dom";
@@ -59,8 +66,10 @@ import { saveAs } from "file-saver";
 import logo from "../login/log.png";
 
 // =====================================================================
-// ✨ Pedidos — versión limpia, usando precios/unidades del BACKEND ✨
+// ✨ Pedidos — con filtros, paginación, estados dinámicos y bugs corregidos
 // =====================================================================
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Pedidos() {
   const toast = useToast();
@@ -71,6 +80,7 @@ export default function Pedidos() {
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [estadosPedido, setEstadosPedido] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
@@ -81,9 +91,19 @@ export default function Pedidos() {
   const [fechaReserva, setFechaReserva] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [observaciones, setObservaciones] = useState("");
+  const [idEstadoPedido, setIdEstadoPedido] = useState(1);
 
-  // Solo se envían estos campos al backend
   const [productosPedido, setProductosPedido] = useState([]);
+
+  // Filtros de la tabla
+  const [filtroCliente, setFiltroCliente] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [paginaActual, setPaginaActual] = useState(1);
+
+  // ── Multi-usuario: leer email y rol del usuario autenticado ──
+  const userEmail = localStorage.getItem("userEmail") || "";
+  const userRol = (localStorage.getItem("userRol") || "").trim().toLowerCase();
+  const esAdmin = userRol === "administrador" || userRol === "admin" || userRol === "todos";
 
   // Estilos
   const bgMain = useColorModeValue("gray.100", "gray.900");
@@ -94,6 +114,7 @@ export default function Pedidos() {
   const shadow = useColorModeValue("xl", "dark-lg");
   const textColor = useColorModeValue("gray.800", "gray.100");
   const tealHeaderBg = useColorModeValue("teal.500", "teal.700");
+  const emptyTextColor = useColorModeValue("gray.400", "gray.500");
 
   const formatearL = (n) =>
     `L. ${Number(n || 0).toLocaleString("es-HN", {
@@ -106,15 +127,17 @@ export default function Pedidos() {
   // ============================================================
   const cargarCatalogos = useCallback(async () => {
     try {
-      const [clientesRes, productosRes, pedidosRes] = await Promise.all([
+      const [clientesRes, productosRes, pedidosRes, estadosRes] = await Promise.all([
         api.get("/ventas/ventasyreserva/clientes"),
-        api.get("/produccion/productos"), // 👈 YA CORREGIDO
+        api.get("/produccion/productos"),
         api.get("/ventas/ventasyreserva/pedidos"),
+        api.get("/ventas/ventasyreserva/estados-pedido"),
       ]);
 
       setClientes(clientesRes.data || []);
       setProductos(productosRes.data || []);
       setPedidos(pedidosRes.data || []);
+      setEstadosPedido(estadosRes.data || []);
     } catch (err) {
       console.error("❌ Error cargando catálogos:", err);
       toast({
@@ -133,6 +156,33 @@ export default function Pedidos() {
 
   const buscarProducto = (idProducto) =>
     productos.find((p) => p.id_producto === Number(idProducto));
+
+  // ============================================================
+  // 🔹 Filtrado + Paginación
+  // ============================================================
+  const pedidosFiltrados = useMemo(() => {
+    return pedidos.filter((p) => {
+      const matchCliente = filtroCliente
+        ? p.nombre_cliente?.toLowerCase().includes(filtroCliente.toLowerCase())
+        : true;
+      const matchEstado = filtroEstado
+        ? p.estado_pedido === filtroEstado
+        : true;
+      return matchCliente && matchEstado;
+    });
+  }, [pedidos, filtroCliente, filtroEstado]);
+
+  const totalPaginas = Math.ceil(pedidosFiltrados.length / ITEMS_PER_PAGE);
+
+  const pedidosPagina = useMemo(() => {
+    const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
+    return pedidosFiltrados.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [pedidosFiltrados, paginaActual]);
+
+  // Resetear página al cambiar filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [filtroCliente, filtroEstado]);
 
   // ============================================================
   // 🔹 Añadir productos al pedido
@@ -218,7 +268,7 @@ export default function Pedidos() {
         fecha_entrega: fechaEntrega,
         observaciones,
         id_metodo_pago: 1,
-        id_estado_pedido: 1, // Pendiente
+        id_estado_pedido: Number(idEstadoPedido),
         productos: productosPedido.map((p) => ({
           id_producto: Number(p.id_producto),
           cantidad: Number(p.cantidad),
@@ -263,6 +313,7 @@ export default function Pedidos() {
       setFechaReserva(cab.fecha_reserva?.substring(0, 10));
       setFechaEntrega(cab.fecha_entrega?.substring(0, 10));
       setObservaciones(cab.observaciones || "");
+      setIdEstadoPedido(cab.id_estado_pedido || 1);
 
       setProductosPedido(
         detalle.map((d) => ({
@@ -273,6 +324,9 @@ export default function Pedidos() {
 
       setEditando(true);
       setPedidoSeleccionado(pedido);
+
+      // Scroll al formulario
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("❌ Error al cargar pedido:", err);
       toast({
@@ -291,6 +345,7 @@ export default function Pedidos() {
     setFechaEntrega("");
     setFechaReserva("");
     setObservaciones("");
+    setIdEstadoPedido(1);
   };
 
   // ============================================================
@@ -331,7 +386,9 @@ export default function Pedidos() {
         align: "center",
       });
 
-      const renderPedido = (enc, detalle) => {
+      const renderPedido = (enc, detalle, addPageFirst = false) => {
+        if (addPageFirst) doc.addPage();
+
         const startY = doc.lastAutoTable
           ? doc.lastAutoTable.finalY + 20
           : 40;
@@ -369,17 +426,17 @@ export default function Pedidos() {
         const res = await api.get(
           `/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`
         );
-        renderPedido(res.data.pedido, res.data.detalle);
+        renderPedido(res.data.pedido, res.data.detalle, false);
         doc.save(`Pedido_${pedido.id_pedido}.pdf`);
         return;
       }
 
-      for (const p of pedidos) {
+      // Bug #4 corregido: el primer pedido no agrega página, los demás sí
+      for (let i = 0; i < pedidos.length; i++) {
         const res = await api.get(
-          `/ventas/ventasyreserva/pedidos/${p.id_pedido}`
+          `/ventas/ventasyreserva/pedidos/${pedidos[i].id_pedido}`
         );
-        if (doc.lastAutoTable) doc.addPage();
-        renderPedido(res.data.pedido, res.data.detalle);
+        renderPedido(res.data.pedido, res.data.detalle, i > 0);
       }
 
       doc.save("Pedidos_Completos.pdf");
@@ -459,6 +516,20 @@ export default function Pedidos() {
   };
 
   // ============================================================
+  // Helpers de badge color por estado
+  // ============================================================
+  const colorPorEstado = (estado) => {
+    const mapa = {
+      Pendiente: "yellow",
+      "En proceso": "blue",
+      Completado: "green",
+      Entregado: "teal",
+      Cancelado: "red",
+    };
+    return mapa[estado] || "gray";
+  };
+
+  // ============================================================
   // Loader
   // ============================================================
   if (loading)
@@ -513,60 +584,99 @@ export default function Pedidos() {
       </Flex>
 
       {/* ============================ */}
-      {/* Formulario del Pedido */}
+      {/* Formulario del Pedido        */}
       {/* ============================ */}
       <Box p={6}>
         <Box bg={bgCard} p={6} borderRadius="2xl" boxShadow={shadow} mb={10}>
           <Heading size="md" mb={4} color="teal.400">
-            {editando ? "Editar Pedido" : "Nuevo Pedido"}
+            {editando ? `✏️ Editar Pedido #${pedidoSeleccionado?.id_pedido}` : "🆕 Nuevo Pedido"}
           </Heading>
 
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={4}>
             {/* Cliente */}
-            <Select
-              placeholder="Seleccione Cliente"
-              value={idCliente}
-              onChange={(e) => setIdCliente(e.target.value)}
-              bg={inputBg}
-              size="sm"
-            >
-              {clientes.map((c) => (
-                <option key={c.id_cliente} value={c.id_cliente}>
-                  {c.nombre_cliente}
-                </option>
-              ))}
-            </Select>
+            <FormControl>
+              <FormLabel fontSize="xs" color="gray.500" mb={1}>Cliente</FormLabel>
+              <Select
+                placeholder="Seleccione Cliente"
+                value={idCliente}
+                onChange={(e) => setIdCliente(e.target.value)}
+                bg={inputBg}
+                size="sm"
+              >
+                {clientes.map((c) => (
+                  <option key={c.id_cliente} value={c.id_cliente}>
+                    {c.nombre_cliente}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
 
-            {/* Fechas */}
-            <Input
-              type="date"
-              value={fechaReserva}
-              onChange={(e) => setFechaReserva(e.target.value)}
-              bg={inputBg}
-              size="sm"
-            />
-            <Input
-              type="date"
-              value={fechaEntrega}
-              onChange={(e) => setFechaEntrega(e.target.value)}
-              bg={inputBg}
-              size="sm"
-            />
+            {/* Fecha Reserva */}
+            <FormControl>
+              <FormLabel fontSize="xs" color="gray.500" mb={1}>Fecha de Reserva</FormLabel>
+              <Input
+                type="date"
+                value={fechaReserva}
+                onChange={(e) => setFechaReserva(e.target.value)}
+                bg={inputBg}
+                size="sm"
+              />
+            </FormControl>
+
+            {/* Fecha Entrega */}
+            <FormControl>
+              <FormLabel fontSize="xs" color="gray.500" mb={1}>Fecha de Entrega</FormLabel>
+              <Input
+                type="date"
+                value={fechaEntrega}
+                onChange={(e) => setFechaEntrega(e.target.value)}
+                bg={inputBg}
+                size="sm"
+              />
+            </FormControl>
           </SimpleGrid>
 
-          <Textarea
-            placeholder="Observaciones"
-            value={observaciones}
-            onChange={(e) => setObservaciones(e.target.value)}
-            bg={inputBg}
-            size="sm"
-            mb={4}
-          />
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mb={4}>
+            {/* Observaciones */}
+            <FormControl>
+              <FormLabel fontSize="xs" color="gray.500" mb={1}>Observaciones</FormLabel>
+              <Textarea
+                placeholder="Observaciones (opcional)"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                bg={inputBg}
+                size="sm"
+                rows={2}
+              />
+            </FormControl>
+
+            {/* Estado — solo visible al editar */}
+            {editando && (
+              <FormControl>
+                <FormLabel fontSize="xs" color="gray.500" mb={1}>Estado del Pedido</FormLabel>
+                <Select
+                  value={idEstadoPedido}
+                  onChange={(e) => setIdEstadoPedido(e.target.value)}
+                  bg={inputBg}
+                  size="sm"
+                >
+                  {estadosPedido.length > 0
+                    ? estadosPedido.map((e) => (
+                      <option key={e.id_estado_pedido} value={e.id_estado_pedido}>
+                        {e.nombre}
+                      </option>
+                    ))
+                    : <option value={1}>Pendiente</option>
+                  }
+                </Select>
+              </FormControl>
+            )}
+          </SimpleGrid>
 
           <Divider mb={3} />
 
           {/* ============================ */}
-          {/* DETALLE */}
+          {/* DETALLE                      */}
           {/* ============================ */}
           <Flex justify="space-between" align="center" mb={3}>
             <Text fontWeight="bold" color="teal.400">
@@ -603,84 +713,92 @@ export default function Pedidos() {
               </Thead>
 
               <Tbody>
-                {productosPedido.map((p, i) => {
-                  const prod = buscarProducto(p.id_producto);
+                {productosPedido.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={5} textAlign="center" py={6} color={emptyTextColor}>
+                      Sin productos — haz clic en "Agregar Producto"
+                    </Td>
+                  </Tr>
+                ) : (
+                  productosPedido.map((p, i) => {
+                    const prod = buscarProducto(p.id_producto);
 
-                  return (
-                    <Tr key={i}>
-                      {/* Producto */}
-                      <Td>
-                        <Select
-                          placeholder="Seleccione producto"
-                          value={p.id_producto}
-                          onChange={(e) =>
-                            actualizarProducto(i, "id_producto", e.target.value)
-                          }
-                          bg={inputBg}
-                          size="sm"
-                        >
-                          {productos.map((prod) => (
-                            <option
-                              key={prod.id_producto}
-                              value={prod.id_producto}
-                            >
-                              {prod.nombre_producto}{" "}
-                              {prod.unidad_medida
-                                ? `(${prod.unidad_medida})`
-                                : ""}
-                            </option>
-                          ))}
-                        </Select>
-                      </Td>
+                    return (
+                      <Tr key={i}>
+                        {/* Producto */}
+                        <Td>
+                          <Select
+                            placeholder="Seleccione producto"
+                            value={p.id_producto}
+                            onChange={(e) =>
+                              actualizarProducto(i, "id_producto", e.target.value)
+                            }
+                            bg={inputBg}
+                            size="sm"
+                          >
+                            {productos.map((prod) => (
+                              <option
+                                key={prod.id_producto}
+                                value={prod.id_producto}
+                              >
+                                {prod.nombre_producto}{" "}
+                                {prod.unidad_medida
+                                  ? `(${prod.unidad_medida})`
+                                  : ""}
+                              </option>
+                            ))}
+                          </Select>
+                        </Td>
 
-                      {/* Cantidad */}
-                      <Td textAlign="center">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={p.cantidad}
-                          onChange={(e) =>
-                            actualizarProducto(i, "cantidad", e.target.value)
-                          }
-                          bg={inputBg}
-                          size="sm"
-                          w="80px"
-                        />
-                      </Td>
+                        {/* Cantidad */}
+                        <Td textAlign="center">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={p.cantidad}
+                            onChange={(e) =>
+                              actualizarProducto(i, "cantidad", e.target.value)
+                            }
+                            bg={inputBg}
+                            size="sm"
+                            w="80px"
+                          />
+                        </Td>
 
-                      {/* Precio */}
-                      <Td textAlign="center">
-                        {prod ? formatearL(prod.precio_unitario) : "—"}
-                      </Td>
+                        {/* Precio */}
+                        <Td textAlign="center">
+                          {prod ? formatearL(prod.precio_unitario) : "—"}
+                        </Td>
 
-                      {/* Subtotal */}
-                      <Td textAlign="center">
-                        {prod
-                          ? formatearL(
+                        {/* Subtotal */}
+                        <Td textAlign="center">
+                          {prod
+                            ? formatearL(
                               Number(prod.precio_unitario) *
-                                Number(p.cantidad || 0)
+                              Number(p.cantidad || 0)
                             )
-                          : "—"}
-                      </Td>
+                            : "—"}
+                        </Td>
 
-                      {/* Acciones */}
-                      <Td>
-                        <IconButton
-                          icon={<FaTrash />}
-                          size="sm"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={() => eliminarProducto(i)}
-                        />
-                      </Td>
-                    </Tr>
-                  );
-                })}
+                        {/* Acciones */}
+                        <Td>
+                          <IconButton
+                            icon={<FaTrash />}
+                            size="sm"
+                            colorScheme="red"
+                            variant="ghost"
+                            onClick={() => eliminarProducto(i)}
+                          />
+                        </Td>
+                      </Tr>
+                    );
+                  })
+                )}
               </Tbody>
             </Table>
           </Box>
 
-          {/* Total */}
+          {/* Total + Acciones */}
           <Flex justify="space-between" align="center">
             <Tag size="lg" colorScheme="teal" borderRadius="full" px={6}>
               <TagLabel fontSize="xl" fontWeight="bold">
@@ -692,7 +810,7 @@ export default function Pedidos() {
                       acc +
                       (prod
                         ? Number(prod.precio_unitario) *
-                          Number(p.cantidad || 0)
+                        Number(p.cantidad || 0)
                         : 0)
                     );
                   }, 0)
@@ -727,12 +845,57 @@ export default function Pedidos() {
         </Box>
 
         {/* ============================ */}
-        {/* TABLA DE PEDIDOS */}
+        {/* TABLA DE PEDIDOS             */}
         {/* ============================ */}
         <Box bg={bgCard} p={6} borderRadius="2xl" boxShadow={shadow}>
-          <Heading size="md" mb={4} color="teal.400">
-            Pedidos Registrados
-          </Heading>
+          <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
+            <Heading size="md" color="teal.400">
+              Pedidos Registrados
+            </Heading>
+
+            {/* Filtros */}
+            <HStack spacing={3} flexWrap="wrap">
+              <InputGroup size="sm" w="200px">
+                <InputLeftElement pointerEvents="none">
+                  <FaSearch color="gray" />
+                </InputLeftElement>
+                <Input
+                  placeholder="Buscar cliente..."
+                  value={filtroCliente}
+                  onChange={(e) => setFiltroCliente(e.target.value)}
+                  bg={inputBg}
+                  pl={8}
+                />
+              </InputGroup>
+
+              <Select
+                size="sm"
+                w="170px"
+                placeholder="Todos los estados"
+                value={filtroEstado}
+                onChange={(e) => setFiltroEstado(e.target.value)}
+                bg={inputBg}
+              >
+                {estadosPedido.map((e) => (
+                  <option key={e.id_estado_pedido} value={e.nombre}>
+                    {e.nombre}
+                  </option>
+                ))}
+              </Select>
+
+              {(filtroCliente || filtroEstado) && (
+                <Tooltip label="Limpiar filtros">
+                  <IconButton
+                    icon={<FaTimes />}
+                    size="sm"
+                    variant="ghost"
+                    colorScheme="gray"
+                    onClick={() => { setFiltroCliente(""); setFiltroEstado(""); }}
+                  />
+                </Tooltip>
+              )}
+            </HStack>
+          </Flex>
 
           <Box overflowX="auto" borderWidth="1px" borderRadius="lg">
             <Table size="sm" variant="simple">
@@ -740,6 +903,7 @@ export default function Pedidos() {
                 <Tr>
                   <Th>ID</Th>
                   <Th>Cliente</Th>
+                  {esAdmin && <Th>Vendedor</Th>}
                   <Th>F. Reserva</Th>
                   <Th>F. Entrega</Th>
                   <Th>Estado</Th>
@@ -749,67 +913,135 @@ export default function Pedidos() {
               </Thead>
 
               <Tbody>
-                {pedidos.map((p) => (
-                  <Tr key={p.id_pedido}>
-                    <Td>{p.id_pedido}</Td>
-                    <Td>{p.nombre_cliente}</Td>
-                    <Td>{p.fecha_reserva}</Td>
-                    <Td>{p.fecha_entrega}</Td>
-
-                    <Td>
-                      <Badge colorScheme="teal">
-                        {p.nombre_estado || "Pendiente"}
-                      </Badge>
-                    </Td>
-
-                    <Td textAlign="right" fontFamily="monospace">
-                      {formatearL(p.total)}
-                    </Td>
-
-                    <Td textAlign="center">
-                      <HStack justify="center" spacing={1}>
-                        <Tooltip label="Editar">
-                          <IconButton
-                            icon={<FaEdit />}
-                            size="sm"
-                            colorScheme="blue"
-                            onClick={() => seleccionarPedido(p)}
-                          />
-                        </Tooltip>
-
-                        <Tooltip label="Eliminar">
-                          <IconButton
-                            icon={<FaTrash />}
-                            size="sm"
-                            colorScheme="red"
-                            onClick={() => confirmarEliminar(p)}
-                          />
-                        </Tooltip>
-
-                        <Tooltip label="PDF">
-                          <IconButton
-                            icon={<FaFilePdf />}
-                            size="sm"
-                            colorScheme="red"
-                            onClick={() => exportarPDF(p)}
-                          />
-                        </Tooltip>
-
-                        <Tooltip label="Excel">
-                          <IconButton
-                            icon={<FaFileExcel />}
-                            size="sm"
-                            colorScheme="green"
-                            onClick={() => exportarExcel(p)}
-                          />
-                        </Tooltip>
-                      </HStack>
+                {pedidosPagina.length === 0 ? (
+                  <Tr>
+                    <Td colSpan={esAdmin ? 8 : 7} textAlign="center" py={10} color={emptyTextColor}>
+                      {filtroCliente || filtroEstado
+                        ? "No se encontraron pedidos con los filtros aplicados."
+                        : "No hay pedidos registrados aún."}
                     </Td>
                   </Tr>
-                ))}
+                ) : (
+                  pedidosPagina.map((p) => (
+                    <Tr key={p.id_pedido}>
+                      <Td fontWeight="bold">{p.id_pedido}</Td>
+                      <Td>{p.nombre_cliente}</Td>
+                      {esAdmin && (
+                        <Td fontSize="xs" color="gray.500">
+                          {p.creado_por || "—"}
+                        </Td>
+                      )}
+                      <Td>{p.fecha_reserva?.substring(0, 10)}</Td>
+                      <Td>{p.fecha_entrega?.substring(0, 10)}</Td>
+
+                      <Td>
+                        {/* Bug #3 corregido: campo correcto es estado_pedido */}
+                        <Badge colorScheme={colorPorEstado(p.estado_pedido)}>
+                          {p.estado_pedido || "Desconocido"}
+                        </Badge>
+                      </Td>
+
+                      <Td textAlign="right" fontFamily="monospace">
+                        {formatearL(p.total)}
+                      </Td>
+
+                      <Td textAlign="center">
+                        <HStack justify="center" spacing={1}>
+                          <Tooltip label="Editar">
+                            <IconButton
+                              icon={<FaEdit />}
+                              size="sm"
+                              colorScheme="blue"
+                              onClick={() => seleccionarPedido(p)}
+                            />
+                          </Tooltip>
+
+                          {/* Solo admin puede eliminar cualquier pedido;
+                              un vendedor solo puede eliminar los suyos */}
+                          {(esAdmin || p.creado_por?.toLowerCase() === userEmail.toLowerCase()) && (
+                            <Tooltip label="Eliminar">
+                              <IconButton
+                                icon={<FaTrash />}
+                                size="sm"
+                                colorScheme="red"
+                                onClick={() => confirmarEliminar(p)}
+                              />
+                            </Tooltip>
+                          )}
+
+                          <Tooltip label="PDF">
+                            <IconButton
+                              icon={<FaFilePdf />}
+                              size="sm"
+                              colorScheme="red"
+                              onClick={() => exportarPDF(p)}
+                            />
+                          </Tooltip>
+
+                          <Tooltip label="Excel">
+                            <IconButton
+                              icon={<FaFileExcel />}
+                              size="sm"
+                              colorScheme="green"
+                              onClick={() => exportarExcel(p)}
+                            />
+                          </Tooltip>
+                        </HStack>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
               </Tbody>
             </Table>
           </Box>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <Flex justify="space-between" align="center" mt={4}>
+              <Text fontSize="sm" color="gray.500">
+                Mostrando {Math.min((paginaActual - 1) * ITEMS_PER_PAGE + 1, pedidosFiltrados.length)}
+                –{Math.min(paginaActual * ITEMS_PER_PAGE, pedidosFiltrados.length)} de {pedidosFiltrados.length} pedidos
+              </Text>
+              <HStack spacing={2}>
+                <IconButton
+                  icon={<FaChevronLeft />}
+                  size="sm"
+                  isDisabled={paginaActual === 1}
+                  onClick={() => setPaginaActual((p) => p - 1)}
+                  aria-label="Página anterior"
+                />
+                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                  .filter((n) => n === 1 || n === totalPaginas || Math.abs(n - paginaActual) <= 1)
+                  .reduce((acc, n, i, arr) => {
+                    if (i > 0 && n - arr[i - 1] > 1) acc.push("...");
+                    acc.push(n);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === "..." ? (
+                      <Text key={`dots-${idx}`} px={2} color="gray.400">…</Text>
+                    ) : (
+                      <Button
+                        key={item}
+                        size="sm"
+                        colorScheme={paginaActual === item ? "teal" : "gray"}
+                        variant={paginaActual === item ? "solid" : "outline"}
+                        onClick={() => setPaginaActual(item)}
+                      >
+                        {item}
+                      </Button>
+                    )
+                  )}
+                <IconButton
+                  icon={<FaChevronRight />}
+                  size="sm"
+                  isDisabled={paginaActual === totalPaginas}
+                  onClick={() => setPaginaActual((p) => p + 1)}
+                  aria-label="Página siguiente"
+                />
+              </HStack>
+            </Flex>
+          )}
         </Box>
       </Box>
 
@@ -827,7 +1059,7 @@ export default function Pedidos() {
 
             <AlertDialogBody>
               ¿Seguro que deseas eliminar el pedido #
-              {pedidoAEliminar?.id_pedido}?
+              {pedidoAEliminar?.id_pedido}? Esta acción no se puede deshacer.
             </AlertDialogBody>
 
             <AlertDialogFooter>

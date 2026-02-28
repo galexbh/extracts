@@ -186,17 +186,39 @@ exports.updateProducto = async (req, res) => {
 
 // ============================================================
 // 🔹 DELETE: Eliminar producto
+// Bug fix: ahora usa transacción para eliminar también el registro
+// de inventario asociado y evitar registros huérfanos.
 // ============================================================
 exports.deleteProducto = async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query(
-      `DELETE FROM produccion.tbl_productos WHERE id_producto=$1`,
+    await client.query("BEGIN");
+
+    // Eliminar el inventario vinculado al producto primero
+    await client.query(
+      `DELETE FROM inventario.tbl_inventario_productos WHERE id_producto = $1`,
       [req.params.id]
     );
 
+    // Luego eliminar el producto
+    const result = await client.query(
+      `DELETE FROM produccion.tbl_productos WHERE id_producto = $1 RETURNING id_producto`,
+      [req.params.id]
+    );
+
+    if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    await client.query("COMMIT");
     res.json({ message: "Producto eliminado" });
+
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("❌ Error al eliminar producto:", err);
     res.status(500).json({ error: "Error al eliminar producto" });
+  } finally {
+    client.release();
   }
 };

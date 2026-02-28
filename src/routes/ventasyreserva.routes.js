@@ -37,6 +37,9 @@ router.put("/pedidos/:id_pedido", pedidosCtrl.updatePedido);
 // Eliminar pedido (y su detalle)
 router.delete("/pedidos/:id_pedido", pedidosCtrl.deletePedido);
 
+// Listar estados de pedido
+router.get("/estados-pedido", pedidosCtrl.getEstadosPedido);
+
 // ============================================================
 // 📊 ESTADÍSTICAS PARA EL DASHBOARD
 // ============================================================

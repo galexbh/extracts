@@ -57,10 +57,10 @@ import extractusLogo from "../login/log.png";
 // ✅ Validaciones
 import {
   validarRequerido,
-  soloLetras,
   validarTelefono,
   validarRTN,
   validarEmail,
+  validarLongitudMinima,
 } from "../../utils/validaciones";
 
 export default function Clientes() {
@@ -167,6 +167,35 @@ export default function Clientes() {
   }, [data]);
 
   // ============================================================
+  // 🔍 Validadores por campo
+  // ============================================================
+  const validators = {
+    nombre_cliente: (v) => {
+      const req = validarRequerido(v, "Nombre del cliente");
+      if (req) return req;
+      if (String(v).trim().length < 3)
+        return "El nombre debe tener al menos 3 caracteres.";
+      if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(String(v)))
+        return "El nombre solo debe contener letras y espacios.";
+      return null;
+    },
+    rtn: (v) => {
+      if (!v || String(v).trim() === "") return null;
+      const limpio = String(v).replace(/-/g, "");
+      if (!/^[0-9]{14}$/.test(limpio))
+        return "El RTN debe tener 14 dígitos numéricos.";
+      return null;
+    },
+    direccion: (v) =>
+      validarRequerido(v, "Dirección") ||
+      validarLongitudMinima(v, "Dirección", 5),
+    telefono: (v) =>
+      validarRequerido(v, "Teléfono") || validarTelefono(v),
+    correo_electronico: (v) =>
+      v && String(v).trim() !== "" ? validarEmail(v) : null,
+  };
+
+  // ============================================================
   // 🔹 Campos del formulario CRUD
   // ============================================================
   const fields = [
@@ -175,8 +204,16 @@ export default function Clientes() {
       label: "Nombre del Cliente",
       type: "text",
       required: true,
+      validate: validators.nombre_cliente,
+      sanitize: (v) => String(v).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, ""),
     },
-    { name: "rtn", label: "RTN / ID", type: "text" },
+    {
+      name: "rtn",
+      label: "RTN / ID (14 dígitos)",
+      type: "text",
+      validate: validators.rtn,
+      sanitize: (v) => String(v).replace(/[^0-9-]/g, "").slice(0, 15),
+    },
     {
       name: "id_tipo_cliente",
       label: "Tipo de Cliente",
@@ -186,10 +223,29 @@ export default function Clientes() {
         value: t.id_tipo_cliente,
       })),
       required: true,
+      validate: (v) => validarRequerido(v, "Tipo de cliente"),
     },
-    { name: "direccion", label: "Dirección", type: "text", required: true },
-    { name: "telefono", label: "Teléfono", type: "text", required: true },
-    { name: "correo_electronico", label: "Correo Electrónico", type: "email" },
+    {
+      name: "direccion",
+      label: "Dirección",
+      type: "text",
+      required: true,
+      validate: validators.direccion,
+    },
+    {
+      name: "telefono",
+      label: "Teléfono (8 dígitos)",
+      type: "text",
+      required: true,
+      validate: validators.telefono,
+      sanitize: (v) => String(v).replace(/[^0-9-]/g, "").slice(0, 9),
+    },
+    {
+      name: "correo_electronico",
+      label: "Correo Electrónico",
+      type: "email",
+      validate: validators.correo_electronico,
+    },
     {
       name: "id_estado_cliente",
       label: "Estado del Cliente",
@@ -199,25 +255,10 @@ export default function Clientes() {
         value: e.id_estado_cliente,
       })),
       required: true,
+      validate: (v) => validarRequerido(v, "Estado"),
     },
   ];
 
-  // ============================================================
-  // 🔍 Validadores por campo (se pasan al CrudTabla)
-// ============================================================
-  const validators = {
-    nombre_cliente: (v) =>
-      validarRequerido(v, "Nombre del cliente") ||
-      (!soloLetras(v) ? "El nombre solo debe contener letras." : null),
-
-    rtn: (v) => (v ? validarRTN(v) : null),
-
-    telefono: (v) =>
-      validarRequerido(v, "Teléfono") || validarTelefono(v),
-
-    correo_electronico: (v) =>
-      v ? validarEmail(v) : null,
-  };
 
   // ============================================================
   // 🧾 Exportar PDF (logo + fecha/hora)

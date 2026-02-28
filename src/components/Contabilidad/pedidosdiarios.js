@@ -1,5 +1,5 @@
 // src/components/Contabilidad/pedidosdiarios.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   Box,
   Flex,
@@ -30,6 +30,8 @@ import {
   FormLabel,
   Input,
   IconButton,
+  Spinner,
+  Text,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, RepeatIcon } from "@chakra-ui/icons";
 import { FaFilePdf, FaFileExcel } from "react-icons/fa";
@@ -39,7 +41,7 @@ import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import logo from "../login/log.png";
-import { pedidos, productos as allProds } from "../../data/pedidos";
+import api from "../../api/apiClient";
 
 const COMPANY_NAME = "Extractus";
 const REPORT_TITLE = "Reporte de Pedidos Diarios";
@@ -53,23 +55,51 @@ const extractors = {
 export default function PedidosDiarios() {
   const navigate = useNavigate();
 
-  // 1) Prepara datos agrupados
-  const rawData = useMemo(() => {
-    const map = {};
-    pedidos.forEach(({ fecha_reserva, productos }) =>
-      productos.forEach(({ id_producto, cantidad }) => {
-        const key = `${fecha_reserva}|${id_producto}`;
-        map[key] = (map[key] || 0) + cantidad;
-      })
-    );
-    return Object.entries(map).map(([k, cantidad]) => {
-      const [fecha, id] = k.split("|");
-      const prod = allProds.find((p) => p.id_producto === +id);
-      return { fecha, producto: prod?.nombre || "", cantidad };
-    });
+  const [loading, setLoading] = useState(true);
+  const [rawData, setRawData] = useState([]);
+
+  // Cargar datos reales desde el backend
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        // Traer lista de pedidos
+        const listRes = await api.get("/ventas/ventasyreserva/pedidos");
+        const pedidosList = listRes.data || [];
+
+        // Por cada pedido, obtener su detalle
+        const map = {};
+        await Promise.all(
+          pedidosList.map(async (p) => {
+            try {
+              const detRes = await api.get(
+                `/ventas/ventasyreserva/pedidos/${p.id_pedido}`
+              );
+              const { pedido: cab, detalle } = detRes.data;
+              const fecha = cab.fecha_reserva?.substring(0, 10);
+              detalle.forEach(({ nombre_producto, cantidad }) => {
+                const key = `${fecha}|${nombre_producto}`;
+                map[key] = (map[key] || 0) + Number(cantidad);
+              });
+            } catch { }
+          })
+        );
+
+        const resultado = Object.entries(map).map(([k, cantidad]) => {
+          const [fecha, producto] = k.split("|");
+          return { fecha, producto, cantidad };
+        });
+
+        setRawData(resultado);
+      } catch (err) {
+        console.error("❌ Error cargando pedidos diarios:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    cargar();
   }, []);
 
-  // 2) Estados de filtro y exportación
+  // Estados de filtro y exportación
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -81,7 +111,7 @@ export default function PedidosDiarios() {
       prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]
     );
 
-  // 3) Filtra por rango
+  // Filtrar por rango de fechas
   const data = useMemo(() => {
     return rawData
       .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
@@ -92,13 +122,12 @@ export default function PedidosDiarios() {
       });
   }, [rawData, fromDate, toDate]);
 
-  // 4) Limpia filtros
   const clearFilters = () => {
     setFromDate("");
     setToDate("");
   };
 
-  // 5) Exportar a PDF
+  // Exportar a PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
     const m = 14,
@@ -110,10 +139,12 @@ export default function PedidosDiarios() {
     doc.setFontSize(14).setTextColor(102, 187, 106).text(REPORT_TITLE, w / 2, 30, { align: "center" });
     doc.setFontSize(10).setTextColor(0).text(`Fecha: ${dateStr}`, m, 20);
 
-    const img = doc.getImageProperties(logo);
-    const imgW = 20,
-      imgH = (img.height * imgW) / img.width;
-    doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
+    try {
+      const img = doc.getImageProperties(logo);
+      const imgW = 20,
+        imgH = (img.height * imgW) / img.width;
+      doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
+    } catch { }
     doc.setDrawColor(0).setLineWidth(0.5).line(m, 35, w - m, 35);
 
     autoTable(doc, {
@@ -121,7 +152,7 @@ export default function PedidosDiarios() {
       head: [selectedCols],
       body: data.map((r) => selectedCols.map((c) => extractors[c](r))),
       theme: "grid",
-      headStyles: { fillColor: [200, 255, 200], textColor: [0, 80, 0] },
+      headStyles: { fillColor: [0, 128, 128], textColor: [255, 255, 255] },
       margin: { left: m, right: m },
       styles: { fontSize: 8, cellPadding: 2 },
       didDrawPage: () => {
@@ -134,7 +165,7 @@ export default function PedidosDiarios() {
     onClose();
   };
 
-  // 6) Exportar a Excel
+  // Exportar a Excel
   const exportToExcel = async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("PedidosDiarios", {
@@ -171,8 +202,8 @@ export default function PedidosDiarios() {
     hdr.height = 20;
     hdr.eachCell((cell) => {
       Object.assign(cell, {
-        fill: { type: "pattern", pattern: "solid", fgColor: { argb: "CCFFCC" } },
-        font: { bold: true, color: { argb: "005000" } },
+        fill: { type: "pattern", pattern: "solid", fgColor: { argb: "008080" } },
+        font: { bold: true, color: { argb: "FFFFFF" } },
         alignment: { horizontal: "center", vertical: "middle" },
       });
     });
@@ -190,9 +221,16 @@ export default function PedidosDiarios() {
     onClose();
   };
 
-  // 7) Renderizado
   const bg = useColorModeValue("white", "gray.800");
   const border = useColorModeValue("gray.200", "gray.600");
+  const emptyColor = useColorModeValue("gray.400", "gray.500");
+
+  if (loading)
+    return (
+      <Flex justify="center" align="center" minH="40vh">
+        <Spinner size="xl" color="teal.400" />
+      </Flex>
+    );
 
   return (
     <Box p={6} bg={bg} borderRadius="md" boxShadow="lg">
@@ -201,20 +239,18 @@ export default function PedidosDiarios() {
         {REPORT_TITLE}
       </Heading>
 
-      {/* Botón Atrás debajo del título */}
+      {/* Botón Atrás */}
       <Button mt={1} mb={3} size="sm" onClick={() => navigate(-1)} w="fit-content">
         ←
       </Button>
 
       <Divider mb={4} />
 
-      {/* Filtros Desde/Hasta, Limpiar y Exportar */}
-      <Flex mb={4} align="center" justify="space-between">
-        <Flex align="flex-end" gap={4}>
+      {/* Filtros + Exportar */}
+      <Flex mb={4} align="center" justify="space-between" wrap="wrap" gap={3}>
+        <Flex align="flex-end" gap={4} wrap="wrap">
           <FormControl>
-            <FormLabel fontSize="sm" mb={1}>
-              Desde
-            </FormLabel>
+            <FormLabel fontSize="sm" mb={1}>Desde</FormLabel>
             <Input
               type="date"
               size="sm"
@@ -225,9 +261,7 @@ export default function PedidosDiarios() {
             />
           </FormControl>
           <FormControl>
-            <FormLabel fontSize="sm" mb={1}>
-              Hasta
-            </FormLabel>
+            <FormLabel fontSize="sm" mb={1}>Hasta</FormLabel>
             <Input
               type="date"
               size="sm"
@@ -245,31 +279,31 @@ export default function PedidosDiarios() {
             mt={6}
           />
         </Flex>
-        <Menu>
-          <MenuButton as={Button} colorScheme="green" size="sm" rightIcon={<ChevronDownIcon />}>
-            Exportar
-          </MenuButton>
-          <MenuList>
-            <MenuItem
-              icon={<FaFilePdf />}
-              onClick={() => {
-                setExportFormat("PDF");
-                onOpen();
-              }}
-            >
-              Exportar PDF
-            </MenuItem>
-            <MenuItem
-              icon={<FaFileExcel />}
-              onClick={() => {
-                setExportFormat("EXCEL");
-                onOpen();
-              }}
-            >
-              Exportar Excel
-            </MenuItem>
-          </MenuList>
-        </Menu>
+
+        <Flex align="center" gap={3}>
+          <Text fontSize="sm" color={emptyColor}>
+            {data.length} registro(s)
+          </Text>
+          <Menu>
+            <MenuButton as={Button} colorScheme="teal" size="sm" rightIcon={<ChevronDownIcon />}>
+              Exportar
+            </MenuButton>
+            <MenuList>
+              <MenuItem
+                icon={<FaFilePdf />}
+                onClick={() => { setExportFormat("PDF"); onOpen(); }}
+              >
+                Exportar PDF
+              </MenuItem>
+              <MenuItem
+                icon={<FaFileExcel />}
+                onClick={() => { setExportFormat("EXCEL"); onOpen(); }}
+              >
+                Exportar Excel
+              </MenuItem>
+            </MenuList>
+          </Menu>
+        </Flex>
       </Flex>
 
       {/* Modal columnas */}
@@ -292,7 +326,7 @@ export default function PedidosDiarios() {
           </ModalBody>
           <ModalFooter>
             <Button
-              colorScheme="green"
+              colorScheme="teal"
               mr={3}
               onClick={exportFormat === "PDF" ? exportToPDF : exportToExcel}
             >
@@ -305,7 +339,7 @@ export default function PedidosDiarios() {
         </ModalContent>
       </Modal>
 
-      {/* Tabla con líneas */}
+      {/* Tabla */}
       <Box borderRadius="md" p={0}>
         <Table
           size="sm"
@@ -330,25 +364,33 @@ export default function PedidosDiarios() {
             </Tr>
           </Thead>
           <Tbody>
-            {data.map((row, idx) => (
-              <Tr key={idx}>
-                {selectedCols.includes("Fecha") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {row.fecha}
-                  </Td>
-                )}
-                {selectedCols.includes("Producto") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {row.producto}
-                  </Td>
-                )}
-                {selectedCols.includes("Cantidad") && (
-                  <Td textAlign="center" borderBottom="1px solid">
-                    {row.cantidad}
-                  </Td>
-                )}
+            {data.length === 0 ? (
+              <Tr>
+                <Td colSpan={selectedCols.length} textAlign="center" py={10} color={emptyColor}>
+                  No hay datos para el rango de fechas seleccionado.
+                </Td>
               </Tr>
-            ))}
+            ) : (
+              data.map((row, idx) => (
+                <Tr key={idx}>
+                  {selectedCols.includes("Fecha") && (
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
+                      {row.fecha}
+                    </Td>
+                  )}
+                  {selectedCols.includes("Producto") && (
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
+                      {row.producto}
+                    </Td>
+                  )}
+                  {selectedCols.includes("Cantidad") && (
+                    <Td textAlign="center" borderBottom="1px solid">
+                      {row.cantidad}
+                    </Td>
+                  )}
+                </Tr>
+              ))
+            )}
           </Tbody>
         </Table>
       </Box>

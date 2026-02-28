@@ -52,6 +52,32 @@ router.get("/usuarios/estado-login", async (req, res) => {
   }
 });
 
+// 🔑 Obtener rol del usuario por email (para login multi-usuario)
+// Va ANTES de /usuarios/:id para que no colisione con esa ruta dinámica
+router.get("/usuarios/rol", async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ error: "Email requerido" });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.nombre_rol
+       FROM seguridad.tbl_usuarios u
+       JOIN seguridad.tbl_roles r ON r.id_rol = u.id_rol
+       WHERE LOWER(u.username) = LOWER($1) AND u.id_estado_usuario = 1
+       LIMIT 1;`,
+      [email]
+    );
+
+    if (!rows.length)
+      return res.status(404).json({ error: "Usuario no encontrado" });
+
+    res.json({ nombre_rol: rows[0].nombre_rol });
+  } catch (err) {
+    console.error("❌ Error obteniendo rol:", err);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 router.get("/usuarios/:id", usuariosCtrl.getUsuarioById);
 router.post("/usuarios", usuariosCtrl.insertUsuario);
 router.put("/usuarios/:id_usuario", usuariosCtrl.updateUsuario);

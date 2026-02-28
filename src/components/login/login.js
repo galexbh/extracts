@@ -68,12 +68,12 @@ export default function Login() {
   useEffect(() => {
     const savedRemember = localStorage.getItem("rememberMe") === "true";
     const savedEmail = localStorage.getItem("rememberEmail") || "";
-    const savedPass = localStorage.getItem("rememberPass") || "";
     setRememberMe(savedRemember);
     if (savedRemember && savedEmail) {
       setUser(savedEmail);
-      if (savedPass) setPass(atob(savedPass)); // decodificar base64
     }
+    // Limpiar contraseña guardada si existía (migración segura)
+    localStorage.removeItem("rememberPass");
   }, []);
 
   const safeEmail = (s) => (s || "").trim().toLowerCase();
@@ -117,15 +117,13 @@ export default function Login() {
       localStorage.setItem("uid", userUid);
       localStorage.setItem("userEmail", email);
 
-      // 💾 Recordar dispositivo: guardar o limpiar email + contraseña
+      // 💾 Recordar dispositivo: guardar o limpiar solo el email
       if (rememberMe) {
         localStorage.setItem("rememberMe", "true");
         localStorage.setItem("rememberEmail", email);
-        localStorage.setItem("rememberPass", btoa(pass)); // Base64
       } else {
         localStorage.removeItem("rememberMe");
         localStorage.removeItem("rememberEmail");
-        localStorage.removeItem("rememberPass");
       }
 
       // Token: en localStorage si recuerda, en sessionStorage si no
@@ -202,6 +200,22 @@ export default function Login() {
       // 🔐 Pasar el secreto solo si es primera inscripción (cuando hay QR visible)
       const data = await mfaVerify(uid, code, secret);
       if (data.success) {
+        // ✅ Obtener el rol del usuario y guardarlo para filtrado multi-usuario
+        try {
+          const email = localStorage.getItem("userEmail") || "";
+          const rolRes = await fetch(
+            `${API_URL}/seguridad/usuarios/rol?email=${encodeURIComponent(email)}`
+          );
+          if (rolRes.ok) {
+            const rolData = await rolRes.json();
+            if (rolData.nombre_rol) {
+              localStorage.setItem("userRol", rolData.nombre_rol);
+            }
+          }
+        } catch (_) {
+          // No bloquear el login si falla obtener el rol
+        }
+
         toast({ title: "Acceso concedido ✅", status: "success" });
         setShowMfaModal(false);
         navigate("/app", { replace: true });

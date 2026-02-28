@@ -69,13 +69,17 @@ exports.getDetallePedido = async (req, res) => {
 
 // ============================================================
 // 3️⃣ INICIAR ORDEN DE PRODUCCIÓN
+// Bug fix: ahora crea una ORDEN POR CADA PRODUCTO del pedido,
+// no solo del primero.
 // ============================================================
 exports.iniciarProduccion = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id_pedido } = req.params;
 
+    // Obtener usuario por email (header x-user-email)
     const email = req.headers["x-user-email"];
-    const u = await pool.query(
+    const u = await client.query(
       `SELECT id_usuario FROM seguridad.tbl_usuarios WHERE LOWER(username)=LOWER($1)`,
       [email]
     );
@@ -85,34 +89,63 @@ exports.iniciarProduccion = async (req, res) => {
 
     const id_usuario = u.rows[0].id_usuario;
 
-    const det = await pool.query(
+    // Verificar que el pedido no tiene ya una orden iniciada
+    const existing = await client.query(
+      `SELECT id_orden FROM produccion.tbl_orden_produccion WHERE id_pedido = $1 LIMIT 1`,
+      [id_pedido]
+    );
+
+    if (existing.rowCount > 0) {
+      return res.status(400).json({
+        error: `Ya existe una orden de producción para el pedido #${id_pedido}`,
+      });
+    }
+
+    // Obtener TODOS los productos del pedido
+    const det = await client.query(
       `SELECT id_producto, cantidad 
        FROM ventasyreserva.tbl_detalle_pedidos 
        WHERE id_pedido=$1`,
       [id_pedido]
     );
 
-    const primer = det.rows[0];
+    if (det.rowCount === 0) {
+      return res.status(400).json({ error: "El pedido no tiene productos" });
+    }
 
-    const insert = await pool.query(
-      `
-      INSERT INTO produccion.tbl_orden_produccion
-      (id_producto, cantidad_producir, id_origen_produccion,
-       id_pedido, fecha_inicio, id_estado_produccion, id_usuario, fecha_creacion)
-      VALUES ($1,$2,1,$3,NOW(),1,$4,NOW())
-      RETURNING id_orden;
-      `,
-      [primer.id_producto, primer.cantidad, id_pedido, id_usuario]
-    );
+    await client.query("BEGIN");
+
+    const ordenesCreadas = [];
+
+    // Crear una orden por cada producto del pedido
+    for (const item of det.rows) {
+      const insert = await client.query(
+        `
+        INSERT INTO produccion.tbl_orden_produccion
+        (id_producto, cantidad_producir, id_origen_produccion,
+         id_pedido, fecha_inicio, id_estado_produccion, id_usuario, fecha_creacion)
+        VALUES ($1,$2,1,$3,NOW(),1,$4,NOW())
+        RETURNING id_orden;
+        `,
+        [item.id_producto, item.cantidad, id_pedido, id_usuario]
+      );
+      ordenesCreadas.push(insert.rows[0].id_orden);
+    }
+
+    await client.query("COMMIT");
 
     res.json({
-      message: "Producción iniciada correctamente",
-      id_orden: insert.rows[0].id_orden,
+      message: `Producción iniciada correctamente (${ordenesCreadas.length} orden(es) creada(s))`,
+      id_ordenes: ordenesCreadas,
+      id_orden: ordenesCreadas[0], // compatibilidad con el frontend
     });
 
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("🔥 ERROR iniciarProduccion:", err);
     res.status(500).json({ error: "Error al iniciar producción" });
+  } finally {
+    client.release();
   }
 };
 
@@ -144,13 +177,30 @@ exports.getInsumosInventario = async (_req, res) => {
 };
 
 // ============================================================
-// 5️⃣ FINALIZAR PRODUCCIÓN + DESCONTAR INSUMOS + SUMAR PRODUCTO
+// 5️⃣ LISTAR ESTADOS DE PRODUCCIÓN (movido desde routes)
+// ============================================================
+exports.getEstadosProducto = async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id_estado_producto, nombre_estado
+      FROM mantenimiento.tbl_estado_producto
+      ORDER BY id_estado_producto;
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error al obtener estados de producto:", err);
+    res.status(500).json({ error: "Error al obtener estados de producto" });
+  }
+};
+
+// ============================================================
+// 6️⃣ FINALIZAR PRODUCCIÓN + DESCONTAR INSUMOS + SUMAR PRODUCTO
+// Bug fix: parámetros del SP alineados con la firma de 4 parámetros.
+// Bug fix: validación de que la orden pertenece al pedido correcto.
 // ============================================================
 exports.registrarInsumosUsados = async (req, res) => {
   const { id_orden } = req.params;
   const { insumos, comentarios } = req.body;
-
-  console.log("📥 RECIBIDO:", { id_orden, insumos, comentarios });
 
   const usuario = req.headers["x-user-email"] || "Sistema";
 
@@ -158,10 +208,31 @@ exports.registrarInsumosUsados = async (req, res) => {
     return res.status(400).json({ error: "Insumos vacíos" });
   }
 
+  if (!id_orden || isNaN(Number(id_orden))) {
+    return res.status(400).json({ error: "ID de orden inválido" });
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+
+    // Verificar que la orden existe
+    const ordCheck = await client.query(
+      `SELECT id_orden, id_producto, cantidad_producir, id_estado_produccion
+       FROM produccion.tbl_orden_produccion WHERE id_orden = $1`,
+      [id_orden]
+    );
+
+    if (ordCheck.rowCount === 0) {
+      throw new Error(`Orden de producción #${id_orden} no encontrada`);
+    }
+
+    const ord = ordCheck.rows[0];
+
+    if (ord.id_estado_produccion === 3) {
+      throw new Error(`La orden #${id_orden} ya está finalizada`);
+    }
 
     // ============================================================
     // 🔹 DESCONTAR INSUMOS USADOS + REGISTRAR MOVIMIENTO INSUMO
@@ -182,20 +253,22 @@ exports.registrarInsumosUsados = async (req, res) => {
       );
 
       if (inv.rowCount === 0) {
-        throw new Error("Insumo no existe en inventario");
+        throw new Error(`Insumo ${id_insumo} no existe en inventario`);
       }
 
       if (Number(inv.rows[0].stock_actual) < cant) {
         throw new Error(`Stock insuficiente para insumo ${id_insumo}`);
       }
 
+      // Registrar consumo
       await client.query(
         `INSERT INTO produccion.tbl_consumo_insumo
          (id_orden, id_insumo, cantidad_utilizada, comentario) 
          VALUES ($1,$2,$3,$4)`,
-        [id_orden, id_insumo, cant, comentarios]
+        [id_orden, id_insumo, cant, comentarios || null]
       );
 
+      // Descontar del inventario de insumos (SP con 4 parámetros)
       await client.query(
         `CALL inventario.sp_registrar_movimiento(
            $1::integer,
@@ -208,7 +281,7 @@ exports.registrarInsumosUsados = async (req, res) => {
     }
 
     // ============================================================
-    // 🔹 MARCAR ORDEN COMO FINALIZADA
+    // 🔹 MARCAR ORDEN COMO FINALIZADA (estado 3)
     // ============================================================
     await client.query(
       `UPDATE produccion.tbl_orden_produccion
@@ -216,36 +289,29 @@ exports.registrarInsumosUsados = async (req, res) => {
            fecha_finalizada      = NOW(),
            comentarios           = COALESCE($2, comentarios)
        WHERE id_orden = $1`,
-      [id_orden, comentarios]
+      [id_orden, comentarios || null]
     );
 
     // ============================================================
-    // 🔹 SUMAR PRODUCTO TERMINADO (SOLO SP)
+    // 🔹 SUMAR PRODUCTO TERMINADO AL INVENTARIO
+    // SP con 4 parámetros: (id_producto, tipo_movimiento, cantidad, descripcion)
     // ============================================================
-    const ord = await client.query(
-      `SELECT id_producto, cantidad_producir
-       FROM produccion.tbl_orden_produccion 
-       WHERE id_orden = $1`,
-      [id_orden]
-    );
+    const id_producto = ord.id_producto;
+    const cantidad_producida = Number(ord.cantidad_producir);
 
-    if (ord.rowCount === 0) throw new Error("Orden de producción no encontrada");
-
-    const id_producto = ord.rows[0].id_producto;
-    const cantidad_producida = Number(ord.rows[0].cantidad_producir);
-
-    // 👇 SOLO SE LLAMA EL SP — YA SUMA INVENTARIO AUTOMÁTICO
     await client.query(
       `CALL inventario.sp_registrar_movimiento_producto(
          $1::integer,
-         'Entrada'::varchar,
-         $2::numeric,
-         $3::varchar,
-         'PRODUCCION'::varchar,
-         $4::integer,
-         $4::integer
+         $2::varchar,
+         $3::numeric,
+         $4::varchar
       )`,
-      [id_producto, cantidad_producida, usuario, id_orden]
+      [
+        id_producto,
+        "Entrada",
+        cantidad_producida,
+        `Entrada por producción - Orden #${id_orden}`,
+      ]
     );
 
     await client.query("COMMIT");

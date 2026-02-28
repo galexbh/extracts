@@ -7,16 +7,21 @@ const { pool } = require("../../db");
 // 🔹 LISTAR TODAS LAS PERSONAS
 // ============================================================
 exports.getPersonas = async (req, res) => {
+  // Bug fix: usar client dedicado para que BEGIN/cursor/FETCH/COMMIT
+  // ocurran SIEMPRE en la misma conexión del pool.
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    await pool.query(`CALL seguridad.sp_personas_listar('cur_personas')`);
-    const result = await pool.query(`FETCH ALL FROM cur_personas`);
-    await pool.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query(`CALL seguridad.sp_personas_listar('cur_personas')`);
+    const result = await client.query(`FETCH ALL FROM cur_personas`);
+    await client.query("COMMIT");
     res.json(result.rows);
   } catch (error) {
-    await pool.query("ROLLBACK");
-    console.error("❌ Error al listar personas:", error);
+    await client.query("ROLLBACK").catch(() => { });
+    console.error("[API] \u274c Error al listar personas:", error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -25,11 +30,15 @@ exports.getPersonas = async (req, res) => {
 // ============================================================
 exports.getPersonaById = async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    await pool.query(`CALL seguridad.sp_personas_obtener_por_id('cur_persona', $1)`, [id]);
-    const result = await pool.query(`FETCH ALL FROM cur_persona`);
-    await pool.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query(
+      `CALL seguridad.sp_personas_obtener_por_id('cur_persona', $1)`,
+      [id]
+    );
+    const result = await client.query(`FETCH ALL FROM cur_persona`);
+    await client.query("COMMIT");
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Persona no encontrada" });
@@ -37,9 +46,11 @@ exports.getPersonaById = async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (error) {
-    await pool.query("ROLLBACK");
-    console.error("❌ Error al obtener persona:", error);
+    await client.query("ROLLBACK").catch(() => { });
+    console.error("[API] \u274c Error al obtener persona:", error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 };
 

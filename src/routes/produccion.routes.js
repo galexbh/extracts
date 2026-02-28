@@ -4,7 +4,6 @@
 
 const express = require("express");
 const router = express.Router();
-const { pool } = require("../db");
 
 // ============================================================
 // 📦 Controllers
@@ -13,10 +12,10 @@ const { pool } = require("../db");
 // Productos
 const productosCtrl = require("../controllers/produccion/productos.controller");
 
-// Insumos (solo catálogo de insumos de producción)
+// Insumos (catálogo de insumos de producción)
 const insumosCtrl = require("../controllers/produccion/InsumosController");
 
-// Órdenes y pedidos (produce / inventario)
+// Órdenes y pedidos
 const produccionCtrl = require("../controllers/produccion/ordenes.controller");
 
 
@@ -42,7 +41,6 @@ router.delete("/insumos/:id_insumo", insumosCtrl.deleteInsumo);
 // ============================================================
 // 🔹 INSUMOS — Inventario REAL (existencias)
 // ============================================================
-// 🔥 Usa inventario.tbl_inventario_insumo
 router.get("/inventario-insumos", produccionCtrl.getInsumosInventario);
 
 
@@ -60,24 +58,9 @@ router.post("/ordenes/:id_orden/insumos", produccionCtrl.registrarInsumosUsados)
 
 
 // ============================================================
-// 🔹 ESTADOS DEL PRODUCTO
+// 🔹 ESTADOS DEL PRODUCTO (movido del inline al controller)
 // ============================================================
-router.get("/estados-producto", async (_req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id_estado_producto, nombre_estado
-      FROM mantenimiento.tbl_estado_producto
-      ORDER BY id_estado_producto;
-    `);
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("❌ Error al obtener estados de producto:", err);
-    res.status(500).json({
-      error: "Error al obtener estados de producto"
-    });
-  }
-});
+router.get("/estados-producto", produccionCtrl.getEstadosProducto);
 
 
 // ============================================================
