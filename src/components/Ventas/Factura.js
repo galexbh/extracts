@@ -252,6 +252,8 @@ export default function Facturas() {
   const [facturaParaImprimir, setFacturaParaImprimir] = useState(null);
   const [imprimirTrasGuardar, setImprimirTrasGuardar] = useState(false);
 
+  const [isSaving, setIsSaving] = useState(false);
+
   // Totales helpers
   const calcSub = (f) =>
     (f.items || []).reduce(
@@ -270,46 +272,46 @@ export default function Facturas() {
   const calcTotal = (f) => calcGravado15(f) + calcISV15(f);
 
   const imprimirDesdeFila = async (id_factura) => {
-  try {
-    const res = await api.get(`/ventas/facturas/${id_factura}`);
+    try {
+      const res = await api.get(`/ventas/facturas/${id_factura}`);
 
-    // Asegurar estructura segura
-    const factura = res.data?.factura;
-    const detalle = Array.isArray(res.data?.detalle) ? res.data.detalle : [];
+      // Asegurar estructura segura
+      const factura = res.data?.factura;
+      const detalle = Array.isArray(res.data?.detalle) ? res.data.detalle : [];
 
-    if (!factura) {
+      if (!factura) {
+        toast({
+          title: "Error",
+          description: "No se encontró la factura",
+          status: "error",
+        });
+        return;
+      }
+
+      // Armar la factura completa con validación
+      const facturaCompleta = {
+        ...factura,
+        aplica_isv_15: factura.aplica_isv_15 ?? true,
+        items: detalle.map((d) => ({
+          id_producto: d.id_producto,
+          cantidad: Number(d.cantidad),
+          descripcion: d.descripcion,
+          precio: Number(d.precio_unitario),
+          descuento: Number(d.descuento || 0),
+        })),
+      };
+
+      imprimirPDF(facturaCompleta);
+
+    } catch (err) {
+      console.error("❌ Error al imprimir factura:", err);
       toast({
-        title: "Error",
-        description: "No se encontró la factura",
+        title: "Error al imprimir factura",
+        description: err.message,
         status: "error",
       });
-      return;
     }
-
-    // Armar la factura completa con validación
-    const facturaCompleta = {
-      ...factura,
-      aplica_isv_15: factura.aplica_isv_15 ?? true,
-      items: detalle.map((d) => ({
-        id_producto: d.id_producto,
-        cantidad: Number(d.cantidad),
-        descripcion: d.descripcion,
-        precio: Number(d.precio_unitario),
-        descuento: Number(d.descuento || 0),
-      })),
-    };
-
-    imprimirPDF(facturaCompleta);
-
-  } catch (err) {
-    console.error("❌ Error al imprimir factura:", err);
-    toast({
-      title: "Error al imprimir factura",
-      description: err.message,
-      status: "error",
-    });
-  }
-};
+  };
   // =========================
   // PDF de UNA factura (elegante con logo)
   // =========================
@@ -319,7 +321,7 @@ export default function Facturas() {
       unit: "mm",
       format: "letter",
     });
-    
+
 
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
@@ -335,7 +337,7 @@ export default function Facturas() {
 
     try {
       doc.addImage(logo, "PNG", m, m - 1, 28, 28);
-    } catch {}
+    } catch { }
 
     doc.setTextColor(...C_ACCENT);
     doc.setFont("helvetica", "bold");
@@ -581,7 +583,10 @@ export default function Facturas() {
       align: "center",
     });
 
-    doc.save(`Factura_${factura.numero_factura || "NA"}.pdf`);
+    // 🖨️ Auto-imprimir en lugar de descargar
+    doc.autoPrint();
+    const blobURL = doc.output("bloburl");
+    window.open(blobURL, "_blank");
   };
 
   // =========================
@@ -697,15 +702,15 @@ export default function Facturas() {
 
     cargarDatos();
     const cargarMetodosPago = async () => {
-  try {
-    const res = await api.get("/ventas/pagos-factura/metodos-pago");
-    setMetodosPago(res.data || []);
-  } catch (err) {
-    console.error("❌ Error cargando métodos de pago:", err);
-  }
-};
+      try {
+        const res = await api.get("/ventas/pagos-factura/metodos-pago");
+        setMetodosPago(res.data || []);
+      } catch (err) {
+        console.error("❌ Error cargando métodos de pago:", err);
+      }
+    };
 
-cargarMetodosPago();
+    cargarMetodosPago();
 
 
 
@@ -734,48 +739,48 @@ cargarMetodosPago();
     onOpen();
   };
 
- const abrirEditar = async (f) => {
-  try {
-    const res = await api.get(`/ventas/facturas/${f.id_factura}`);
-    const { factura, detalle } = res.data;
+  const abrirEditar = async (f) => {
+    try {
+      const res = await api.get(`/ventas/facturas/${f.id_factura}`);
+      const { factura, detalle } = res.data;
 
-    setSel({
-      id_factura: factura.id_factura,
-      numero_factura: factura.numero_factura,
-      cai: factura.cai,
-      fecha_emision: factura.fecha_emision?.substring(0, 10),
-      fecha_vencimiento: factura.fecha_vencimiento?.substring(0, 10),
-      id_cliente: factura.id_cliente,
-      cliente: factura.cliente,
-      rtn: factura.rtn,
-      direccion_entrega: factura.direccion_entrega,
-      vendedor: factura.vendedor,
-      estado: factura.estado,
-      aplica_isv_15: factura.aplica_isv_15 ?? true,
+      setSel({
+        id_factura: factura.id_factura,
+        numero_factura: factura.numero_factura,
+        cai: factura.cai,
+        fecha_emision: factura.fecha_emision?.substring(0, 10),
+        fecha_vencimiento: factura.fecha_vencimiento?.substring(0, 10),
+        id_cliente: factura.id_cliente,
+        cliente: factura.cliente,
+        rtn: factura.rtn,
+        direccion_entrega: factura.direccion_entrega,
+        vendedor: factura.vendedor,
+        estado: factura.estado,
+        aplica_isv_15: factura.aplica_isv_15 ?? true,
 
-      // 🔥🔥🔥 ESTE CAMPO FALTABA — causaba el error
-      id_metodo_pago: factura.id_metodo_pago ?? 1,
+        // 🔥🔥🔥 ESTE CAMPO FALTABA — causaba el error
+        id_metodo_pago: factura.id_metodo_pago ?? 1,
 
-      items: detalle.map((d) => ({
-        id: d.id_detalle_factura,
-        id_producto: d.id_producto,
-        cantidad: Number(d.cantidad),
-        descripcion: d.descripcion,
-        precio: Number(d.precio_unitario),
-        descuento: Number(d.descuento_unitario || 0),
-      })),
-    });
+        items: detalle.map((d) => ({
+          id: d.id_detalle_factura,
+          id_producto: d.id_producto,
+          cantidad: Number(d.cantidad),
+          descripcion: d.descripcion,
+          precio: Number(d.precio_unitario),
+          descuento: Number(d.descuento_unitario || 0),
+        })),
+      });
 
-    onOpen();
-  } catch (err) {
-    console.error("❌ Error cargando factura:", err);
-    toast({
-      title: "Error cargando factura",
-      description: err.message,
-      status: "error",
-    });
-  }
-};
+      onOpen();
+    } catch (err) {
+      console.error("❌ Error cargando factura:", err);
+      toast({
+        title: "Error cargando factura",
+        description: err.message,
+        status: "error",
+      });
+    }
+  };
 
 
   const cerrar = () => {
@@ -839,13 +844,13 @@ cargarMetodosPago();
       items: s.items.map((it) =>
         it.id === lineId
           ? {
-              ...it,
-              id_producto: prod?.id_producto || null,
-              descripcion: prod
-                ? `${prod.nombre_producto} (${prod.unidad_medida})`
-                : "",
-              precio: prod ? Number(prod.precio_unitario) || 0 : 0,
-            }
+            ...it,
+            id_producto: prod?.id_producto || null,
+            descripcion: prod
+              ? `${prod.nombre_producto} (${prod.unidad_medida})`
+              : "",
+            precio: prod ? Number(prod.precio_unitario) || 0 : 0,
+          }
           : it
       ),
     }));
@@ -882,6 +887,30 @@ cargarMetodosPago();
     });
   };
 
+  const handleDescuentoChange = (lineId, v) => {
+    setSel((s) => {
+      const items = s.items.map((it) => {
+        if (it.id !== lineId) return it;
+
+        let desc = Number.isFinite(v) ? v : 0;
+        const subtotalLinea = (Number(it.cantidad) || 0) * (Number(it.precio) || 0);
+
+        if (desc > subtotalLinea) {
+          toast({
+            title: "Descuento excesivo",
+            description: "El descuento no puede superar el total de la línea.",
+            status: "warning",
+            duration: 3000,
+          });
+          desc = subtotalLinea; // Autoajuste al máximo permitido
+        }
+
+        return { ...it, descuento: desc };
+      });
+      return { ...s, items };
+    });
+  };
+
   // =========================
   // Guardar usando el backend
   // =========================
@@ -890,6 +919,15 @@ cargarMetodosPago();
       toast({
         title: "Datos incompletos",
         description: "Debe ingresar número de factura y seleccionar un cliente",
+        status: "warning",
+      });
+      return;
+    }
+
+    if (sel.fecha_vencimiento < sel.fecha_emision) {
+      toast({
+        title: "Fechas inválidas",
+        description: "La fecha de vencimiento no puede ser menor a la fecha de emisión.",
         status: "warning",
       });
       return;
@@ -923,64 +961,65 @@ cargarMetodosPago();
       }
     }
 
-const estadoToID = (est) => {
-  if (est === "Pagada") return 1;
-  if (est === "Anulada") return 2;
-  if (est === "Pendiente") return 3;
-  return 3;
-};
+    const estadoToID = (est) => {
+      if (est === "Pagada") return 1;
+      if (est === "Anulada") return 2;
+      if (est === "Pendiente") return 3;
+      return 3;
+    };
 
-// === CÁLCULOS OBLIGATORIOS ===
-const subtotal = calcSub(sel);
-const descuento_total = calcDesc(sel);
-const importe_gravado_15 = calcGravado15(sel);
-const importe_gravado_18 = 0;
-const isv_15 = calcISV15(sel);
-const isv_18 = 0;
-const importe_exonerado = 0;
-const importe_exento = 0;
-const total_a_pagar = calcTotal(sel);
-const valor_en_letras = numeroALetrasHNL(total_a_pagar);
+    // === CÁLCULOS OBLIGATORIOS ===
+    const subtotal = calcSub(sel);
+    const descuento_total = calcDesc(sel);
+    const importe_gravado_15 = calcGravado15(sel);
+    const importe_gravado_18 = 0;
+    const isv_15 = calcISV15(sel);
+    const isv_18 = 0;
+    const importe_exonerado = 0;
+    const importe_exento = 0;
+    const total_a_pagar = calcTotal(sel);
+    const valor_en_letras = numeroALetrasHNL(total_a_pagar);
 
-const payload = {
-  numero_factura: sel.numero_factura,
-  cai: sel.cai,
-  fecha_emision: sel.fecha_emision,
-  fecha_vencimiento: sel.fecha_vencimiento,
-  id_cliente: sel.id_cliente,
-  direccion_entrega: sel.direccion_entrega,
-  vendedor: sel.vendedor,
-  aplica_isv_15: sel.aplica_isv_15,
+    const payload = {
+      numero_factura: sel.numero_factura,
+      cai: sel.cai,
+      fecha_emision: sel.fecha_emision,
+      fecha_vencimiento: sel.fecha_vencimiento,
+      id_cliente: sel.id_cliente,
+      direccion_entrega: sel.direccion_entrega,
+      vendedor: sel.vendedor,
+      aplica_isv_15: sel.aplica_isv_15,
 
-  subtotal,
-  descuento_total,
-  importe_gravado_15,
-  importe_gravado_18,
-  isv_15,
-  isv_18,
-  importe_exonerado,
-  importe_exento,
-  total_a_pagar,
-  valor_en_letras,
+      subtotal,
+      descuento_total,
+      importe_gravado_15,
+      importe_gravado_18,
+      isv_15,
+      isv_18,
+      importe_exonerado,
+      importe_exento,
+      total_a_pagar,
+      valor_en_letras,
 
-  // 🔥 AHORA CORRECTO
-  id_metodo_pago: Number(sel.id_metodo_pago),
+      // 🔥 AHORA CORRECTO
+      id_metodo_pago: Number(sel.id_metodo_pago),
 
-  id_estado_pago: estadoToID(sel.estado),
-  id_cambio_cai: 1,
+      id_estado_pago: estadoToID(sel.estado),
+      id_cambio_cai: 1,
 
-  items: sel.items.map((it) => ({
-    id_producto: it.id_producto,
-    cantidad: Number(it.cantidad) || 0,
-    descripcion: it.descripcion,
-    precio: Number(it.precio) || 0,
-    descuento: Number(it.descuento) || 0,
-  })),
-};
-
-
+      items: sel.items.map((it) => ({
+        id_producto: it.id_producto,
+        cantidad: Number(it.cantidad) || 0,
+        descripcion: it.descripcion,
+        precio: Number(it.precio) || 0,
+        descuento: Number(it.descuento) || 0,
+      })),
+    };
 
 
+
+
+    setIsSaving(true);
     try {
       if (sel.id_factura) {
         await api.put(`/ventas/facturas/${sel.id_factura}`, payload);
@@ -1008,6 +1047,8 @@ const payload = {
         description: err.response?.data?.error || err.message,
         status: "error",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1029,9 +1070,9 @@ const payload = {
       });
     }
   };
-// ============================================================
-// 🔹 Imprimir factura directamente desde el botón de la tabla
-// ============================================================
+  // ============================================================
+  // 🔹 Imprimir factura directamente desde el botón de la tabla
+  // ============================================================
 
   // =========================
   // 🔹 Preparar impresión desde la tabla (botón PDF por fila)
@@ -1043,21 +1084,21 @@ const payload = {
 
       const facturaCompleta = factura
         ? {
-            ...factura,
-            aplica_isv_15: factura.aplica_isv_15 ?? true,
-            items: (detalle || []).map((d) => ({
-              id: d.id_detalle_factura || Date.now() + Math.random(),
-              id_producto: d.id_producto,
-              cantidad: Number(d.cantidad),
-              descripcion: d.descripcion,
-              precio: Number(d.precio_unitario),
-              descuento: Number(d.descuento || 0),
-            })),
-          }
+          ...factura,
+          aplica_isv_15: factura.aplica_isv_15 ?? true,
+          items: (detalle || []).map((d) => ({
+            id: d.id_detalle_factura || Date.now() + Math.random(),
+            id_producto: d.id_producto,
+            cantidad: Number(d.cantidad),
+            descripcion: d.descripcion,
+            precio: Number(d.precio_unitario),
+            descuento: Number(d.descuento || 0),
+          })),
+        }
         : {
-            ...f,
-            items: [],
-          };
+          ...f,
+          items: [],
+        };
 
       setFacturaParaImprimir(facturaCompleta);
       setImprimirTrasGuardar(false);
@@ -1237,14 +1278,14 @@ const payload = {
                     <Td>
                       <HStack justify="center" spacing={2}>
                         {/* 🔹 Botón PDF por factura */}
-<IconButton
-    aria-label="Imprimir PDF"
-    size="xs"
-    icon={<FaFilePdf />}
-    colorScheme="green"
-    variant="outline"
-    onClick={() => imprimirDesdeFila(f.id_factura)}
-/>
+                        <IconButton
+                          aria-label="Imprimir PDF"
+                          size="xs"
+                          icon={<FaFilePdf />}
+                          colorScheme="green"
+                          variant="outline"
+                          onClick={() => imprimirDesdeFila(f.id_factura)}
+                        />
 
                         <IconButton
                           aria-label="Editar"
@@ -1340,6 +1381,7 @@ const payload = {
                           type="date"
                           name="fecha_vencimiento"
                           value={sel.fecha_vencimiento}
+                          min={sel.fecha_emision} // Evita que escojan fechas pasadas respecto a emisión
                           onChange={actualizarCampo}
                         />
                       </FormControl>
@@ -1366,21 +1408,21 @@ const payload = {
                         </Select>
                       </FormControl>
 
-                        {/* 🔥 MÉTODO DE PAGO AQUÍ */}
-  <FormControl maxW="200px">
-    <FormLabel fontSize="sm">Método de pago</FormLabel>
-    <Select
-      name="id_metodo_pago"
-      value={sel.id_metodo_pago}
-      onChange={actualizarCampo}
-    >
-      {metodosPago.map((m) => (
-        <option key={m.id_metodo_pago} value={m.id_metodo_pago}>
-          {m.nombre_metodo}
-        </option>
-      ))}
-    </Select>
-  </FormControl>
+                      {/* 🔥 MÉTODO DE PAGO AQUÍ */}
+                      <FormControl maxW="200px">
+                        <FormLabel fontSize="sm">Método de pago</FormLabel>
+                        <Select
+                          name="id_metodo_pago"
+                          value={sel.id_metodo_pago}
+                          onChange={actualizarCampo}
+                        >
+                          {metodosPago.map((m) => (
+                            <option key={m.id_metodo_pago} value={m.id_metodo_pago}>
+                              {m.nombre_metodo}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
 
                     </HStack>
                   </CardBody>
@@ -1554,13 +1596,7 @@ const payload = {
                                   min={0}
                                   precision={2}
                                   value={it.descuento}
-                                  onChange={(_, v) =>
-                                    updLinea(
-                                      it.id,
-                                      "descuento",
-                                      Number.isFinite(v) ? v : 0
-                                    )
-                                  }
+                                  onChange={(_, v) => handleDescuentoChange(it.id, v)}
                                   size="sm"
                                 >
                                   <NumberInputField />
@@ -1643,7 +1679,12 @@ const payload = {
               <Button onClick={cerrar} variant="ghost">
                 Cancelar
               </Button>
-              <Button colorScheme="teal" onClick={guardar}>
+              <Button
+                colorScheme="teal"
+                onClick={guardar}
+                isLoading={isSaving}
+                loadingText="Guardando..."
+              >
                 {sel?.id_factura ? "Guardar cambios" : "Crear factura"}
               </Button>
               {sel && (

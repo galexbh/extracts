@@ -86,22 +86,30 @@ const iconEstado = (estado) => {
 
 // ─────────────────────────────────────────────────────────────
 export default function Produccion() {
-  // 🎨 Paleta idéntica a Sidebar + Header del sistema
-  const pageBg = useColorModeValue("gray.50", "gray.900");   // igual que body
-  const cardBg = useColorModeValue("white", "gray.900");   // igual que sidebar bg
-  const cardBorder = useColorModeValue("gray.200", "gray.700");   // igual que sidebar border
-  const headerBg = useColorModeValue("green.600", "green.700");  // green primario sistema
-  const tableHdrBg = useColorModeValue("green.50", "gray.800");   // igual que hoverBg sidebar
-  const rowHover = useColorModeValue("green.50", "gray.800");   // igual que hoverBg sidebar
-  const activeColor = useColorModeValue("green.800", "white");      // igual que textActive sidebar
-  const subtleText = useColorModeValue("gray.500", "gray.500");   // igual que textInactive sidebar
+  // 🎨 Colores adaptados a día/noche (Idénticos al módulo Clientes)
+  const accent = useColorModeValue("#009e73", "teal.300");
+  const pageBg = useColorModeValue("#f7faf8", "#020617");
+  const cardBg = useColorModeValue("white", "#0b1120");
+  const cardBorder = useColorModeValue("#c2d4c3", "#1f2937");
+
+  const btnBackBg = useColorModeValue("teal.100", "teal.600");
+  const btnBackColor = useColorModeValue("teal.800", "white");
+  const btnBackHoverBg = useColorModeValue("teal.200", "teal.500");
+  const topBarBg = useColorModeValue("teal.600", "teal.800");
+
+  const statTotalBg = useColorModeValue("#e8f7f0", "rgba(0,158,115,0.12)");
+  const statActivosBg = useColorModeValue("#e9f9ee", "rgba(56,161,105,0.12)");
+  const statInactivosBg = useColorModeValue("#ffe9e9", "rgba(245,101,101,0.12)");
+
+  const activosNumberColor = useColorModeValue("green.600", "green.300");
+  const inactivosNumberColor = useColorModeValue("red.500", "red.300");
+
+  const tableHdrBg = useColorModeValue("gray.50", "gray.800");
+  const rowHover = useColorModeValue("teal.50", "gray.800");
+  const activeColor = useColorModeValue("teal.800", "white");
+  const subtleText = useColorModeValue("gray.500", "gray.400");
   const inputBg = useColorModeValue("gray.50", "gray.800");
   const modalBg = useColorModeValue("white", "gray.900");
-
-  // Fondos de stats
-  const statBg1 = useColorModeValue("green.50", "rgba(56,161,105,0.10)");
-  const statBg2 = useColorModeValue("teal.50", "rgba(56,178,172,0.10)");
-  const statBg3 = useColorModeValue("green.100", "rgba(56,161,105,0.15)");
 
   // 🔁 Estados
   const [pedidos, setPedidos] = useState([]);
@@ -254,34 +262,51 @@ export default function Produccion() {
 
   // ── RENDER PRINCIPAL ──────────────────────────────────────
   return (
-    <Box bg={pageBg} minH="100vh" p={{ base: 3, md: 6 }}>
+    <Box bg={pageBg} minH="100vh" p={4}>
+      {/* Botón Atrás */}
+      <Tooltip label="Volver al menú Producción" placement="bottom-start">
+        <Button
+          leftIcon={<Icon as={FaArrowLeft} />}
+          bg={btnBackBg}
+          color={btnBackColor}
+          _hover={{ bg: btnBackHoverBg, transform: "scale(1.03)" }}
+          onClick={() => navigate("/app/produccion")}
+          size="sm"
+          mb={4}
+          boxShadow="sm"
+          borderRadius="full"
+        >
+          Atrás
+        </Button>
+      </Tooltip>
 
-      {/* ── HEADER — verde primario del sistema ── */}
       <Box
-        bg={headerBg}
+        bg={cardBg}
+        borderColor={cardBorder}
+        borderWidth="1px"
+        boxShadow="md"
         borderRadius="xl"
         p={{ base: 5, md: 6 }}
         mb={6}
-        boxShadow="0 4px 20px rgba(56,161,105,0.20)"
       >
         <Flex align="center" justify="space-between" wrap="wrap" gap={3}>
           <HStack spacing={4}>
             <Flex
               w={10}
               h={10}
-              bg="whiteAlpha.200"
+              bg="teal.100"
               borderRadius="lg"
               align="center"
               justify="center"
               flexShrink={0}
             >
-              <Icon as={FaIndustry} color="white" boxSize={5} />
+              <Icon as={FaIndustry} color="teal.600" boxSize={5} />
             </Flex>
             <Box>
-              <Heading size="md" color="white" fontWeight="700">
+              <Heading size="md" color={accent} fontWeight="700">
                 Módulo de Producción
               </Heading>
-              <Text color="whiteAlpha.800" fontSize="xs" mt={0.5}>
+              <Text color={subtleText} fontSize="xs" mt={0.5}>
                 Gestión de órdenes y consumo de insumos
               </Text>
             </Box>
@@ -290,115 +315,103 @@ export default function Produccion() {
           <HStack spacing={2}>
             <Button
               size="sm"
-              variant="solid"
-              bg="whiteAlpha.200"
-              color="white"
-              _hover={{ bg: "whiteAlpha.300" }}
+              colorScheme="teal"
+              variant="outline"
               borderRadius="md"
               onClick={cargarPedidos}
             >
               Actualizar
             </Button>
-            <Button
-              leftIcon={<FaArrowLeft />}
-              size="sm"
-              variant="solid"
-              bg="whiteAlpha.200"
-              color="white"
-              _hover={{ bg: "whiteAlpha.300" }}
-              borderRadius="md"
-              onClick={() => navigate("/app/produccion")}
-            >
-              Volver
-            </Button>
           </HStack>
         </Flex>
+
+        <Divider mt={4} borderColor={cardBorder} />
+
+        {/* ── MINI DASHBOARD — 3 tarjetas ── */}
+        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mt={5}>
+
+          {/* Total */}
+          <Box
+            bg={statTotalBg}
+            borderRadius="xl"
+            p={5}
+            borderWidth="1px"
+            borderColor={cardBorder}
+            boxShadow="sm"
+            transition="transform 0.2s, box-shadow 0.2s"
+            _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
+          >
+            <Flex justify="space-between" align="center">
+              <Stat>
+                <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
+                  Total Pedidos
+                </StatLabel>
+                <StatNumber fontSize="3xl" fontWeight="800" color="teal.900">
+                  {total}
+                </StatNumber>
+                <StatHelpText fontSize="xs" color={subtleText}>Pendientes / en proceso</StatHelpText>
+              </Stat>
+              <Flex w={11} h={11} bg="whiteAlpha.600" borderRadius="lg" align="center" justify="center">
+                <Icon as={FaBoxOpen} boxSize={5} color="#009e73" />
+              </Flex>
+            </Flex>
+          </Box>
+
+          {/* En proceso */}
+          <Box
+            bg={statActivosBg}
+            borderRadius="xl"
+            p={5}
+            borderWidth="1px"
+            borderColor={cardBorder}
+            boxShadow="sm"
+            transition="transform 0.2s, box-shadow 0.2s"
+            _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
+          >
+            <Flex justify="space-between" align="center">
+              <Stat>
+                <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
+                  En Proceso
+                </StatLabel>
+                <StatNumber fontSize="3xl" fontWeight="800" color={activosNumberColor}>
+                  {enProceso}
+                </StatNumber>
+                <StatHelpText fontSize="xs" color={subtleText}>Órdenes iniciadas</StatHelpText>
+              </Stat>
+              <Flex w={11} h={11} bg="whiteAlpha.600" borderRadius="lg" align="center" justify="center">
+                <Icon as={FaClock} boxSize={5} color="green" />
+              </Flex>
+            </Flex>
+          </Box>
+
+          {/* Finalizados */}
+          <Box
+            bg={statInactivosBg}
+            borderRadius="xl"
+            p={5}
+            borderWidth="1px"
+            borderColor={cardBorder}
+            boxShadow="sm"
+            transition="transform 0.2s, box-shadow 0.2s"
+            _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
+          >
+            <Flex justify="space-between" align="center">
+              <Stat>
+                <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
+                  Finalizados
+                </StatLabel>
+                <StatNumber fontSize="3xl" fontWeight="800" color={inactivosNumberColor}>
+                  {finalizados}
+                </StatNumber>
+                <StatHelpText fontSize="xs" color={subtleText}>Producción completada</StatHelpText>
+              </Stat>
+              <Flex w={11} h={11} bg="whiteAlpha.600" borderRadius="lg" align="center" justify="center">
+                <Icon as={FaCheckCircle} boxSize={5} color="red" />
+              </Flex>
+            </Flex>
+          </Box>
+        </SimpleGrid>
       </Box>
-
-      {/* ── MINI DASHBOARD — 3 tarjetas ── */}
-      <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
-
-        {/* Total */}
-        <Box
-          bg={statBg1}
-          borderRadius="xl"
-          p={5}
-          borderWidth="1px"
-          borderColor={cardBorder}
-          boxShadow="sm"
-          transition="transform 0.2s, box-shadow 0.2s"
-          _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
-        >
-          <Flex justify="space-between" align="center">
-            <Stat>
-              <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
-                Total Pedidos
-              </StatLabel>
-              <StatNumber fontSize="3xl" fontWeight="800" color="green.600">
-                {total}
-              </StatNumber>
-              <StatHelpText fontSize="xs" color={subtleText}>Pendientes / en proceso</StatHelpText>
-            </Stat>
-            <Flex w={11} h={11} bg="green.100" borderRadius="lg" align="center" justify="center">
-              <Icon as={FaBoxOpen} boxSize={5} color="green.600" />
-            </Flex>
-          </Flex>
-        </Box>
-
-        {/* En proceso */}
-        <Box
-          bg={statBg2}
-          borderRadius="xl"
-          p={5}
-          borderWidth="1px"
-          borderColor={cardBorder}
-          boxShadow="sm"
-          transition="transform 0.2s, box-shadow 0.2s"
-          _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
-        >
-          <Flex justify="space-between" align="center">
-            <Stat>
-              <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
-                En Proceso
-              </StatLabel>
-              <StatNumber fontSize="3xl" fontWeight="800" color="teal.500">
-                {enProceso}
-              </StatNumber>
-              <StatHelpText fontSize="xs" color={subtleText}>Órdenes iniciadas</StatHelpText>
-            </Stat>
-            <Flex w={11} h={11} bg="teal.100" borderRadius="lg" align="center" justify="center">
-              <Icon as={FaClock} boxSize={5} color="teal.500" />
-            </Flex>
-          </Flex>
-        </Box>
-
-        {/* Finalizados */}
-        <Box
-          bg={statBg3}
-          borderRadius="xl"
-          p={5}
-          borderWidth="1px"
-          borderColor={cardBorder}
-          boxShadow="sm"
-          transition="transform 0.2s, box-shadow 0.2s"
-          _hover={{ transform: "translateY(-2px)", boxShadow: "md" }}
-        >
-          <Flex justify="space-between" align="center">
-            <Stat>
-              <StatLabel fontSize="xs" color={subtleText} textTransform="uppercase" letterSpacing="wide">
-                Finalizados
-              </StatLabel>
-              <StatNumber fontSize="3xl" fontWeight="800" color="green.700">
-                {finalizados}
-              </StatNumber>
-              <StatHelpText fontSize="xs" color={subtleText}>Producción completada</StatHelpText>
-            </Stat>
-            <Flex w={11} h={11} bg="green.200" borderRadius="lg" align="center" justify="center">
-              <Icon as={FaCheckCircle} boxSize={5} color="green.700" />
-            </Flex>
-          </Flex>
-        </Box>
-      </SimpleGrid>
 
       {/* ── TABLA DE PEDIDOS ── */}
       <Box
@@ -570,7 +583,7 @@ export default function Produccion() {
         <ModalOverlay backdropFilter="blur(4px)" bg="blackAlpha.400" />
         <ModalContent bg={modalBg} borderRadius="xl" overflow="hidden" boxShadow="xl">
           {/* Header verde — igual que sidebar activo */}
-          <Box bg={headerBg} px={5} py={4}>
+          <Box bg={topBarBg} px={5} py={4}>
             <HStack justify="space-between">
               <HStack spacing={3}>
                 <Icon as={FaClipboardList} color="white" boxSize={4} />
@@ -590,11 +603,11 @@ export default function Produccion() {
           <ModalBody p={5}>
             {/* Fechas */}
             <SimpleGrid columns={2} spacing={3} mb={4}>
-              <Box bg={statBg1} borderRadius="lg" p={3}>
+              <Box bg={statTotalBg} borderRadius="lg" p={3}>
                 <Text fontSize="xs" color={subtleText}>Fecha Reserva</Text>
                 <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_reserva || "—"}</Text>
               </Box>
-              <Box bg={statBg2} borderRadius="lg" p={3}>
+              <Box bg={statActivosBg} borderRadius="lg" p={3}>
                 <Text fontSize="xs" color={subtleText}>Fecha Entrega</Text>
                 <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_entrega || "—"}</Text>
               </Box>

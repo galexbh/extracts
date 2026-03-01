@@ -15,8 +15,23 @@ import {
   Button,
   Tooltip,
   Icon,
+  Card,
+  CardHeader,
+  CardBody,
+  SimpleGrid,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText,
+  Text,
+  HStack,
 } from "@chakra-ui/react";
-import { FaArrowLeft } from "react-icons/fa";
+import {
+  FaArrowLeft,
+  FaBoxOpen,
+  FaCheckCircle,
+  FaTimesCircle
+} from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "../Seguridad/CrudTabla"; // ✅ Reutilizable
 import api from "../../api/apiClient"; // ✅ Axios centralizado
@@ -25,10 +40,24 @@ export default function Insumos() {
   // ============================================================
   // 🎨 Estilos Chakra
   // ============================================================
-  const accent = useColorModeValue("teal.600", "teal.300");
-  const btnBg = useColorModeValue("teal.100", "teal.600");
-  const btnColor = useColorModeValue("teal.800", "white");
-  const btnHoverBg = useColorModeValue("teal.200", "teal.500");
+  // 🎨 Colores adaptados a día/noche (Idénticos al módulo Clientes)
+  const accent = useColorModeValue("#009e73", "teal.300");
+  const pageBg = useColorModeValue("#f7faf8", "#020617");
+  const cardBg = useColorModeValue("white", "#0b1120");
+  const borderColor = useColorModeValue("#c2d4c3", "#1f2937");
+
+  const btnBackBg = useColorModeValue("teal.100", "teal.600");
+  const btnBackColor = useColorModeValue("teal.800", "white");
+  const btnBackHoverBg = useColorModeValue("teal.200", "teal.500");
+  const topBarBg = useColorModeValue("teal.600", "teal.800");
+
+  const statTotalBg = useColorModeValue("#e8f7f0", "rgba(0,158,115,0.12)");
+  const statActivosBg = useColorModeValue("#e9f9ee", "rgba(56,161,105,0.12)");
+  const statInactivosBg = useColorModeValue("#ffe9e9", "rgba(245,101,101,0.12)");
+
+  const subtitleColor = useColorModeValue("gray.600", "gray.300");
+  const activosNumberColor = useColorModeValue("green.600", "green.300");
+  const inactivosNumberColor = useColorModeValue("red.500", "red.300");
 
   const toast = useToast();
   const navigate = useNavigate();
@@ -79,6 +108,51 @@ export default function Insumos() {
   }, [cargarInsumos, cargarEstados]);
 
   // ============================================================
+  // 🔹 Calculadora de Estadísticas para Dashboard Frontal
+  // ============================================================
+  const { totalInsumos, insActivos, insInactivos } = React.useMemo(() => {
+    const total = data.length;
+
+    const activos = data.filter((r) => {
+      const estado = (r.estado_insumo || r.nombre_estado_insumo || "")
+        .toString()
+        .toLowerCase();
+      return estado === "activo";
+    }).length;
+
+    const inactivos = total - activos;
+
+    return {
+      totalInsumos: total,
+      insActivos: activos,
+      insInactivos: inactivos,
+    };
+  }, [data]);
+
+  // ============================================================
+  // 🔹 Utilidades de Validación (Inyectadas para CrudTabla)
+  // ============================================================
+  const validarRequerido = (valor, campo) => {
+    if (!valor || String(valor).trim() === "") return `El campo ${campo} es obligatorio.`;
+    return null;
+  };
+
+  const validarSoloLetras = (valor, campo) => {
+    const errorReq = validarRequerido(valor, campo);
+    if (errorReq) return errorReq;
+    const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+    if (!regex.test(valor)) {
+      return `El campo ${campo} solo debe contener letras y espacios.`;
+    }
+    return null;
+  };
+
+  const sanitizeTexto = (valor) => {
+    if (!valor) return "";
+    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ""); // Borra números al tipear
+  };
+
+  // ============================================================
   // 🔹 Campos del formulario CRUD
   // ============================================================
   const fields = [
@@ -87,20 +161,35 @@ export default function Insumos() {
       label: "Nombre del Insumo",
       type: "text",
       required: true,
+      placeholderText: "Ej. Sal, Azucar",
+      validate: (v) => validarSoloLetras(v, "Nombre del Insumo"),
+      sanitize: sanitizeTexto,
     },
     {
       name: "unidad_medida",
       label: "Unidad de Medida",
-      type: "text",
+      type: "select",
       required: true,
+      options: [
+        { value: "Litro", label: "Litro" },
+        { value: "Galón", label: "Galón" }
+      ],
+      validate: (v) => {
+        if (!v) return "Debe seleccionar una unidad de medida.";
+        return null;
+      }
     },
     {
       name: "precio_unitario",
       label: "Precio Unitario (Lps)",
       type: "number",
       step: "0.01",
-      min: "0",
+      min: "0.01",
       required: true,
+      validate: (v) => {
+        if (!v || Number(v) <= 0) return "El precio debe ser mayor a 0.";
+        return null;
+      }
     },
     {
       name: "stock_minimo",
@@ -109,6 +198,11 @@ export default function Insumos() {
       step: "0.01",
       min: "0",
       required: true,
+      validate: (v) => {
+        if (v === "" || v === undefined) return "El Stock Mínimo es obligatorio";
+        if (Number(v) < 0) return "El stock no puede ser negativo";
+        return null;
+      }
     },
     {
       name: "stock_maximo",
@@ -117,16 +211,32 @@ export default function Insumos() {
       step: "0.01",
       min: "0",
       required: true,
+      validate: (v, formData) => {
+        if (v === "" || v === undefined) return "El Stock Máximo es obligatorio";
+        const valMax = Number(v);
+        const valMin = Number(formData.stock_minimo);
+        if (valMax < 0) return "El stock no puede ser negativo";
+        if (valMax < valMin) {
+          return `El Stock Máximo (${valMax}) no puede ser menor al Mínimo (${valMin}).`;
+        }
+        return null;
+      }
     },
     {
       name: "id_estado_insumo",
       label: "Estado del Insumo",
       type: "select",
       required: true,
-      options: estados.map((e) => ({
-        value: e.id_estado_insumo,
-        label: e.nombre_estado,
-      })),
+      options: estados
+        .filter((e) => e.nombre_estado.toLowerCase() === "activo" || e.nombre_estado.toLowerCase() === "inactivo")
+        .map((e) => ({
+          value: e.id_estado_insumo,
+          label: e.nombre_estado,
+        })),
+      validate: (v) => {
+        if (!v) return "Debe seleccionar un estado.";
+        return null;
+      }
     },
   ];
 
@@ -156,15 +266,15 @@ export default function Insumos() {
     "Fecha Creación": (r) =>
       r.fecha_creacion
         ? new Date(r.fecha_creacion).toLocaleString("es-HN", {
-            timeZone: "America/Tegucigalpa",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          })
+          timeZone: "America/Tegucigalpa",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        })
         : "—",
   };
 
@@ -272,46 +382,113 @@ export default function Insumos() {
   // 🔹 Render principal
   // ============================================================
   return (
-    <>
-      <Box p={3}>
-        <Tooltip label="Volver al menú Producción" placement="bottom-start">
-          <Button
-            leftIcon={<Icon as={FaArrowLeft} />}
-            bg={btnBg}
-            color={btnColor}
-            _hover={{ bg: btnHoverBg, transform: "scale(1.05)" }}
-            onClick={() => navigate("/app/produccion")}
-            size="sm"
-            mb={3}
-            boxShadow="sm"
-          >
-            Atrás
-          </Button>
-        </Tooltip>
+    <Box bg={pageBg} minH="100vh" p={4}>
+      {/* Botón Atrás */}
+      <Tooltip label="Volver al menú Producción" placement="bottom-start">
+        <Button
+          leftIcon={<Icon as={FaArrowLeft} />}
+          bg={btnBackBg}
+          color={btnBackColor}
+          _hover={{ bg: btnBackHoverBg, transform: "scale(1.03)" }}
+          onClick={() => navigate("/app/produccion")}
+          size="sm"
+          mb={4}
+          boxShadow="sm"
+          borderRadius="full"
+        >
+          Atrás
+        </Button>
+      </Tooltip>
 
-        <Flex align="center" justify="space-between" wrap="wrap" gap={3}>
-          <Heading size="md" color={accent}>
-            Gestión de Insumos
-          </Heading>
-        </Flex>
-        <Divider mb={2} />
-      </Box>
+      <Card
+        bg={cardBg}
+        borderColor={borderColor}
+        borderWidth="1px"
+        boxShadow="md"
+      >
+        {/* Encabezado con título estilo Clientes */}
+        <CardHeader pb={3}>
+          <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+            <Box>
+              <HStack spacing={2}>
+                <FaBoxOpen color={accent} size={24} />
+                <Heading size="md" color={accent}>
+                  Gestión de Insumos
+                </Heading>
+              </HStack>
+              <Text fontSize="sm" color={subtitleColor} mt={1}>
+                Administra el catálogo de insumos y límites de stock
+              </Text>
+            </Box>
+          </Flex>
 
-      <Box overflowX="auto">
-        <CrudTabla
-          title="Insumos"
-          columns={columns}
-          extractors={extractors}
-          fields={fields}
-          idKey="id_insumo"
-          initialData={data}
-          onInsert={handleInsert}
-          onUpdate={handleUpdate}
-          onDelete={handleDelete}
-          onReload={cargarInsumos}
-          apiUrl="/produccion/insumos"
-        />
-      </Box>
-    </>
+          <Divider mt={4} borderColor={borderColor} />
+
+          {/* Mini-Dashboard idéntico a Clientes */}
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mt={5} mb={2}>
+            <Stat bg={statTotalBg} p={4} borderRadius="lg">
+              <HStack spacing={2} mb={1}>
+                <FaBoxOpen color="#009e73" />
+                <StatLabel fontWeight="bold" color="teal.800">
+                  Total de Insumos
+                </StatLabel>
+              </HStack>
+              <StatNumber fontSize="3xl" color="teal.900">
+                {totalInsumos}
+              </StatNumber>
+              <StatHelpText m={0} color="teal.700">
+                Registrados en BD
+              </StatHelpText>
+            </Stat>
+
+            <Stat bg={statActivosBg} p={4} borderRadius="lg">
+              <HStack spacing={2} mb={1}>
+                <FaCheckCircle color="green" />
+                <StatLabel fontWeight="bold" color="green.800">
+                  Insumos Activos
+                </StatLabel>
+              </HStack>
+              <StatNumber fontSize="3xl" color={activosNumberColor}>
+                {insActivos}
+              </StatNumber>
+              <StatHelpText m={0} color="green.700">
+                Disponibles para producción
+              </StatHelpText>
+            </Stat>
+
+            <Stat bg={statInactivosBg} p={4} borderRadius="lg">
+              <HStack spacing={2} mb={1}>
+                <FaTimesCircle color="red" />
+                <StatLabel fontWeight="bold" color="red.800">
+                  Insumos Inactivos
+                </StatLabel>
+              </HStack>
+              <StatNumber fontSize="3xl" color={inactivosNumberColor}>
+                {insInactivos}
+              </StatNumber>
+              <StatHelpText m={0} color="red.700">
+                Uso suspendido o agotado
+              </StatHelpText>
+            </Stat>
+          </SimpleGrid>
+        </CardHeader>
+
+        <CardBody pt={0} px={{ base: 2, md: 6 }}>
+          <CrudTabla
+            title="Insumos"
+            columns={columns}
+            extractors={extractors}
+            fields={fields}
+            idKey="id_insumo"
+            initialData={data}
+            onInsert={handleInsert}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            onReload={cargarInsumos}
+            apiUrl="/produccion/insumos"
+          />
+        </CardBody>
+      </Card>
+    </Box>
   );
 }

@@ -188,16 +188,26 @@ exports.insertPedido = async (req, res) => {
       fecha_reserva,
       fecha_entrega,
       observaciones,
-      id_estado_pedido = 1,
       id_metodo_pago = 1,
       productos = [],
     } = req.body;
 
+    const id_estado_pedido = 1; // 🔒 Siempre nace como "Pendiente" y no depende del frontend
+
     // Email del vendedor que crea el pedido
     const creado_por = req.headers["x-user-email"] || null;
 
-    if (!Array.isArray(productos) || productos.length === 0)
-      throw new Error("Debe incluir al menos un producto en el pedido");
+    if (!id_cliente || !fecha_reserva || !fecha_entrega) {
+      throw new Error("Datos incompletos, faltan campos básicos (Cliente y Fechas).");
+    }
+
+    if (new Date(fecha_entrega) < new Date(fecha_reserva)) {
+      throw new Error("La fecha de entrega no puede ser anterior a la de reserva.");
+    }
+
+    if (!Array.isArray(productos) || productos.length === 0) {
+      throw new Error("Debe incluir al menos un producto en el pedido.");
+    }
 
     await client.query("BEGIN");
 

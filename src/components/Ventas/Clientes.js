@@ -61,6 +61,7 @@ import {
   validarRTN,
   validarEmail,
   validarLongitudMinima,
+  formatearTelefono,
 } from "../../utils/validaciones";
 
 export default function Clientes() {
@@ -180,10 +181,11 @@ export default function Clientes() {
       return null;
     },
     rtn: (v) => {
-      if (!v || String(v).trim() === "") return null;
+      const req = validarRequerido(v, "El RTN / ID");
+      if (req) return req;
       const limpio = String(v).replace(/-/g, "");
-      if (!/^[0-9]{14}$/.test(limpio))
-        return "El RTN debe tener 14 dígitos numéricos.";
+      if (!/^[0-9]{13,14}$/.test(limpio))
+        return "El RTN / ID debe tener entre 13 y 14 dígitos numéricos.";
       return null;
     },
     direccion: (v) =>
@@ -192,7 +194,7 @@ export default function Clientes() {
     telefono: (v) =>
       validarRequerido(v, "Teléfono") || validarTelefono(v),
     correo_electronico: (v) =>
-      v && String(v).trim() !== "" ? validarEmail(v) : null,
+      validarRequerido(v, "Correo") || validarEmail(v),
   };
 
   // ============================================================
@@ -204,13 +206,16 @@ export default function Clientes() {
       label: "Nombre del Cliente",
       type: "text",
       required: true,
+      placeholderText: "Ej. Juan Perez",
       validate: validators.nombre_cliente,
       sanitize: (v) => String(v).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, ""),
     },
     {
       name: "rtn",
-      label: "RTN / ID (14 dígitos)",
+      label: "RTN / ID (13 o 14 dígitos)",
       type: "text",
+      required: true,
+      placeholderText: "Ej. 0801199012345",
       validate: validators.rtn,
       sanitize: (v) => String(v).replace(/[^0-9-]/g, "").slice(0, 15),
     },
@@ -230,6 +235,7 @@ export default function Clientes() {
       label: "Dirección",
       type: "text",
       required: true,
+      placeholderText: "Ej. Col. Kennedy, Bloque 4",
       validate: validators.direccion,
     },
     {
@@ -237,13 +243,16 @@ export default function Clientes() {
       label: "Teléfono (8 dígitos)",
       type: "text",
       required: true,
+      placeholderText: "Ej. 9999-9999",
       validate: validators.telefono,
-      sanitize: (v) => String(v).replace(/[^0-9-]/g, "").slice(0, 9),
+      sanitize: (v) => formatearTelefono(v),
     },
     {
       name: "correo_electronico",
       label: "Correo Electrónico",
       type: "email",
+      required: true,
+      placeholderText: "Ej. correo@ejemplo.com",
       validate: validators.correo_electronico,
     },
     {

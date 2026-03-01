@@ -67,7 +67,7 @@ exports.getProductoById = async (req, res) => {
 exports.insertProducto = async (req, res) => {
   const client = await pool.connect();
   try {
-    const {
+    let {
       nombre_producto,
       descripcion,
       unidad_medida,
@@ -76,6 +76,35 @@ exports.insertProducto = async (req, res) => {
       stock_minimo,
       stock_maximo,
     } = req.body;
+
+    // 🔒 Validaciones y Sanitización Backend
+    nombre_producto = nombre_producto ? nombre_producto.trim() : null;
+    unidad_medida = unidad_medida ? unidad_medida.trim() : null;
+
+    if (!nombre_producto || !unidad_medida) {
+      return res.status(400).json({ error: "Nombre y unidad de medida son obligatorios." });
+    }
+
+    const unPermitidas = ["litro", "galón", "galon"];
+    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
+      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
+    }
+
+    // Normalizar capitalización
+    if (unidad_medida.toLowerCase() === "litro") unidad_medida = "Litro";
+    else unidad_medida = "Galón";
+
+    if (Number(precio_unitario) <= 0) {
+      return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });
+    }
+
+    if (Number(stock_minimo) < 0 || Number(stock_maximo) < 0) {
+      return res.status(400).json({ error: "El stock no puede ser negativo." });
+    }
+
+    if (Number(stock_maximo) < Number(stock_minimo)) {
+      return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
 
     await client.query("BEGIN");
 
@@ -128,7 +157,7 @@ exports.insertProducto = async (req, res) => {
 exports.updateProducto = async (req, res) => {
   const client = await pool.connect();
   try {
-    const {
+    let {
       nombre_producto,
       descripcion,
       unidad_medida,
@@ -137,6 +166,35 @@ exports.updateProducto = async (req, res) => {
       stock_minimo,
       stock_maximo,
     } = req.body;
+
+    // 🔒 Validaciones y Sanitización Backend
+    nombre_producto = nombre_producto ? nombre_producto.trim() : null;
+    unidad_medida = unidad_medida ? unidad_medida.trim() : null;
+
+    if (!nombre_producto || !unidad_medida) {
+      return res.status(400).json({ error: "Nombre y unidad de medida son obligatorios." });
+    }
+
+    const unPermitidas = ["litro", "galón", "galon"];
+    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
+      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
+    }
+
+    // Normalizar capitalización
+    if (unidad_medida.toLowerCase() === "litro") unidad_medida = "Litro";
+    else unidad_medida = "Galón";
+
+    if (Number(precio_unitario) <= 0) {
+      return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });
+    }
+
+    if (Number(stock_minimo) < 0 || Number(stock_maximo) < 0) {
+      return res.status(400).json({ error: "El stock no puede ser negativo." });
+    }
+
+    if (Number(stock_maximo) < Number(stock_minimo)) {
+      return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
 
     await client.query("BEGIN");
 

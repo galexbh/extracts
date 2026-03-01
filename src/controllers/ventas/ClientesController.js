@@ -33,15 +33,20 @@ function validar(data) {
       errores.push("El teléfono debe tener 8 dígitos (ej. 9999-9999).");
   }
 
-  if (correo_electronico && String(correo_electronico).trim() !== "") {
+  if (!correo_electronico || String(correo_electronico).trim() === "") {
+    errores.push("El correo electrónico es obligatorio.");
+  } else {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(correo_electronico))
       errores.push("El correo electrónico no tiene un formato válido.");
   }
 
-  if (rtn && String(rtn).trim() !== "") {
-    if (!/^[0-9]{14}$/.test(rtn))
-      errores.push("El RTN debe tener exactamente 14 dígitos numéricos.");
+  if (!rtn || String(rtn).trim() === "") {
+    errores.push("El RTN / ID es obligatorio.");
+  } else {
+    const limpio = String(rtn).replace(/-/g, "");
+    if (!/^[0-9]{13,14}$/.test(limpio))
+      errores.push("El RTN / ID debe tener entre 13 y 14 dígitos numéricos.");
   }
 
   return errores;

@@ -33,7 +33,7 @@ exports.getInsumos = async (req, res) => {
 // ============================================================
 exports.insertInsumo = async (req, res) => {
   try {
-    const {
+    let {
       nombre_insumo,
       unidad_medida,
       id_estado_insumo,
@@ -41,6 +41,32 @@ exports.insertInsumo = async (req, res) => {
       stock_minimo,
       stock_maximo,
     } = req.body;
+
+    // 🔒 Validaciones y Sanitización Backend
+    nombre_insumo = nombre_insumo ? nombre_insumo.trim() : null;
+    unidad_medida = unidad_medida ? unidad_medida.trim() : null;
+
+    if (!nombre_insumo || !unidad_medida) {
+      return res.status(400).json({ error: "El nombre y la unidad son obligatorios." });
+    }
+
+    const unPermitidas = ["litro", "galón", "galon"];
+    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
+      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
+    }
+    unidad_medida = unidad_medida.toLowerCase() === "litro" ? "Litro" : "Galón";
+
+    if (Number(precio_unitario) <= 0) {
+      return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });
+    }
+
+    if (Number(stock_minimo) < 0 || Number(stock_maximo) < 0) {
+      return res.status(400).json({ error: "El stock no puede ser negativo." });
+    }
+
+    if (Number(stock_maximo) < Number(stock_minimo)) {
+      return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
 
     await pool.query(
       `CALL produccion.sp_insumo_insertar($1, $2, $3, $4, $5, $6);`,
@@ -67,7 +93,7 @@ exports.insertInsumo = async (req, res) => {
 exports.updateInsumo = async (req, res) => {
   try {
     const { id_insumo } = req.params;
-    const {
+    let {
       nombre_insumo,
       unidad_medida,
       id_estado_insumo,
@@ -75,6 +101,32 @@ exports.updateInsumo = async (req, res) => {
       stock_minimo,
       stock_maximo,
     } = req.body;
+
+    // 🔒 Validaciones y Sanitización Backend
+    nombre_insumo = nombre_insumo ? nombre_insumo.trim() : null;
+    unidad_medida = unidad_medida ? unidad_medida.trim() : null;
+
+    if (!nombre_insumo || !unidad_medida) {
+      return res.status(400).json({ error: "El nombre y la unidad son obligatorios." });
+    }
+
+    const unPermitidas = ["litro", "galón", "galon"];
+    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
+      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
+    }
+    unidad_medida = unidad_medida.toLowerCase() === "litro" ? "Litro" : "Galón";
+
+    if (Number(precio_unitario) <= 0) {
+      return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });
+    }
+
+    if (Number(stock_minimo) < 0 || Number(stock_maximo) < 0) {
+      return res.status(400).json({ error: "El stock no puede ser negativo." });
+    }
+
+    if (Number(stock_maximo) < Number(stock_minimo)) {
+      return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
 
     await pool.query(
       `CALL produccion.sp_insumo_editar($1, $2, $3, $4, $5, $6, $7);`,

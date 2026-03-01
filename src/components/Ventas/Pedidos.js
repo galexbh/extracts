@@ -86,6 +86,7 @@ export default function Pedidos() {
   const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
   const [editando, setEditando] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [idCliente, setIdCliente] = useState("");
   const [fechaReserva, setFechaReserva] = useState("");
@@ -261,6 +262,7 @@ export default function Pedidos() {
   const guardarPedido = async () => {
     try {
       if (!validarPedido()) return;
+      setIsSaving(true);
 
       const payload = {
         id_cliente: Number(idCliente),
@@ -295,6 +297,8 @@ export default function Pedidos() {
         description: err.response?.data?.error || err.message,
         status: "error",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -629,6 +633,7 @@ export default function Pedidos() {
               <Input
                 type="date"
                 value={fechaEntrega}
+                min={fechaReserva} // Validación nativa extra
                 onChange={(e) => setFechaEntrega(e.target.value)}
                 bg={inputBg}
                 size="sm"
@@ -823,6 +828,8 @@ export default function Pedidos() {
                 leftIcon={<FaSave />}
                 colorScheme="green"
                 onClick={guardarPedido}
+                isLoading={isSaving}
+                loadingText="Guardando..."
               >
                 {editando ? "Actualizar" : "Guardar"}
               </Button>

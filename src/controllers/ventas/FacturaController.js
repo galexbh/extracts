@@ -140,6 +140,42 @@ exports.crearFactura = async (req, res) => {
 
     const data = req.body;
 
+    if (!data.id_cliente) throw new Error("El ID del cliente es obligatorio.");
+    if (!data.items || data.items.length === 0) throw new Error("La factura debe tener al menos un producto.");
+
+    // --- VALIDACIÓN DE INVENTARIO Y PRECIOS ---
+    for (const item of data.items) {
+      const cantReq = Number(item.cantidad) || 0;
+      if (cantReq <= 0) throw new Error("Cantidad inválida para el producto.");
+
+      const checkQ = await client.query(
+        `SELECT p.nombre_producto, p.precio_unitario, COALESCE(ip.stock_actual, 0) AS stock
+         FROM produccion.tbl_productos p
+         LEFT JOIN inventario.tbl_inventario_producto ip ON p.id_producto = ip.id_producto
+         WHERE p.id_producto = $1`,
+        [item.id_producto]
+      );
+
+      if (checkQ.rowCount === 0) {
+        throw new Error(`El producto con ID ${item.id_producto} no existe.`);
+      }
+
+      const info = checkQ.rows[0];
+      const stock = Number(info.stock);
+
+      if (stock < cantReq) {
+        throw new Error(`Stock insuficiente para "${info.nombre_producto}". Disponibles: ${stock}, Solicitados: ${cantReq}.`);
+      }
+
+      // Antiburto: Forzar precio original y limitar descuentos máximos
+      item.precio = Number(info.precio_unitario) || 0;
+      const maxDesc = cantReq * item.precio;
+      if ((Number(item.descuento) || 0) > maxDesc) {
+        item.descuento = maxDesc;
+      }
+    }
+    // --- FIN VALIDACIÓN ---
+
     const subtotal = calcSub(data.items);
     const descuento_total = calcDesc(data.items);
     const importe_gravado_15 = calcGravado15(data.items);
@@ -264,6 +300,49 @@ exports.actualizarFactura = async (req, res) => {
       );
     }
 
+    if (!data.id_cliente) throw new Error("El ID del cliente es obligatorio.");
+    if (!data.items || data.items.length === 0) throw new Error("La factura debe tener al menos un producto.");
+
+    // --- VALIDACIÓN DE INVENTARIO Y PRECIOS ---
+    for (const item of data.items) {
+      const cantReq = Number(item.cantidad) || 0;
+      if (cantReq <= 0) throw new Error("Cantidad inválida para el producto.");
+
+      const checkQ = await client.query(
+        `SELECT p.nombre_producto, p.precio_unitario, COALESCE(ip.stock_actual, 0) AS stock
+         FROM produccion.tbl_productos p
+         LEFT JOIN inventario.tbl_inventario_producto ip ON p.id_producto = ip.id_producto
+         WHERE p.id_producto = $1`,
+        [item.id_producto]
+      );
+
+      if (checkQ.rowCount === 0) {
+        throw new Error(`El producto con ID ${item.id_producto} no existe.`);
+      }
+
+      const info = checkQ.rows[0];
+      const stock = Number(info.stock);
+
+      if (stock < cantReq) {
+        throw new Error(`Stock insuficiente para "${info.nombre_producto}". Disponibles: ${stock}, Solicitados: ${cantReq} (luego de reversión).`);
+      }
+
+      // Antiburto
+      item.precio = Number(info.precio_unitario) || 0;
+      const maxDesc = cantReq * item.precio;
+      if ((Number(item.descuento) || 0) > maxDesc) {
+        item.descuento = maxDesc;
+      }
+    }
+    // --- FIN VALIDACIÓN ---
+
+    // Recalcular montos de manera segura en Backend
+    const sub = calcSub(data.items);
+    const desc = calcDesc(data.items);
+    const grav15 = calcGravado15(data.items);
+    const isv15 = calcISV15(data.items, data.aplica_isv_15);
+    const totalPagar = calcTotal(data.items, data.aplica_isv_15);
+
     await client.query(
       `CALL ventasyreserva.sp_actualizar_factura(
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
@@ -272,17 +351,17 @@ exports.actualizarFactura = async (req, res) => {
         id,
         data.numero_factura,
         data.fecha_emision,
-        data.id_pedido,
+        data.id_pedido || null,
         data.direccion_entrega,
-        data.subtotal,
-        data.descuento_total,
-        data.importe_gravado_15,
-        data.importe_gravado_18,
-        data.isv_15,
-        data.isv_18,
-        data.importe_exonerado,
-        data.importe_exento,
-        data.total_a_pagar,
+        sub,
+        desc,
+        grav15,
+        0, // importe_gravado_18
+        isv15,
+        0, // isv_18
+        0, // importe_exonerado
+        0, // importe_exento
+        totalPagar,
         data.valor_en_letras,
         data.id_metodo_pago,
         data.id_estado_pago,
