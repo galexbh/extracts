@@ -81,14 +81,101 @@ export default function Proveedores() {
   }, [cargarProveedores, cargarEstados]);
 
   // ============================================================
-  // ✅ CAMPOS DEL FORMULARIO CRUD — VERSIÓN CORRECTA
+  // 🔹 Funciones de validación y sanitización
+  // ============================================================
+  const sanitizeTexto = (v) => {
+    if (!v) return "";
+    return v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
+  };
+
+  const sanitizeRTN = (v) => {
+    if (!v) return "";
+    return v.replace(/[^0-9\-]/g, "");
+  };
+
+  const sanitizeTelefono = (v) => {
+    if (!v) return "";
+    return v.replace(/[^0-9\-\+\s]/g, "");
+  };
+
+  const sanitizeDireccion = (v) => {
+    if (!v) return "";
+    return v.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s.,#\-\/]/g, "");
+  };
+
+  const validarNombre = (v) => {
+    if (!v || v.trim() === "") return "El nombre del proveedor es obligatorio.";
+    if (v.trim().length < 3) return "El nombre debe tener al menos 3 caracteres.";
+    return null;
+  };
+
+  const validarRTN = (v) => {
+    if (!v || v.trim() === "") return "El RTN es obligatorio.";
+    const soloDigitos = v.replace(/\-/g, "");
+    if (!/^\d+$/.test(soloDigitos)) return "El RTN solo debe contener números y guiones.";
+    if (soloDigitos.length < 13 || soloDigitos.length > 14) return "El RTN debe tener entre 13 y 14 dígitos.";
+    return null;
+  };
+
+  const validarTelefono = (v) => {
+    if (!v || v.trim() === "") return null; // Opcional
+    const soloDigitos = v.replace(/[\-\+\s]/g, "");
+    if (!/^\d+$/.test(soloDigitos)) return "El teléfono solo debe contener números.";
+    if (soloDigitos.length < 8) return "El teléfono debe tener al menos 8 dígitos.";
+    return null;
+  };
+
+  const validarCorreo = (v) => {
+    if (!v || v.trim() === "") return null; // Opcional
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!regex.test(v)) return "El correo electrónico no tiene un formato válido.";
+    return null;
+  };
+
+  // ============================================================
+  // ✅ CAMPOS DEL FORMULARIO CRUD — CON VALIDACIONES
   // ============================================================
   const fields = [
-    { name: "nombre", label: "Nombre del Proveedor", type: "text", required: true },
-    { name: "rtn", label: "RTN", type: "text", required: true },
-    { name: "telefono", label: "Teléfono", type: "text" },
-    { name: "correo", label: "Correo Electrónico", type: "email" },
-    { name: "direccion", label: "Dirección", type: "text" },
+    {
+      name: "nombre",
+      label: "Nombre del Proveedor",
+      type: "text",
+      required: true,
+      placeholderText: "Ej. Distribuidora Central",
+      validate: validarNombre,
+      sanitize: sanitizeTexto,
+    },
+    {
+      name: "rtn",
+      label: "RTN",
+      type: "text",
+      required: true,
+      placeholderText: "Ej. 0801-1990-12345",
+      validate: validarRTN,
+      sanitize: sanitizeRTN,
+    },
+    {
+      name: "telefono",
+      label: "Teléfono",
+      type: "text",
+      placeholderText: "Ej. 9999-9999",
+      validate: validarTelefono,
+      sanitize: sanitizeTelefono,
+    },
+    {
+      name: "correo",
+      label: "Correo Electrónico",
+      type: "email",
+      placeholderText: "Ej. proveedor@empresa.com",
+      validate: validarCorreo,
+    },
+    {
+      name: "direccion",
+      label: "Dirección",
+      type: "text",
+      placeholderText: "Ej. Col. Kennedy, Tegucigalpa",
+      sanitize: sanitizeDireccion,
+    },
 
     // ✅ SOLO EDITAR — NO mostrar al crear
     {

@@ -52,7 +52,7 @@ import ReportesContabilidad from "./components/Contabilidad/ReportesContabilidad
 // ===============================
 import Menuproduccion from './components/produccion/menuproduccion';
 import Productos from './components/produccion/productos';
-import Recetas from './components/produccion/Recetas';
+//import Recetas from './components/produccion/Recetas';
 import Produccion from './components/produccion/produccion';
 import Insumos from './components/produccion/Insumos';
 
@@ -165,7 +165,7 @@ function App() {
               {/* ===================== PRODUCCIÓN ===================== */}
               <Route path="produccion" element={<Menuproduccion />} />
               <Route path="produccion/productos" element={<Productos />} />
-              <Route path="produccion/recetas" element={<Recetas />} />
+              
               <Route path="produccion/produccion" element={<Produccion />} />
               <Route path="produccion/insumos" element={<Insumos />} />
 

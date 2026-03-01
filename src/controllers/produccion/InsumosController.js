@@ -50,11 +50,8 @@ exports.insertInsumo = async (req, res) => {
       return res.status(400).json({ error: "El nombre y la unidad son obligatorios." });
     }
 
-    const unPermitidas = ["litro", "galón", "galon"];
-    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
-      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
-    }
-    unidad_medida = unidad_medida.toLowerCase() === "litro" ? "Litro" : "Galón";
+    // Normalizar capitalización (Primera letra mayúscula)
+    unidad_medida = unidad_medida.charAt(0).toUpperCase() + unidad_medida.slice(1).toLowerCase();
 
     if (Number(precio_unitario) <= 0) {
       return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });
@@ -110,11 +107,8 @@ exports.updateInsumo = async (req, res) => {
       return res.status(400).json({ error: "El nombre y la unidad son obligatorios." });
     }
 
-    const unPermitidas = ["litro", "galón", "galon"];
-    if (!unPermitidas.includes(unidad_medida.toLowerCase())) {
-      return res.status(400).json({ error: "La unidad de medida solo puede ser 'Litro' o 'Galón'." });
-    }
-    unidad_medida = unidad_medida.toLowerCase() === "litro" ? "Litro" : "Galón";
+    // Normalizar capitalización (Primera letra mayúscula)
+    unidad_medida = unidad_medida.charAt(0).toUpperCase() + unidad_medida.slice(1).toLowerCase();
 
     if (Number(precio_unitario) <= 0) {
       return res.status(400).json({ error: "El precio unitario debe ser mayor a 0." });

@@ -168,16 +168,14 @@ export default function Insumos() {
     {
       name: "unidad_medida",
       label: "Unidad de Medida",
-      type: "select",
+      type: "text",
       required: true,
-      options: [
-        { value: "Litro", label: "Litro" },
-        { value: "Galón", label: "Galón" }
-      ],
+      placeholderText: "Ej. Caja, Litro, Kilo",
       validate: (v) => {
-        if (!v) return "Debe seleccionar una unidad de medida.";
+        if (!v || v.trim() === "") return "Debe especificar una unidad de medida.";
         return null;
-      }
+      },
+      sanitize: sanitizeTexto,
     },
     {
       name: "precio_unitario",

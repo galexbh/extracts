@@ -3,6 +3,7 @@
 // ✅ Gestor unificado con totales idénticos a factura TAPLAX
 //    (sin base imponible, sin impuesto_renglon por línea)
 //    Mantiene proveedores y ordenes INTactos
+// ✅ FIX: Unidad de medida normalizada + validación estricta
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -47,6 +48,7 @@ import {
   Checkbox,
   useDisclosure,
   Spinner,
+  FormHelperText,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -63,11 +65,12 @@ import {
   FaReceipt,
 } from "react-icons/fa";
 import {
-  soloLetras,
-  validarEmail,
-  validarTelefono,
-  formatearTelefono,
+  validarRequerido,
+  validarSoloLetras,
   validarRTN,
+  validarTelefono,
+  validarEmail,
+  formatearTelefono
 } from "../../utils/validaciones";
 
 import jsPDF from "jspdf";
@@ -79,6 +82,17 @@ import logoSrc from "../login/log.png";
 
 
 
+// =======================
+// 🔥 Normaliza unidad para que coincida con <Select> (unidad/caja/litro/galon/fardo)
+// Ej: "Unidad" -> "unidad", "Galón" -> "galon", "  LITRO " -> "litro"
+// =======================
+const normalizarUnidad = (u = "") =>
+  u
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 
 const safeNum = (v) => {
@@ -87,9 +101,9 @@ const safeNum = (v) => {
   // Si es cadena con moneda “L.”
   if (typeof v === "string") {
     const cleaned = v
-      .replace(/L/gi, "")  // quita L.
+      .replace(/L/gi, "") // quita L.
       .replace(/\s+/g, "") // quita espacios
-      .replace(/,/g, "");  // quita comas
+      .replace(/,/g, ""); // quita comas
 
     const num = parseFloat(cleaned);
     return isNaN(num) ? 0 : num;
@@ -100,19 +114,14 @@ const safeNum = (v) => {
 };
 
 
+
 // =======================
 // Utilidad: totales EXACTOS según factura (sin base imponible)
 // =======================
 const calcTotalesFactura = (detalles, flete = 0) => {
-  const subtotal = detalles.reduce(
-    (acc, d) => acc + safeNum(d.subtotal),
-    0
-  );
+  const subtotal = detalles.reduce((acc, d) => acc + safeNum(d.subtotal), 0);
 
-  const descuentos = detalles.reduce(
-    (acc, d) => acc + safeNum(d.descuento),
-    0
-  );
+  const descuentos = detalles.reduce((acc, d) => acc + safeNum(d.descuento), 0);
 
   let importeExento = 0;
   let importeExonerado = 0;
@@ -201,7 +210,7 @@ export default function Compras() {
   const subtle = useColorModeValue("gray.600", "gray.300");
   const pillBg = useColorModeValue("teal.50", "teal.900");
 
-   // =============================
+  // =============================
   // 🔥 Protección contra salida del módulo (DENTRO DEL COMPONENTE)
   // =============================
   const [tieneCambios, setTieneCambios] = useState(false);
@@ -210,21 +219,22 @@ export default function Compras() {
   const [rutaPendiente, setRutaPendiente] = useState(null);
 
   // 🔥 Sincronizar con el Sidebar
-useEffect(() => {
-  window.__CAMBIOS_COMPRAS__ = tieneCambios;
-}, [tieneCambios]);
+  useEffect(() => {
+    window.__CAMBIOS_COMPRAS__ = tieneCambios;
+  }, [tieneCambios]);
 
   // Bloquear refrescar/cerrar ventana
   useEffect(() => {
     const handler = (e) => {
       if (tieneCambios) {
         e.preventDefault();
-        e.returnValue = ""; 
+        e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [tieneCambios]);
+
   // =======================
   // Estado base
   // =======================
@@ -252,7 +262,6 @@ useEffect(() => {
   const [detalles, setDetalles] = useState([]);
   const [flete, setFlete] = useState(0);
 
-
   // Órdenes recientes + total
   const [ordenesRecientes, setOrdenesRecientes] = useState([]);
   const [totalGeneral, setTotalGeneral] = useState(0);
@@ -266,8 +275,6 @@ useEffect(() => {
   const [proveedorAEliminar, setProveedorAEliminar] = useState(null);
   const [modalProv, setModalProv] = useState(false);
 
-  
-
   const [provForm, setProvForm] = useState({
     nombre: "",
     rtn: "",
@@ -276,24 +283,27 @@ useEffect(() => {
     direccion: "",
     id_estado_proveedor: 1,
   });
-
+  const [provMsg, setProvMsg] = useState({
+  nombre: "",
+  rtn: "",
+  telefono: "",
+  correo: "",
+  direccion: "",
+});
 
   // =======================
   // Detalle (frontend con NOMBRES de factura)
-  // ⚠️ OJO: mapeamos a/desde la API que sigue usando:
-  // cantidad_solicitada, descuento_renglon, tasa_impuesto_renglon, etc.
-// =======================
+  // =======================
   const [detalleForm, setDetalleForm] = useState({
     id_detalle_oc: null,
     id_insumo: "",
-    // Nombres "de factura" en UI:
     cantidad: "",
     precio_unitario: "",
     subtotal: 0,
     unidad_medida: "",
     categoria_impuesto: "Gravado 15%",
-    tasa_impuesto: 15, // guardamos en BD como tasa_impuesto_renglon
-    descuento: 0, // BD: descuento_renglon
+    tasa_impuesto: 15,
+    descuento: 0,
   });
   const [editandoDetalleId, setEditandoDetalleId] = useState(null);
 
@@ -321,7 +331,7 @@ useEffect(() => {
       { key: "observacion", label: "Observación" },
       { key: "flete", label: "Flete" },
 
-      // Detalle (nombres factura)
+      // Detalle
       { key: "id_detalle_oc", label: "ID Detalle" },
       { key: "id_insumo", label: "ID Insumo" },
       { key: "insumo", label: "Insumo" },
@@ -329,14 +339,10 @@ useEffect(() => {
       { key: "unidad_medida", label: "Unidad de medida" },
       { key: "precio_unitario", label: "Precio Unitario" },
       { key: "subtotal", label: "Subtotal" },
-       { key: "categoria_impuesto", label: "Categoría Impuesto" },
+      { key: "categoria_impuesto", label: "Categoría Impuesto" },
       { key: "tasa_impuesto", label: "Tasa Impuesto %" },
       { key: "descuento", label: "Descuento" },
       { key: "total", label: "Total" },
-      
-     
-      
-      
     ],
     []
   );
@@ -348,25 +354,23 @@ useEffect(() => {
   const isIndeterminate =
     selectedColumns.length > 0 && selectedColumns.length < ALL_COLUMNS.length;
 
-// =======================
-// 🔥 Cálculo automático del subtotal
-// =======================
-useEffect(() => {
-  const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+  // =======================
+  // 🔥 Cálculo automático del subtotal
+  // =======================
+  useEffect(() => {
+    const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 
-  const cant = toNum(detalleForm.cantidad);
-  const precio = toNum(detalleForm.precio_unitario);
-  const desc = toNum(detalleForm.descuento);
+    const cant = toNum(detalleForm.cantidad);
+    const precio = toNum(detalleForm.precio_unitario);
+    const desc = toNum(detalleForm.descuento);
 
-  const subtotalCalc = cant * precio - desc;
+    const subtotalCalc = cant * precio - desc;
 
-  setDetalleForm((prev) => ({
-    ...prev,
-    subtotal: subtotalCalc > 0 ? subtotalCalc : 0,
-  }));
-}, [detalleForm.cantidad, detalleForm.precio_unitario, detalleForm.descuento]);
-
-
+    setDetalleForm((prev) => ({
+      ...prev,
+      subtotal: subtotalCalc > 0 ? subtotalCalc : 0,
+    }));
+  }, [detalleForm.cantidad, detalleForm.precio_unitario, detalleForm.descuento]);
 
   // =======================
   // Carga inicial
@@ -387,32 +391,34 @@ useEffect(() => {
 
       let totalAll = 0;
 
-for (const oc of ocRes.data || []) {
-  try {
-    // cargar detalles reales de la orden
-    const det = await api.get(`/compras/detalle-orden-compra/orden/${oc.id_orden_compra}`);
-    const detalles = det.data || [];
+      for (const oc of ocRes.data || []) {
+        try {
+          const det = await api.get(
+            `/compras/detalle-orden-compra/orden/${oc.id_orden_compra}`
+          );
+          const detalles = det.data || [];
 
-    // Adaptar formato para usar calcTotalesFactura()
-    const detallesAdaptados = detalles.map((d) => ({
-      cantidad: Number(d.cantidad || 0),
-      precio_unitario: Number(d.precio_unitario || 0),
-      descuento: Number(d.descuento || 0),
-      subtotal: Number(d.cantidad || 0) * Number(d.precio_unitario || 0) - Number(d.descuento || 0),
-      categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
-      tasa_impuesto: Number(d.tasa_impuesto || 15),
-    }));
+          const detallesAdaptados = detalles.map((d) => ({
+            cantidad: Number(d.cantidad || 0),
+            precio_unitario: Number(d.precio_unitario || 0),
+            descuento: Number(d.descuento || 0),
+            subtotal:
+              Number(d.cantidad || 0) * Number(d.precio_unitario || 0) -
+              Number(d.descuento || 0),
+            categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
+            tasa_impuesto: Number(d.tasa_impuesto || 15),
+          }));
 
-    // usar tu MISMA función del resumen
-    const tot = calcTotalesFactura(detallesAdaptados, Number(oc.flete || 0));
+          const tot = calcTotalesFactura(
+            detallesAdaptados,
+            Number(oc.flete || 0)
+          );
+          totalAll += tot.total;
+        } catch (e) {
+          console.error("Error al calcular total de OC:", oc.id_orden_compra, e);
+        }
+      }
 
-    totalAll += tot.total;
-  } catch (e) {
-    console.error("Error al calcular total de OC:", oc.id_orden_compra, e);
-  }
-}
-
-setTotalGeneral(totalAll);
       setTotalGeneral(totalAll);
       setLastRefresh(new Date());
     } catch (e) {
@@ -460,7 +466,7 @@ setTotalGeneral(totalAll);
   };
 
   // =======================
-  // Nueva Orden (sin tocar estructura de orden)
+  // Nueva Orden
   // =======================
   const nuevaOrden = (mostrarMensaje = true) => {
     setOrden({
@@ -476,7 +482,7 @@ setTotalGeneral(totalAll);
 
     setDetalles([]);
     setEditandoDetalleId(null);
-    setFlete(0); 
+    setFlete(0);
     setDetalleForm({
       id_detalle_oc: null,
       id_insumo: "",
@@ -495,174 +501,151 @@ setTotalGeneral(totalAll);
   };
 
   // =======================
-  // Abrir Orden (mapeo de nombres al frontend "de factura")
- const abrirOrden = async (ocId, opts = { silent: false }) => {
-  if (!opts?.silent) setLoading(true);
-  try {
-    const [oc, det] = await Promise.all([
-      api.get(`/compras/orden-compra/${ocId}`),
-api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
+  // Abrir Orden
+  // =======================
+  const abrirOrden = async (ocId, opts = { silent: false }) => {
+    if (!opts?.silent) setLoading(true);
+    try {
+      const [oc, det] = await Promise.all([
+        api.get(`/compras/orden-compra/${ocId}`),
+        api.get(`/compras/detalle-orden-compra/orden/${ocId}`),
+      ]);
 
-    const O = oc.data;
+      const O = oc.data;
 
-    // 🔥 Cargar Flete guardado en BD
-    setFlete(Number(O.flete || 0));
+      setFlete(Number(O.flete || 0));
 
-    setOrden({
-      id_orden_compra: O.id_orden_compra,
-      id_proveedor: O.id_proveedor,
-      id_estado_orden_compra: O.id_estado_orden_compra,
-      fecha_orden: O.fecha_orden,
-      observacion: O.observacion || "",
-      factura_proveedor: O.factura_proveedor || "",
-      nombre_proveedor: O.nombre_proveedor || "",
-      nombre_estado: O.nombre_estado || "",
-    });
+      setOrden({
+        id_orden_compra: O.id_orden_compra,
+        id_proveedor: O.id_proveedor,
+        id_estado_orden_compra: O.id_estado_orden_compra,
+        fecha_orden: O.fecha_orden,
+        observacion: O.observacion || "",
+        factura_proveedor: O.factura_proveedor || "",
+        nombre_proveedor: O.nombre_proveedor || "",
+        nombre_estado: O.nombre_estado || "",
+      });
 
-    setIdProveedorSel(O.id_proveedor?.toString() || "");
+      setIdProveedorSel(O.id_proveedor?.toString() || "");
 
-    setDetalles(
-      (det.data || []).map((d) => {
-        const cant = Number(d.cantidad ?? 0);
-        const precio = Number(d.precio_unitario ?? 0);
-        const desc = Number(d.descuento || 0);
+      setDetalles(
+        (det.data || []).map((d) => {
+          const cant = Number(d.cantidad ?? 0);
+          const precio = Number(d.precio_unitario ?? 0);
+          const desc = Number(d.descuento || 0);
 
-        return {
-          id_detalle_oc: d.id_detalle_oc,
-          id_insumo: d.id_insumo,
-          nombre_insumo: d.nombre_insumo,
-          cantidad: cant,
-          precio_unitario: precio,
-          descuento: desc,
-          subtotal: (cant * precio) - Number(d.descuento || 0), // 🔥 FIX descuento aplicado
-          unidad_medida: d.unidad_medida || "",
-          categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
-          tasa_impuesto: Number(d.tasa_impuesto ?? 15),
-        };
-      })
-    );
-
-
-  } catch (e) {
-    console.error(e);
-    toast({
-      title: "Error al abrir orden",
-      description: e.message,
-      status: "error",
-    });
-  } finally {
-    if (!opts?.silent) setLoading(false);
-  }
-};
+          return {
+            id_detalle_oc: d.id_detalle_oc,
+            id_insumo: d.id_insumo,
+            nombre_insumo: d.nombre_insumo,
+            cantidad: cant,
+            precio_unitario: precio,
+            descuento: desc,
+            subtotal: cant * precio - desc,
+            unidad_medida: normalizarUnidad(d.unidad_medida || ""),
+            categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
+            tasa_impuesto: Number(d.tasa_impuesto ?? 15),
+          };
+        })
+      );
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Error al abrir orden",
+        description: e.message,
+        status: "error",
+      });
+    } finally {
+      if (!opts?.silent) setLoading(false);
+    }
+  };
 
   // =======================
   // CRUD Proveedores (INTACTO)
   // =======================
   const abrirModalProveedor = () => {
-    setProvForm({
-      nombre: "",
-      rtn: "",
-      telefono: "",
-      correo: "",
-      direccion: "",
-      id_estado_proveedor: 1,
-    });
-    setModalProv(true);
-  };
+  setProvForm({
+    nombre: "",
+    rtn: "",
+    telefono: "",
+    correo: "",
+    direccion: "",
+    id_estado_proveedor: 1,
+  });
+
+  // 🔥 limpiar mensajes de error
+  setProvMsg({
+    nombre: "",
+    rtn: "",
+    telefono: "",
+    correo: "",
+    direccion: "",
+  });
+
+  setModalProv(true);
+};
 
   const guardarProveedor = async () => {
-
-  // ================================
-  // 🔍 VALIDACIONES GLOBALES
-  // ================================
-
-  // Nombre requerido
-  if (!provForm.nombre.trim()) {
-    return toast({
-      title: "Nombre requerido",
-      description: "Debe ingresar el nombre del proveedor.",
-      status: "warning",
-    });
-  }
-
-  // Nombre solo letras
-  if (!soloLetras(provForm.nombre)) {
+  // 1) Nombre
+  const errNombre = validarSoloLetras(provForm.nombre, "Nombre del proveedor", true);
+  if (errNombre) {
     return toast({
       title: "Nombre inválido",
-      description: "El nombre solo puede contener letras.",
-      status: "error",
+      description: errNombre, // 👈 mensaje específico
+      status: errNombre.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // RTN requerido
-  if (!provForm.rtn.trim()) {
-    return toast({
-      title: "RTN requerido",
-      description: "Debe ingresar el RTN del proveedor.",
-      status: "warning",
-    });
-  }
-
-  // RTN formato
-  const errRTN = validarRTN(provForm.rtn);
+  // 2) RTN / ID (13 o 14 dígitos)
+  const errRTN = validarRTN(provForm.rtn, true);
   if (errRTN) {
     return toast({
-      title: "RTN inválido",
-      description: errRTN,
-      status: "error",
+      title: "RTN / ID inválido",
+      description: errRTN, // 👈 "no letras" / "no especiales" / "13 o 14"
+      status: errRTN.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // Teléfono requerido
-  if (!provForm.telefono.trim()) {
-    return toast({
-      title: "Teléfono requerido",
-      description: "Debe ingresar el número de teléfono.",
-      status: "warning",
-    });
-  }
-
-  // Teléfono formato
-  const errTel = validarTelefono(provForm.telefono);
+  // 3) Teléfono
+  const errTel = validarTelefono(provForm.telefono, true);
   if (errTel) {
     return toast({
       title: "Teléfono inválido",
-      description: errTel,
-      status: "error",
+      description: errTel, // 👈 específico
+      status: errTel.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // Correo requerido
-  if (!provForm.correo.trim()) {
-    return toast({
-      title: "Correo requerido",
-      description: "Debe ingresar un correo electrónico.",
-      status: "warning",
-    });
-  }
-
-  // Correo formato
-  const errCorreo = validarEmail(provForm.correo);
+  // 4) Correo
+  const errCorreo = validarEmail(provForm.correo, true);
   if (errCorreo) {
     return toast({
       title: "Correo inválido",
       description: errCorreo,
-      status: "error",
+      status: errCorreo.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // Estado proveedor
-  if (!provForm.id_estado_proveedor) {
+  // 5) Dirección (si la quiere obligatoria)
+  const errDir = validarRequerido(provForm.direccion, "Dirección");
+  if (errDir) {
+    return toast({
+      title: "Dirección requerida",
+      description: errDir,
+      status: "warning",
+    });
+  }
+
+  // 6) Estado
+  const errEstado = validarRequerido(provForm.id_estado_proveedor, "Estado del proveedor");
+  if (errEstado) {
     return toast({
       title: "Estado requerido",
-      description: "Debe seleccionar un estado para el proveedor.",
-      status: "error",
+      description: errEstado,
+      status: "warning",
     });
   }
 
-  // ================================
-  // 🔥 SI TODO ES VÁLIDO → GUARDAR
-  // ================================
   try {
     setLoading(true);
     const res = await api.post("/compras/proveedores", {
@@ -689,98 +672,62 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
   }
 };
 
-
- const guardarProveedorEditado = async () => {
+  const guardarProveedorEditado = async () => {
   if (!proveedorEdit) return;
 
-  // ================================
-  // 🔍 VALIDACIONES
-  // ================================
-
-  // Nombre requerido
-  if (!proveedorEdit.nombre.trim()) {
-    return toast({
-      title: "Nombre requerido",
-      description: "Debe ingresar el nombre del proveedor.",
-      status: "warning",
-    });
-  }
-
-  // Nombre solo letras
-  if (!soloLetras(proveedorEdit.nombre)) {
+  // 1) Nombre
+  const errNombre = validarSoloLetras(proveedorEdit.nombre, "Nombre del proveedor", true);
+  if (errNombre) {
     return toast({
       title: "Nombre inválido",
-      description: "El nombre solo puede contener letras.",
-      status: "error",
+      description: errNombre,
+      status: errNombre.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // RTN requerido
-  if (!proveedorEdit.rtn.trim()) {
-    return toast({
-      title: "RTN requerido",
-      description: "Debe ingresar el RTN del proveedor.",
-      status: "warning",
-    });
-  }
-
-  // RTN formato
-  const errRTN = validarRTN(proveedorEdit.rtn);
+  // 2) RTN / ID
+  const errRTN = validarRTN(proveedorEdit.rtn, true);
   if (errRTN) {
     return toast({
-      title: "RTN inválido",
+      title: "RTN / ID inválido",
       description: errRTN,
-      status: "error",
+      status: errRTN.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // Teléfono requerido
-  if (!proveedorEdit.telefono.trim()) {
-    return toast({
-      title: "Teléfono requerido",
-      description: "Debe ingresar el número de teléfono.",
-      status: "warning",
-    });
-  }
-
-  // Teléfono formato
-  const errTel = validarTelefono(proveedorEdit.telefono);
+  // 3) Teléfono
+  const errTel = validarTelefono(proveedorEdit.telefono, true);
   if (errTel) {
     return toast({
       title: "Teléfono inválido",
       description: errTel,
-      status: "error",
+      status: errTel.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // Correo requerido
-  if (!proveedorEdit.correo.trim()) {
-    return toast({
-      title: "Correo requerido",
-      description: "Debe ingresar un correo electrónico.",
-      status: "warning",
-    });
-  }
-
-  // Correo formato
-  const errCorreo = validarEmail(proveedorEdit.correo);
+  // 4) Correo
+  const errCorreo = validarEmail(proveedorEdit.correo, true);
   if (errCorreo) {
     return toast({
       title: "Correo inválido",
       description: errCorreo,
-      status: "error",
+      status: errCorreo.includes("obligatorio") ? "warning" : "error",
     });
   }
 
-  // ================================
-  // 🔥 SI TODO ES VÁLIDO → GUARDAR
-  // ================================
+  // 5) Estado (si en editar también aplica)
+  const errEstado = validarRequerido(proveedorEdit.id_estado_proveedor, "Estado del proveedor");
+  if (errEstado) {
+    return toast({
+      title: "Estado requerido",
+      description: errEstado,
+      status: "warning",
+    });
+  }
+
   try {
     setLoading(true);
-    await api.put(
-      `/compras/proveedores/${proveedorEdit.id_proveedor}`,
-      proveedorEdit
-    );
+    await api.put(`/compras/proveedores/${proveedorEdit.id_proveedor}`, proveedorEdit);
 
     toast({ title: "Proveedor actualizado", status: "success" });
     setModalEditarProv(false);
@@ -796,7 +743,6 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
     setLoading(false);
   }
 };
-
   const eliminarProveedor = async () => {
     try {
       setLoading(true);
@@ -819,7 +765,7 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
   };
 
   // =======================
-  // Orden - Guardar / Actualizar (INTACTO en estructura)
+  // Orden - Guardar / Actualizar
   // =======================
   const guardarOrdenCompleta = async () => {
     if (!idProveedorSel) {
@@ -830,72 +776,71 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
       toast({ title: "Selecciona un estado para la orden", status: "warning" });
       return;
     }
-    if (!detalles.length) {
+
+    const detallesVisibles = detalles.filter((d) => !d._delete);
+    if (!detallesVisibles.length) {
       toast({ title: "Agrega al menos un detalle", status: "warning" });
       return;
     }
+
+  
 
     setLoading(true);
     try {
       let idOC = orden.id_orden_compra;
 
       if (!idOC) {
-       const res = await api.post("/compras/orden-compra", {
-  id_proveedor: Number(idProveedorSel),
-  id_estado_orden_compra: Number(orden.id_estado_orden_compra),
-  observacion: orden.observacion || null,
-  factura_proveedor: orden.factura_proveedor || null,
-  flete: Number(flete),  // 🔥 AGREGAR ESTO
-});
+        const res = await api.post("/compras/orden-compra", {
+          id_proveedor: Number(idProveedorSel),
+          id_estado_orden_compra: Number(orden.id_estado_orden_compra),
+          observacion: orden.observacion || null,
+          factura_proveedor: orden.factura_proveedor || null,
+          flete: Number(flete),
+        });
 
         idOC = res.data?.id_orden_compra;
         setOrden((prev) => ({ ...prev, id_orden_compra: idOC }));
       } else {
         await api.put(`/compras/orden-compra/${idOC}`, {
-  id_proveedor: Number(idProveedorSel),
-  id_estado_orden_compra: Number(orden.id_estado_orden_compra),
-  observacion: orden.observacion || null,
-  factura_proveedor: orden.factura_proveedor || null,
-  fecha_orden: orden.fecha_orden || null,
-  flete: Number(flete),   // 🔥 AGREGAR ESTO
-});
-
+          id_proveedor: Number(idProveedorSel),
+          id_estado_orden_compra: Number(orden.id_estado_orden_compra),
+          observacion: orden.observacion || null,
+          factura_proveedor: orden.factura_proveedor || null,
+          fecha_orden: orden.fecha_orden || null,
+          flete: Number(flete),
+        });
       }
 
-      // Guardar detalles (mapeo a nombres de BD)
       for (const d of detalles) {
-  if (d._delete && d.id_detalle_oc && d.id_detalle_oc > 0) {
-    await api.delete(`/compras/detalle-orden-compra/${d.id_detalle_oc}`);
-    continue;
-  }
-  if (!d.id_insumo || !d.cantidad || !d.precio_unitario) continue;
+        if (d._delete && d.id_detalle_oc && d.id_detalle_oc > 0) {
+          await api.delete(`/compras/detalle-orden-compra/${d.id_detalle_oc}`);
+          continue;
+        }
+        if (!d.id_insumo || !d.cantidad || !d.precio_unitario) continue;
 
-  const detalleData = {
-    id_orden_compra: idOC,
-    id_insumo: Number(d.id_insumo),
-    cantidad: Number(d.cantidad),
-    precio_unitario: Number(d.precio_unitario),
-    descuento: Number(d.descuento || 0),
-    unidad_medida: d.unidad_medida || "",
-    categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
-    tasa_impuesto: Number(d.tasa_impuesto ?? 15),
-  };
+        const detalleData = {
+          id_orden_compra: idOC,
+          id_insumo: Number(d.id_insumo),
+          cantidad: Number(d.cantidad),
+          precio_unitario: Number(d.precio_unitario),
+          descuento: Number(d.descuento || 0),
+          unidad_medida: normalizarUnidad(d.unidad_medida || ""),
+          categoria_impuesto: d.categoria_impuesto || "Gravado 15%",
+          tasa_impuesto: Number(d.tasa_impuesto ?? 15),
+        };
 
-  if (!d.id_detalle_oc || d.id_detalle_oc < 0) {
-    await api.post("/compras/detalle-orden-compra", detalleData);
-  } else {
-    await api.put(
-      `/compras/detalle-orden-compra/${d.id_detalle_oc}`,
-      detalleData
-    );
-  }
-}
+        if (!d.id_detalle_oc || d.id_detalle_oc < 0) {
+          await api.post("/compras/detalle-orden-compra", detalleData);
+        } else {
+          await api.put(
+            `/compras/detalle-orden-compra/${d.id_detalle_oc}`,
+            detalleData
+          );
+        }
+      }
 
       toast({ title: "Orden guardada correctamente", status: "success" });
       nuevaOrden();
-      if (!idOC) {
-  setFlete(0);
-}
       await cargarTodo();
     } catch (e) {
       console.error(e);
@@ -937,7 +882,7 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
   };
 
   // =======================
-  // Detalles - agregar / editar / eliminar (UI con nombres de factura)
+  // Detalles - agregar / editar / eliminar
   // =======================
   const limpiarDetalleForm = () =>
     setDetalleForm({
@@ -952,107 +897,137 @@ api.get(`/compras/detalle-orden-compra/orden/${ocId}`)    ]);
       descuento: 0,
     });
 
-const agregarDetalle = () => {
-  if (!detalleForm.id_insumo || detalleForm.cantidad === "" || detalleForm.precio_unitario === "") {
-    toast({ title: "Completa insumo, cantidad y precio", status: "warning" });
-    return;
-  }
+  const agregarDetalle = () => {
+    if (
+      !detalleForm.id_insumo ||
+      detalleForm.cantidad === "" ||
+      detalleForm.precio_unitario === ""
+    ) {
+      toast({ title: "Completa insumo, cantidad y precio", status: "warning" });
+      return;
+    }
 
-  const toNum = (val) => (isNaN(Number(val)) ? 0 : Number(val));
-  const ins = insumos.find(i => Number(i.id_insumo) === Number(detalleForm.id_insumo));
+    const toNum = (val) => (isNaN(Number(val)) ? 0 : Number(val));
+    const ins = insumos.find(
+      (i) => Number(i.id_insumo) === Number(detalleForm.id_insumo)
+    );
 
-  const cantidad = toNum(detalleForm.cantidad);
-  const precio = toNum(detalleForm.precio_unitario);
-  const descuento = toNum(detalleForm.descuento);
+    const um = normalizarUnidad(ins?.unidad_medida || "");
+    if (!um) {
+  toast({
+    title: "Unidad no definida",
+    description: "Este insumo no tiene unidad de medida registrada en Insumos.",
+    status: "warning",
+  });
+  return;
+}
 
-  const subtotalCalc = cantidad * precio - descuento;
+    const cantidad = toNum(detalleForm.cantidad);
+    const precio = toNum(detalleForm.precio_unitario);
+    const descuento = toNum(detalleForm.descuento);
 
-  const nuevo = {
-    ...detalleForm,
-    id_detalle_oc: tempDetailId--,
-    nombre_insumo: ins?.nombre_insumo || "",
-    cantidad,
-    precio_unitario: precio,
-    descuento,
-    subtotal: subtotalCalc,
-    unidad_medida: detalleForm.unidad_medida || "",
-    categoria_impuesto: detalleForm.categoria_impuesto || "Gravado 15%",
-    tasa_impuesto: toNum(detalleForm.tasa_impuesto ?? 15),
+    const subtotalCalc = cantidad * precio - descuento;
+
+    const nuevo = {
+      ...detalleForm,
+      id_detalle_oc: tempDetailId--,
+      nombre_insumo: ins?.nombre_insumo || "",
+      cantidad,
+      precio_unitario: precio,
+      descuento,
+      subtotal: subtotalCalc,
+      unidad_medida: um,
+      categoria_impuesto: detalleForm.categoria_impuesto || "Gravado 15%",
+      tasa_impuesto: toNum(detalleForm.tasa_impuesto ?? 15),
+    };
+
+    setDetalles((arr) => [...arr, nuevo]);
+    limpiarDetalleForm();
   };
 
-  setDetalles((arr) => [...arr, nuevo]);
-  limpiarDetalleForm();
-};
+  // ============================================================
+  // 🔹 Cargar Detalle en formulario (modo edición)
+  // ============================================================
+  const cargarDetalleParaEditar = (row) => {
+    setEditandoDetalleId(row.id_detalle_oc);
 
+    const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 
- const toNum = (val) => (isNaN(Number(val)) ? 0 : Number(val));
+    const subtotalCalc =
+      toNum(row.cantidad) * toNum(row.precio_unitario) -
+      toNum(row.descuento || 0);
 
-// ============================================================
-// 🔹 Cargar Detalle en formulario (modo edición)
-// ============================================================
-const cargarDetalleParaEditar = (row) => {
-  setEditandoDetalleId(row.id_detalle_oc);
+    setDetalleForm({
+      id_detalle_oc: row.id_detalle_oc,
+      id_insumo: row.id_insumo,
+      cantidad: toNum(row.cantidad),
+      precio_unitario: toNum(row.precio_unitario),
+      descuento: toNum(row.descuento),
+      unidad_medida: normalizarUnidad(row.unidad_medida || ""),
+      categoria_impuesto: row.categoria_impuesto,
+      tasa_impuesto: toNum(row.tasa_impuesto),
+      subtotal: subtotalCalc,
+    });
+  };
 
-  const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+  // ============================================================
+  // 🔹 Confirmar edición del detalle
+  // ============================================================
+  const confirmarEdicionDetalle = () => {
+    if (
+      !detalleForm.id_insumo ||
+      detalleForm.cantidad === "" ||
+      detalleForm.precio_unitario === ""
+    ) {
+      toast({ title: "Completa insumo, cantidad y precio", status: "warning" });
+      return;
+    }
 
-  const subtotalCalc =
-    toNum(row.cantidad) * toNum(row.precio_unitario) -
-    toNum(row.descuento || 0);
+    
+    const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+    const ins = insumos.find(
+      (i) => Number(i.id_insumo) === Number(detalleForm.id_insumo)
+    );
 
-  setDetalleForm({
-    id_detalle_oc: row.id_detalle_oc,
-    id_insumo: row.id_insumo,
-    cantidad: toNum(row.cantidad),
-    precio_unitario: toNum(row.precio_unitario),
-    descuento: toNum(row.descuento),
-    unidad_medida: row.unidad_medida || "",
-    categoria_impuesto: row.categoria_impuesto,
-    tasa_impuesto: toNum(row.tasa_impuesto),
-    subtotal: subtotalCalc,
+    // ✅ Unidad SIEMPRE viene del Insumo seleccionado (no del formulario)
+const um = normalizarUnidad(ins?.unidad_medida || "");
+if (!um) {
+  toast({
+    title: "Unidad no definida",
+    description: "Este insumo no tiene unidad de medida registrada en Insumos.",
+    status: "warning",
   });
-};
+  return;
+}
 
+    const cantidad = toNum(detalleForm.cantidad);
+    const precio = toNum(detalleForm.precio_unitario);
+    const descuento = toNum(detalleForm.descuento);
 
- // ============================================================
-// 🔹 Confirmar edición del detalle
-// ============================================================
-const confirmarEdicionDetalle = () => {
-  if (!detalleForm.id_insumo || detalleForm.cantidad === "" || detalleForm.precio_unitario === "") {
-    toast({ title: "Completa insumo, cantidad y precio", status: "warning" });
-    return;
-  }
+    const subtotalCalc = cantidad * precio - descuento;
 
-  const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
-  const ins = insumos.find(i => Number(i.id_insumo) === Number(detalleForm.id_insumo));
+    setDetalles((arr) =>
+      arr.map((d) =>
+        d.id_detalle_oc === editandoDetalleId
+          ? {
+              ...d,
+              id_insumo: Number(detalleForm.id_insumo),
+              nombre_insumo: ins?.nombre_insumo || "",
+              cantidad,
+              precio_unitario: precio,
+              descuento,
+              subtotal: subtotalCalc,
+              unidad_medida: um,
+              categoria_impuesto: detalleForm.categoria_impuesto,
+              tasa_impuesto: toNum(detalleForm.tasa_impuesto ?? 15),
+            }
+          : d
+      )
+    );
 
-  const cantidad = toNum(detalleForm.cantidad);
-  const precio = toNum(detalleForm.precio_unitario);
-  const descuento = toNum(detalleForm.descuento);
-
-  const subtotalCalc = cantidad * precio - descuento;
-
-  setDetalles((arr) =>
-    arr.map((d) =>
-      d.id_detalle_oc === editandoDetalleId
-        ? {
-            ...d,
-            id_insumo: Number(detalleForm.id_insumo),
-            nombre_insumo: ins?.nombre_insumo || "",
-            cantidad,
-            precio_unitario: precio,
-            descuento,
-            subtotal: subtotalCalc,
-            unidad_medida: detalleForm.unidad_medida || "",
-            categoria_impuesto: detalleForm.categoria_impuesto,
-            tasa_impuesto: toNum(detalleForm.tasa_impuesto ?? 15),
-          }
-        : d
-    )
-  );
-
-  setEditandoDetalleId(null);
-  limpiarDetalleForm();
-};
+    setEditandoDetalleId(null);
+    limpiarDetalleForm();
+  };
 
   const eliminarDetalleLocal = (row) => {
     if (row.id_detalle_oc > 0) {
@@ -1069,104 +1044,48 @@ const confirmarEdicionDetalle = () => {
   };
 
   // 🔥📌 AQUI VA — UBICACIÓN PERFECTA
-// ============================================
-const handleNavigate = (path) => {
-  if (tieneCambios) {
-    setRutaPendiente(path);
-    salirModal.onOpen();
-  } else {
-    navigate(path);
-  }
-};
-// ============================================
+  const handleNavigate = (path) => {
+    if (tieneCambios) {
+      setRutaPendiente(path);
+      salirModal.onOpen();
+    } else {
+      navigate(path);
+    }
+  };
 
   const detallesVisibles = detalles.filter((d) => !d._delete);
-const totales = calcTotalesFactura(detallesVisibles, flete);
+  const totales = calcTotalesFactura(detallesVisibles, flete);
 
   // =======================
   // Dataset UNIFICADO export (mapear nombres)
   // =======================
-const buildUnifiedRows = async () => {
-  const [provRes, ocRes, detRes] = await Promise.all([
-    api.get("/compras/proveedores"),
-    api.get("/compras/orden-compra"),
-    api.get("/compras/detalle-orden-compra"),
-  ]);
+  const buildUnifiedRows = async () => {
+    const [provRes, ocRes, detRes] = await Promise.all([
+      api.get("/compras/proveedores"),
+      api.get("/compras/orden-compra"),
+      api.get("/compras/detalle-orden-compra"),
+    ]);
 
-  const provs = provRes.data || [];
-  const ocs = ocRes.data || [];
-  const dets = detRes.data || [];
+    const provs = provRes.data || [];
+    const ocs = ocRes.data || [];
+    const dets = detRes.data || [];
 
-  const provById = new Map(provs.map((p) => [Number(p.id_proveedor), p]));
-  const ocById = new Map(ocs.map((o) => [Number(o.id_orden_compra), o]));
+    const provById = new Map(provs.map((p) => [Number(p.id_proveedor), p]));
+    const ocById = new Map(ocs.map((o) => [Number(o.id_orden_compra), o]));
 
-  const rows = [];
+    const rows = [];
 
-  // ============================================================
-  // 1) ÓRDENES CON DETALLE (datos SIEMPRE en NÚMEROS)
-  // ============================================================
-  for (const d of dets) {
-    const oc = ocById.get(Number(d.id_orden_compra)) || {};
-    const p = provById.get(Number(oc.id_proveedor)) || {};
-
-    const cantidad = Number(d.cantidad_solicitada ?? d.cantidad ?? 0);
-    const precio = Number(d.precio_unitario ?? 0);
-    const descuento = Number(d.descuento_renglon ?? d.descuento ?? 0);
-    const tasa = Number(d.tasa_impuesto_renglon ?? d.tasa_impuesto ?? 0);
-
-    const subtotalCalc = cantidad * precio - descuento;
-    const totalCalc = subtotalCalc * (1 + tasa / 100);
-
-    rows.push({
-      // =======================
-      // PROVEEDOR
-      // =======================
-      id_proveedor: p.id_proveedor ?? oc.id_proveedor ?? "",
-      proveedor: p.nombre ?? oc.nombre_proveedor ?? "",
-      rtn: p.rtn ?? "",
-      telefono: p.telefono ?? "",
-      correo: p.correo ?? "",
-      direccion: p.direccion ?? "",
-      estado_proveedor: p.nombre_estado ?? p.estado ?? "",
-
-      // =======================
-      // ORDEN COMPRA
-      // =======================
-      id_orden_compra: oc.id_orden_compra ?? "",
-      estado_orden: oc.nombre_estado ?? "",
-      fecha_orden: oc.fecha_orden
-        ? oc.fecha_orden.substring(0, 10)
-        : "",
-      factura_proveedor: oc.factura_proveedor ?? "",
-      observacion: oc.observacion ?? "",
-      flete: Number(oc.flete || 0),
-
-      // =======================
-      // DETALLE (todo en números LIMPIOS)
-      // =======================
-      id_detalle_oc: d.id_detalle_oc ?? "",
-      id_insumo: d.id_insumo ?? "",
-      insumo: d.nombre_insumo ?? "",
-
-      cantidad,
-      unidad_medida: d.unidad_medida ?? "", 
-      precio_unitario: precio,
-      descuento,
-      subtotal: subtotalCalc,
-      categoria_impuesto: d.categoria_impuesto ?? "",
-      tasa_impuesto: tasa,
-      total: totalCalc,
-    });
-  }
-
-  // ============================================================
-  // 2) ÓRDENES SIN DETALLE
-  // ============================================================
-  const ocConDetalle = new Set(dets.map((d) => Number(d.id_orden_compra)));
-
-  for (const oc of ocs) {
-    if (!ocConDetalle.has(Number(oc.id_orden_compra))) {
+    for (const d of dets) {
+      const oc = ocById.get(Number(d.id_orden_compra)) || {};
       const p = provById.get(Number(oc.id_proveedor)) || {};
+
+      const cantidad = Number(d.cantidad_solicitada ?? d.cantidad ?? 0);
+      const precio = Number(d.precio_unitario ?? 0);
+      const descuento = Number(d.descuento_renglon ?? d.descuento ?? 0);
+      const tasa = Number(d.tasa_impuesto_renglon ?? d.tasa_impuesto ?? 0);
+
+      const subtotalCalc = cantidad * precio - descuento;
+      const totalCalc = subtotalCalc * (1 + tasa / 100);
 
       rows.push({
         id_proveedor: p.id_proveedor ?? oc.id_proveedor ?? "",
@@ -1179,64 +1098,89 @@ const buildUnifiedRows = async () => {
 
         id_orden_compra: oc.id_orden_compra ?? "",
         estado_orden: oc.nombre_estado ?? "",
-        fecha_orden: oc.fecha_orden
-          ? oc.fecha_orden.substring(0, 10)
-          : "",
+        fecha_orden: oc.fecha_orden ? oc.fecha_orden.substring(0, 10) : "",
         factura_proveedor: oc.factura_proveedor ?? "",
         observacion: oc.observacion ?? "",
         flete: Number(oc.flete || 0),
 
-        // Sin detalle
-        id_detalle_oc: "",
-        id_insumo: "",
-        insumo: "",
-        unidad_medida: "",
-        cantidad: 0,
-        precio_unitario: 0,
-        subtotal: 0,
-        descuento: 0,
-        categoria_impuesto: "",
-        tasa_impuesto: 0,
-        total: 0,
+        id_detalle_oc: d.id_detalle_oc ?? "",
+        id_insumo: d.id_insumo ?? "",
+        insumo: d.nombre_insumo ?? "",
+
+        cantidad,
+        unidad_medida: normalizarUnidad(d.unidad_medida ?? ""),
+        precio_unitario: precio,
+        descuento,
+        subtotal: subtotalCalc,
+        categoria_impuesto: d.categoria_impuesto ?? "",
+        tasa_impuesto: tasa,
+        total: totalCalc,
       });
     }
-  }
 
-  // ============================================================
-  // ORDENAR
-  // ============================================================
-  rows.sort((a, b) => {
-    const pn = (a.proveedor || "").localeCompare(b.proveedor || "");
-    if (pn !== 0) return pn;
+    const ocConDetalle = new Set(dets.map((d) => Number(d.id_orden_compra)));
 
-    const ocA = Number(a.id_orden_compra) || 0;
-    const ocB = Number(b.id_orden_compra) || 0;
-    if (ocA !== ocB) return ocA - ocB;
+    for (const oc of ocs) {
+      if (!ocConDetalle.has(Number(oc.id_orden_compra))) {
+        const p = provById.get(Number(oc.id_proveedor)) || {};
 
-    const dA = Number(a.id_detalle_oc) || 0;
-    const dB = Number(b.id_detalle_oc) || 0;
-    return dA - dB;
-  });
+        rows.push({
+          id_proveedor: p.id_proveedor ?? oc.id_proveedor ?? "",
+          proveedor: p.nombre ?? oc.nombre_proveedor ?? "",
+          rtn: p.rtn ?? "",
+          telefono: p.telefono ?? "",
+          correo: p.correo ?? "",
+          direccion: p.direccion ?? "",
+          estado_proveedor: p.nombre_estado ?? p.estado ?? "",
 
-  
+          id_orden_compra: oc.id_orden_compra ?? "",
+          estado_orden: oc.nombre_estado ?? "",
+          fecha_orden: oc.fecha_orden ? oc.fecha_orden.substring(0, 10) : "",
+          factura_proveedor: oc.factura_proveedor ?? "",
+          observacion: oc.observacion ?? "",
+          flete: Number(oc.flete || 0),
 
+          id_detalle_oc: "",
+          id_insumo: "",
+          insumo: "",
+          unidad_medida: "",
+          cantidad: 0,
+          precio_unitario: 0,
+          subtotal: 0,
+          descuento: 0,
+          categoria_impuesto: "",
+          tasa_impuesto: 0,
+          total: 0,
+        });
+      }
+    }
 
-  // ============================================================
-  // COLAPSAR CAMPOS REPETIDOS
-  // ============================================================
-  return collapseRepeated(rows, [
-    "id_proveedor",
-    "proveedor",
-    "rtn",
-    "telefono",
-    "correo",
-    "direccion",
-    "estado_proveedor",
-  ]);
-};
+    rows.sort((a, b) => {
+      const pn = (a.proveedor || "").localeCompare(b.proveedor || "");
+      if (pn !== 0) return pn;
+
+      const ocA = Number(a.id_orden_compra) || 0;
+      const ocB = Number(b.id_orden_compra) || 0;
+      if (ocA !== ocB) return ocA - ocB;
+
+      const dA = Number(a.id_detalle_oc) || 0;
+      const dB = Number(b.id_detalle_oc) || 0;
+      return dA - dB;
+    });
+
+    return collapseRepeated(rows, [
+      "id_proveedor",
+      "proveedor",
+      "rtn",
+      "telefono",
+      "correo",
+      "direccion",
+      "estado_proveedor",
+    ]);
+  };
 
   // =======================
-  // Exportar (Excel/PDF intacto, usando nombres de factura)
+  // Exportar
   // =======================
   const exportarReporte = async () => {
     try {
@@ -1248,9 +1192,7 @@ const buildUnifiedRows = async () => {
         return;
       }
 
-      const cols = ALL_COLUMNS.filter((c) =>
-        selectedColumns.includes(c.key)
-      );
+      const cols = ALL_COLUMNS.filter((c) => selectedColumns.includes(c.key));
 
       if (exportFormat === "excel") {
         const wb = new ExcelJS.Workbook();
@@ -1261,7 +1203,6 @@ const buildUnifiedRows = async () => {
           ws.addRow(cols.map((c) => r[c.key]));
         });
 
-        // Estilo simple + autosize
         ws.getRow(1).font = { bold: true };
         cols.forEach((c, i) => {
           let max = c.label.length;
@@ -1276,154 +1217,132 @@ const buildUnifiedRows = async () => {
         saveAs(new Blob([buf]), "reporte_compras_unificado.xlsx");
         toast({ title: "Excel exportado", status: "success" });
       } else {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const pageWidth = doc.internal.pageSize.width;
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        const pageWidth = doc.internal.pageSize.width;
 
-  // ================================
-  // FORMATEO DE MONEDA
-  // ================================
-  const formatMoney = (v) => `L. ${Number(v || 0).toFixed(2)}`;
+        const formatMoney = (v) => `L. ${Number(v || 0).toFixed(2)}`;
 
-  // 🔥 Convertir las filas ANTES del PDF
-  const formattedRows = rows.map((r) => ({
-    ...r,
-    precio_unitario: formatMoney(r.precio_unitario),
-    subtotal: formatMoney(r.subtotal),
-    descuento: formatMoney(r.descuento),
-    total: formatMoney(r.total),
-    flete: formatMoney(r.flete),
-  }));
+        const formattedRows = rows.map((r) => ({
+          ...r,
+          precio_unitario: formatMoney(r.precio_unitario),
+          subtotal: formatMoney(r.subtotal),
+          descuento: formatMoney(r.descuento),
+          total: formatMoney(r.total),
+          flete: formatMoney(r.flete),
+        }));
 
-  // ================================
-  // ENCABEZADO PDF
-  // ================================
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, pageWidth, 110, "F");
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, pageWidth, 110, "F");
 
-  // Logo
-  try {
-    const dataURL = await imgToDataURL(logoSrc);
-    doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
-  } catch (e) {
-    console.warn("⚠️ No se pudo cargar el logo", e);
-  }
+        try {
+          const dataURL = await imgToDataURL(logoSrc);
+          doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
+        } catch (e) {
+          console.warn("⚠️ No se pudo cargar el logo", e);
+        }
 
-  // Título
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(25, 55, 80);
-  doc.text("REPORTE DE COMPRAS DE INSUMOS", pageWidth / 2, 50, {
-    align: "center",
-  });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.setTextColor(25, 55, 80);
+        doc.text("REPORTE DE COMPRAS DE INSUMOS", pageWidth / 2, 50, {
+          align: "center",
+        });
 
-  // Fecha
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90);
-  doc.text(`Generado: ${new Date().toLocaleDateString()}`, pageWidth / 2, 70, {
-    align: "center",
-  });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(90);
+        doc.text(`Generado: ${new Date().toLocaleDateString()}`, pageWidth / 2, 70, {
+          align: "center",
+        });
 
-  // Línea
-  doc.setDrawColor(20, 120, 110);
-  doc.setLineWidth(1);
-  doc.line(40, 95, pageWidth - 40, 95);
+        doc.setDrawColor(20, 120, 110);
+        doc.setLineWidth(1);
+        doc.line(40, 95, pageWidth - 40, 95);
 
-  // ================================
-  // 🔥 TABLA PRINCIPAL
-  // ================================
-  autoTable(doc, {
-    startY: 120,
-    head: [cols.map((c) => c.label)],
-    body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
-    styles: { fontSize: 9, cellPadding: 4, valign: "middle" },
-    headStyles: { fillColor: [20, 120, 110], textColor: 255, fontStyle: "bold" },
+        autoTable(doc, {
+          startY: 120,
+          head: [cols.map((c) => c.label)],
+          body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
+          styles: { fontSize: 9, cellPadding: 4, valign: "middle" },
+          headStyles: {
+            fillColor: [20, 120, 110],
+            textColor: 255,
+            fontStyle: "bold",
+          },
+          didDrawPage: () => {
+            const pageSize = doc.internal.pageSize;
+            const pageHeight = pageSize.getHeight();
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(
+              `Página ${doc.getNumberOfPages()}`,
+              pageSize.getWidth() - 80,
+              pageHeight - 20
+            );
+          },
+        });
 
-    didDrawPage: () => {
-      const pageSize = doc.internal.pageSize;
-      const pageHeight = pageSize.getHeight();
-      doc.setFontSize(9);
-      doc.setTextColor(120);
-      doc.text(
-        `Página ${doc.getNumberOfPages()}`,
-        pageSize.getWidth() - 80,
-        pageHeight - 20
-      );
-    },
-  });
+        const finalY = doc.lastAutoTable.finalY + 30;
 
-  // ================================
-  // 🔥 CALCULAR TOTALES PARA EL PDF
-  // ================================
-  const finalY = doc.lastAutoTable.finalY + 30;
+        let subtotalPDF = 0;
+        let descuentosPDF = 0;
+        let exentoPDF = 0;
+        let exoneradoPDF = 0;
+        let gravado15PDF = 0;
 
-  let subtotalPDF = 0;
-  let descuentosPDF = 0;
-  let exentoPDF = 0;
-  let exoneradoPDF = 0;
-  let gravado15PDF = 0;
+        rows.forEach((r) => {
+          const sub = Number(r.subtotal || 0);
+          const desc = Number(r.descuento || 0);
+          const cat = (r.categoria_impuesto || "").toLowerCase();
 
-  rows.forEach((r) => {
-    const sub = Number(r.subtotal || 0);
-    const desc = Number(r.descuento || 0);
-    const cat = (r.categoria_impuesto || "").toLowerCase();
+          subtotalPDF += sub + desc;
+          descuentosPDF += desc;
 
-    subtotalPDF += sub + desc;
-    descuentosPDF += desc;
+          if (cat.includes("exento")) exentoPDF += sub;
+          else if (cat.includes("exonerado")) exoneradoPDF += sub;
+          else gravado15PDF += sub;
+        });
 
-    if (cat.includes("exento")) exentoPDF += sub;
-    else if (cat.includes("exonerado")) exoneradoPDF += sub;
-    else gravado15PDF += sub;
-  });
+        const impuestoPDF = gravado15PDF * 0.15;
 
-  const impuestoPDF = gravado15PDF * 0.15;
+        let fletePDF = 0;
+        rows.forEach((r) => {
+          if (r.flete) fletePDF += Number(r.flete || 0);
+        });
 
-  // 🔥 Flete sumado
-  let fletePDF = 0;
-  rows.forEach((r) => {
-    if (r.flete) fletePDF += Number(r.flete || 0);
-  });
+        const totalPDF =
+          exentoPDF + exoneradoPDF + gravado15PDF + impuestoPDF + fletePDF;
 
-  const totalPDF =
-    exentoPDF +
-    exoneradoPDF +
-    gravado15PDF +
-    impuestoPDF +
-    fletePDF;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("RESUMEN DE TOTALES", 40, finalY);
 
-  // ================================
-  // 🔥 BLOQUE VISUAL DE TOTALES
-  // ================================
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("RESUMEN DE TOTALES", 40, finalY);
+        let y = finalY + 20;
 
-  let y = finalY + 20;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+        const addRow = (label, value) => {
+          doc.text(label, 50, y);
+          doc.text(formatMoney(value), 350, y, { align: "right" });
+          y += 18;
+        };
 
-  const addRow = (label, value) => {
-    doc.text(label, 50, y);
-    doc.text(formatMoney(value), 350, y, { align: "right" });
-    y += 18;
-  };
+        addRow("Subtotal:", subtotalPDF);
+        addRow("Descuentos:", descuentosPDF);
+        addRow("Importe Exento:", exentoPDF);
+        addRow("Importe Exonerado:", exoneradoPDF);
+        addRow("Importe Gravado 15%:", gravado15PDF);
+        addRow("Impuesto 15%:", impuestoPDF);
+        addRow("Flete:", fletePDF);
 
-  addRow("Subtotal:", subtotalPDF);
-  addRow("Descuentos:", descuentosPDF);
-  addRow("Importe Exento:", exentoPDF);
-  addRow("Importe Exonerado:", exoneradoPDF);
-  addRow("Importe Gravado 15%:", gravado15PDF);
-  addRow("Impuesto 15%:", impuestoPDF);
-  addRow("Flete:", fletePDF);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        addRow("TOTAL GENERAL:", totalPDF);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  addRow("TOTAL GENERAL:", totalPDF);
-
-  doc.save("reporte_compras_unificado.pdf");
-  toast({ title: "PDF exportado", status: "success" });
-}
+        doc.save("reporte_compras_unificado.pdf");
+        toast({ title: "PDF exportado", status: "success" });
+      }
     } catch (e) {
       console.error(e);
       toast({
@@ -1437,781 +1356,990 @@ const buildUnifiedRows = async () => {
     }
   };
 
-
-  
-  // =======================
-  // Render
-  // =======================
   const estadoNombre = estadosOC.find(
     (e) =>
-      Number(e.id_estado_orden_compra) ===
-      Number(orden.id_estado_orden_compra)
+      Number(e.id_estado_orden_compra) === Number(orden.id_estado_orden_compra)
   )?.nombre_estado;
 
- return (
-  <Box p={5}>
-    {/* Encabezado + botón único de exportación */}
-    <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
-      <Heading size="lg" color={accent}>
-        Gestión de Compras
-      </Heading>
-      
+  return (
+    <Box p={5}>
+      {/* Encabezado + botón único de exportación */}
+      <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
+        <Heading size="lg" color={accent}>
+          Gestión de Compras
+        </Heading>
 
-      <HStack spacing={2} align="center">
-        {lastRefresh && (
-          <Text fontSize="xs" color={subtle} mr={2}>
-            Última sync: {lastRefresh.toLocaleTimeString()}
-          </Text>
-        )}
+        <HStack spacing={2} align="center">
+          {lastRefresh && (
+            <Text fontSize="xs" color={subtle} mr={2}>
+              Última sync: {lastRefresh.toLocaleTimeString()}
+            </Text>
+          )}
 
-        <Button
-          size="sm"
-          leftIcon={<FaFileExport />}
-          colorScheme="teal"
-          onClick={exportModal.onOpen}
-          isDisabled={loading || loadingRefresh}
-        >
-          Exportar
-        </Button>
+          <Button
+            size="sm"
+            leftIcon={<FaFileExport />}
+            colorScheme="teal"
+            onClick={exportModal.onOpen}
+            isDisabled={loading || loadingRefresh}
+          >
+            Exportar
+          </Button>
 
-        <Button
-          size="sm"
-          leftIcon={<FaSync />}
-          variant="ghost"
-          onClick={refrescarCompras}
-          isLoading={loadingRefresh}
-        >
-          Refrescar
-        </Button>
-      </HStack>
-    </Flex>
+          <Button
+            size="sm"
+            leftIcon={<FaSync />}
+            variant="ghost"
+            onClick={refrescarCompras}
+            isLoading={loadingRefresh}
+          >
+            Refrescar
+          </Button>
+        </HStack>
+      </Flex>
 
-    {/* Mini KPIs */}
-    <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={4} mb={5}>
-      <GridItem>
-        <Box p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Stat>
-            <StatLabel color={subtle}>Proveedores</StatLabel>
-            <StatNumber color={accent}>{proveedores.length}</StatNumber>
-            <StatHelpText>
-              <Icon as={FaUserTie} mr={2} color="teal.500" />
-              Registrados
-            </StatHelpText>
-          </Stat>
-        </Box>
-      </GridItem>
+      {/* Mini KPIs */}
+      <Grid
+        templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }}
+        gap={4}
+        mb={5}
+      >
+        <GridItem>
+          <Box
+            p={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Stat>
+              <StatLabel color={subtle}>Proveedores</StatLabel>
+              <StatNumber color={accent}>{proveedores.length}</StatNumber>
+              <StatHelpText>
+                <Icon as={FaUserTie} mr={2} color="teal.500" />
+                Registrados
+              </StatHelpText>
+            </Stat>
+          </Box>
+        </GridItem>
 
-      <GridItem>
-        <Box p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Stat>
-            <StatLabel color={subtle}>Órdenes</StatLabel>
-            <StatNumber color={accent}>{ordenesRecientes.length}</StatNumber>
-            <StatHelpText>
-              <Icon as={FaListUl} mr={2} color="teal.500" />
-              En el sistema
-            </StatHelpText>
-          </Stat>
-        </Box>
-      </GridItem>
+        <GridItem>
+          <Box
+            p={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Stat>
+              <StatLabel color={subtle}>Órdenes</StatLabel>
+              <StatNumber color={accent}>{ordenesRecientes.length}</StatNumber>
+              <StatHelpText>
+                <Icon as={FaListUl} mr={2} color="teal.500" />
+                En el sistema
+              </StatHelpText>
+            </Stat>
+          </Box>
+        </GridItem>
 
-      <GridItem>
-        <Box p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Stat>
-            <StatLabel color={subtle}>Total general (todas las órdenes)</StatLabel>
-            <StatNumber color={accent}>L. {totalGeneral.toFixed(2)}</StatNumber>
-            <StatHelpText>
-              <Icon as={FaBox} mr={2} color="teal.500" />
-              Sumatoria completa
-            </StatHelpText>
-          </Stat>
-        </Box>
-      </GridItem>
-    </Grid>
+        <GridItem>
+          <Box
+            p={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Stat>
+              <StatLabel color={subtle}>
+                Total general (todas las órdenes)
+              </StatLabel>
+              <StatNumber color={accent}>L. {totalGeneral.toFixed(2)}</StatNumber>
+              <StatHelpText>
+                <Icon as={FaBox} mr={2} color="teal.500" />
+                Sumatoria completa
+              </StatHelpText>
+            </Stat>
+          </Box>
+        </GridItem>
+      </Grid>
 
-    {/* =========================================================
-              SECCIÓN 1: PROVEEDOR + ORDEN
-        ========================================================= */}
-    <Grid templateColumns={{ base: "1fr", lg: "1.1fr 1fr" }} gap={5}>
+      {/* =========================================================
+                SECCIÓN 1: PROVEEDOR + ORDEN
+          ========================================================= */}
+      <Grid templateColumns={{ base: "1fr", lg: "1.1fr 1fr" }} gap={5}>
+        {/* ---------------------------------
+            PROVEEDOR
+        ----------------------------------- */}
+        <GridItem>
+          <Box
+            p={4}
+            mb={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Flex justify="space-between" align="center" mb={3}>
+              <Heading size="md" color={accent}>
+                Proveedor
+              </Heading>
 
-      {/* ---------------------------------
-          PROVEEDOR
-      ----------------------------------- */}
-      <GridItem>
-        <Box p={4} mb={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Flex justify="space-between" align="center" mb={3}>
-            <Heading size="md" color={accent}>Proveedor</Heading>
+              <Button
+                size="sm"
+                colorScheme="teal"
+                variant="solid"
+                leftIcon={<FaPlus />}
+                onClick={() => {
+                  setTieneCambios(true);
+                  abrirModalProveedor();
+                }}
+                isDisabled={loading || loadingRefresh}
+              >
+                Nuevo Proveedor
+              </Button>
+            </Flex>
 
-            <Button
-              size="sm"
-              colorScheme="teal"
-              variant="solid"
-              leftIcon={<FaPlus />}
-              onClick={() => {
-                setTieneCambios(true);
-                abrirModalProveedor();
-              }}
-              isDisabled={loading || loadingRefresh}
-            >
-              Nuevo Proveedor
-            </Button>
-          </Flex>
+            <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={3}>
+              <GridItem>
+                <FormControl>
+                  <FormLabel fontSize="sm">Seleccionar proveedor</FormLabel>
+                  <CSelect
+                    size="sm"
+                    bg="white"
+                    value={idProveedorSel}
+                    onChange={(e) => {
+                      setTieneCambios(true);
+                      const id = e.target.value;
+                      nuevaOrden();
+                      setIdProveedorSel(id);
+                      setOrden((o) => ({ ...o, id_proveedor: id }));
+                      setDetalles([]);
+                    }}
+                  >
+                    <option value="">— Seleccione —</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id_proveedor} value={p.id_proveedor}>
+                        {p.nombre} {p.rtn ? ` | ${p.rtn}` : ""}
+                      </option>
+                    ))}
+                  </CSelect>
 
-          <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={3}>
-            <GridItem>
+                  <HStack mt={2} spacing={2}>
+                    <Button
+                      size="sm"
+                      leftIcon={<FaEdit />}
+                      colorScheme="teal"
+                      variant="ghost"
+                      isDisabled={!idProveedorSel || loading || loadingRefresh}
+                      onClick={() => {
+                        setTieneCambios(true);
+                        const prov = proveedores.find(
+                          (p) => Number(p.id_proveedor) === Number(idProveedorSel)
+                        );
+                        setProveedorEdit(prov);
+                        setModalEditarProv(true);
+                      }}
+                    >
+                      Editar proveedor
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      leftIcon={<FaTrash />}
+                      colorScheme="red"
+                      variant="ghost"
+                      isDisabled={!idProveedorSel || loading || loadingRefresh}
+                      onClick={() => {
+                        setTieneCambios(true);
+                        setProveedorAEliminar(idProveedorSel);
+                        setModalEliminarProv(true);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  </HStack>
+                </FormControl>
+              </GridItem>
+
+              <GridItem display="flex" alignItems="flex-end">
+                <Badge
+                  colorScheme="teal"
+                  variant="subtle"
+                  p={2}
+                  borderRadius="md"
+                >
+                  {idProveedorSel
+                    ? proveedores.find(
+                        (p) => Number(p.id_proveedor) === Number(idProveedorSel)
+                      )?.nombre
+                    : "Ninguno seleccionado"}
+                </Badge>
+              </GridItem>
+            </Grid>
+          </Box>
+
+          {/* ---------------------------------
+              ORDEN DE COMPRA
+          ----------------------------------- */}
+          <Box
+            p={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Flex justify="space-between" align="center" mb={3}>
+              <Heading size="md" color={accent}>
+                {orden.id_orden_compra
+                  ? `Orden OC-${orden.id_orden_compra}`
+                  : "Crear Orden de Compra"}
+              </Heading>
+
+              <Button
+                size="sm"
+                leftIcon={<FaPlus />}
+                variant="outline"
+                onClick={() => {
+                  nuevaOrden(true);
+                }}
+                isDisabled={loading || loadingRefresh}
+              >
+                Nueva
+              </Button>
+            </Flex>
+
+            <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={3}>
+              {/* Estado */}
               <FormControl>
-                <FormLabel fontSize="sm">Seleccionar proveedor</FormLabel>
+                <FormLabel fontSize="sm">Estado</FormLabel>
                 <CSelect
                   size="sm"
                   bg="white"
-                  value={idProveedorSel}
+                  value={orden.id_estado_orden_compra}
                   onChange={(e) => {
                     setTieneCambios(true);
-                    const id = e.target.value;
-                    nuevaOrden();
-                    setIdProveedorSel(id);
-                    setOrden((o) => ({ ...o, id_proveedor: id }));
-                    setDetalles([]);
+                    setOrden((o) => ({
+                      ...o,
+                      id_estado_orden_compra: e.target.value,
+                    }));
                   }}
                 >
                   <option value="">— Seleccione —</option>
-                  {proveedores.map((p) => (
-                    <option key={p.id_proveedor} value={p.id_proveedor}>
-                      {p.nombre} {p.rtn ? ` | ${p.rtn}` : ""}
+                  {estadosOC.map((e) => (
+                    <option
+                      key={e.id_estado_orden_compra}
+                      value={e.id_estado_orden_compra}
+                    >
+                      {e.nombre_estado}
                     </option>
                   ))}
                 </CSelect>
-
-                <HStack mt={2} spacing={2}>
-                  <Button
-                    size="sm"
-                    leftIcon={<FaEdit />}
-                    colorScheme="teal"
-                    variant="ghost"
-                    isDisabled={!idProveedorSel || loading || loadingRefresh}
-                    onClick={() => {
-                      setTieneCambios(true);
-                      const prov = proveedores.find(
-                        (p) => Number(p.id_proveedor) === Number(idProveedorSel)
-                      );
-                      setProveedorEdit(prov);
-                      setModalEditarProv(true);
-                    }}
-                  >
-                    Editar proveedor
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    leftIcon={<FaTrash />}
-                    colorScheme="red"
-                    variant="ghost"
-                    isDisabled={!idProveedorSel || loading || loadingRefresh}
-                    onClick={() => {
-                      setTieneCambios(true);
-                      setProveedorAEliminar(idProveedorSel);
-                      setModalEliminarProv(true);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
-                </HStack>
               </FormControl>
-            </GridItem>
 
-            <GridItem display="flex" alignItems="flex-end">
-              <Badge colorScheme="teal" variant="subtle" p={2} borderRadius="md">
-                {idProveedorSel
-                  ? proveedores.find(
-                      (p) => Number(p.id_proveedor) === Number(idProveedorSel)
-                    )?.nombre
-                  : "Ninguno seleccionado"}
-              </Badge>
-            </GridItem>
-          </Grid>
-        </Box>
+              {/* Factura proveedor */}
+              <FormControl>
+                <FormLabel fontSize="sm">Factura Proveedor (opcional)</FormLabel>
+                <Input
+                  size="sm"
+                  placeholder="Ingrese número de factura"
+                  value={orden.factura_proveedor || ""}
+                  onChange={(e) => {
+                    setTieneCambios(true);
+                    setOrden((o) => ({
+                      ...o,
+                      factura_proveedor: e.target.value,
+                    }));
+                  }}
+                />
+              </FormControl>
 
-        {/* ---------------------------------
-            ORDEN DE COMPRA
-        ----------------------------------- */}
-        <Box p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Flex justify="space-between" align="center" mb={3}>
-            <Heading size="md" color={accent}>
-              {orden.id_orden_compra
-                ? `Orden OC-${orden.id_orden_compra}`
-                : "Crear Orden de Compra"}
-            </Heading>
+              {/* Observación */}
+              <FormControl gridColumn={{ base: "auto", md: "1 / span 2" }}>
+                <FormLabel fontSize="sm">Observación</FormLabel>
+                <Textarea
+                  size="sm"
+                  placeholder="Ingrese observación de la orden de compra"
+                  value={orden.observacion || ""}
+                  onChange={(e) => {
+                    setTieneCambios(true);
+                    setOrden((o) => ({ ...o, observacion: e.target.value }));
+                  }}
+                />
+              </FormControl>
+            </Grid>
+          </Box>
+        </GridItem>
 
-            <Button
+        {/* ===========================================
+              ÓRDENES RECIENTES
+        ============================================ */}
+        <GridItem>
+          <Box
+            p={4}
+            bg={cardBg}
+            border="1px solid"
+            borderColor={border}
+            borderRadius="md"
+          >
+            <Flex justify="space-between" align="center" mb={2}>
+              <Heading size="md" color={accent}>
+                Órdenes recientes
+              </Heading>
+              <Text fontSize="sm" color={subtle}>
+                Selecciona una para editar/ver detalles
+              </Text>
+            </Flex>
+
+            <Divider mb={3} />
+
+            <VStack align="stretch" spacing={2}>
+              {ordenesRecientes.map((o) => (
+                <Flex
+                  key={o.id_orden_compra}
+                  p={2}
+                  bg="teal.50"
+                  border="1px solid"
+                  borderColor="teal.100"
+                  borderRadius="md"
+                  justify="space-between"
+                  align="center"
+                >
+                  <HStack spacing={4}>
+                    <Badge colorScheme="teal">OC-{o.id_orden_compra}</Badge>
+                    <Text fontSize="sm">{o.nombre_proveedor}</Text>
+                    <Badge>{o.nombre_estado}</Badge>
+                    <Text fontSize="sm">
+                      {o.fecha_orden ? o.fecha_orden.slice(0, 10) : ""}
+                    </Text>
+                  </HStack>
+
+                  <HStack>
+                    <Button
+                      size="xs"
+                      leftIcon={<FaFolderOpen />}
+                      colorScheme="teal"
+                      variant="ghost"
+                      onClick={() => {
+                        abrirOrden(o.id_orden_compra);
+                      }}
+                    >
+                      Abrir
+                    </Button>
+
+                    <Button
+                      size="xs"
+                      leftIcon={<FaTrash />}
+                      colorScheme="red"
+                      variant="ghost"
+                      onClick={() => {
+                        setOrdenAEliminar(o.id_orden_compra);
+                        setModalEliminar(true);
+                      }}
+                    >
+                      Borrar
+                    </Button>
+                  </HStack>
+                </Flex>
+              ))}
+
+              {!ordenesRecientes.length && (
+                <Text fontSize="sm" color={subtle}>
+                  No hay órdenes aún.
+                </Text>
+              )}
+            </VStack>
+          </Box>
+        </GridItem>
+      </Grid>
+
+      {/* =============================
+           DETALLES DE ORDEN
+         ============================= */}
+      <Box
+        mt={5}
+        p={4}
+        bg={cardBg}
+        border="1px solid"
+        borderColor={border}
+        borderRadius="md"
+      >
+        <Flex justify="space-between" align="center" mb={3}>
+          <Heading size="md" color={accent}>
+            Detalles de la Orden
+          </Heading>
+
+          <Button
+            size="sm"
+            leftIcon={<FaSave />}
+            colorScheme="teal"
+            onClick={guardarOrdenCompleta}
+            isLoading={loading}
+          >
+            Guardar Orden
+          </Button>
+        </Flex>
+
+        {/* ==================================
+             FORMULARIO DE DETALLES
+           ================================== */}
+        <Grid
+          templateColumns={{ base: "1fr", md: "repeat(8,1fr)" }}
+          gap={3}
+          mb={3}
+        >
+          {/* Insumo */}
+          <FormControl>
+            <FormLabel fontSize="sm">Insumo</FormLabel>
+            <CSelect
               size="sm"
-              leftIcon={<FaPlus />}
-              variant="outline"
-              onClick={() => {
-                
-                nuevaOrden(true);
-              }}
-              isDisabled={loading || loadingRefresh}
-            >
-              Nueva
-            </Button>
-          </Flex>
+              bg="white"
+              value={detalleForm.id_insumo}
+              onChange={(e) => {
+                setTieneCambios(true);
+                const id = e.target.value;
+                const ins = insumos.find(
+                  (i) => Number(i.id_insumo) === Number(id)
+                );
 
-          <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={3}>
-            {/* Estado */}
-            <FormControl>
-              <FormLabel fontSize="sm">Estado</FormLabel>
-              <CSelect
-                size="sm"
-                bg="white"
-                value={orden.id_estado_orden_compra}
-                onChange={(e) => {
-                  setTieneCambios(true);
-                  setOrden((o) => ({
-                    ...o,
-                    id_estado_orden_compra: e.target.value,
+                if (ins) {
+                  const cantidad = Number(detalleForm.cantidad || 0);
+                  const precio = Number(ins.precio_unitario || 0);
+                  const descuento = Number(detalleForm.descuento || 0);
+                  const subtotalCalc = cantidad * precio - descuento;
+
+                  setDetalleForm((prev) => ({
+                    ...prev,
+                    id_insumo: id,
+                    nombre_insumo: ins.nombre_insumo,
+                    // ✅ FIX: normalizar para que el <Select> lo muestre bien
+                    unidad_medida: normalizarUnidad(ins.unidad_medida),
+                    precio_unitario: precio,
+                    subtotal: subtotalCalc > 0 ? subtotalCalc : 0,
                   }));
-                }}
-              >
-                <option value="">— Seleccione —</option>
-                {estadosOC.map((e) => (
-                  <option key={e.id_estado_orden_compra} value={e.id_estado_orden_compra}>
-                    {e.nombre_estado}
-                  </option>
-                ))}
-              </CSelect>
-            </FormControl>
+                } else {
+                  setDetalleForm((prev) => ({
+                    ...prev,
+                    id_insumo: id,
+                    nombre_insumo: "",
+                    unidad_medida: "",
+                    precio_unitario: "",
+                    subtotal: 0,
+                  }));
+                }
+              }}
+            >
+              <option value="">— Seleccione —</option>
+              {insumos.map((i) => (
+                <option key={i.id_insumo} value={i.id_insumo}>
+                  {`${i.nombre_insumo} — ${i.unidad_medida} — L. ${parseFloat(
+                    i.precio_unitario
+                  ).toFixed(2)}`}
+                </option>
+              ))}
+            </CSelect>
+          </FormControl>
 
-            {/* Factura proveedor */}
-            <FormControl>
-  <FormLabel fontSize="sm">Factura Proveedor (opcional)</FormLabel>
+          {/* Cantidad */}
+          <FormControl>
+            <FormLabel fontSize="sm">Cantidad</FormLabel>
+            <Input
+              size="sm"
+              type="number"
+              value={detalleForm.cantidad}
+              onChange={(e) => {
+                setTieneCambios(true);
+                setDetalleForm({ ...detalleForm, cantidad: e.target.value });
+              }}
+            />
+          </FormControl>
+
+          {/* Precio */}
+          <FormControl>
+            <FormLabel fontSize="sm">Precio Unitario</FormLabel>
+            <Input
+              size="sm"
+              type="number"
+              value={detalleForm.precio_unitario}
+              onChange={(e) => {
+                setTieneCambios(true);
+                setDetalleForm({
+                  ...detalleForm,
+                  precio_unitario: e.target.value,
+                });
+              }}
+            />
+          </FormControl>
+
+          {/* Descuento */}
+          <FormControl>
+            <FormLabel fontSize="sm">Descuento</FormLabel>
+            <Input
+              size="sm"
+              type="number"
+              value={detalleForm.descuento}
+              onChange={(e) => {
+                setTieneCambios(true);
+                setDetalleForm({ ...detalleForm, descuento: e.target.value });
+              }}
+            />
+          </FormControl>
+
+         
+    {/* Unidad (auto desde Insumos) */}
+<FormControl>
+  <FormLabel fontSize="sm">Unidad</FormLabel>
   <Input
-  size="sm"
-  placeholder="Ingrese número de factura"
-  value={orden.factura_proveedor || ""}
-  onChange={(e) => {
-    setTieneCambios(true);
-    setOrden((o) => ({
-      ...o,
-      factura_proveedor: e.target.value,
-      }));
-    }}
+    size="sm"
+    value={detalleForm.unidad_medida || ""}
+    isReadOnly
+    placeholder="Automática según el insumo"
   />
 </FormControl>
 
-            {/* Observación */}
-            <FormControl gridColumn={{ base: "auto", md: "1 / span 2" }}>
-              <FormLabel fontSize="sm">Observación</FormLabel>
-              <Textarea
-  size="sm"
-  placeholder="Ingrese observación de la orden de compra"
-  value={orden.observacion || ""}
-  onChange={(e) => {
-    setTieneCambios(true);
-    setOrden((o) => ({ ...o, observacion: e.target.value }));
+          {/* Impuesto */}
+          <FormControl>
+            <FormLabel fontSize="sm">Categoría Impuesto</FormLabel>
+            <CSelect
+              size="sm"
+              bg="white"
+              value={detalleForm.categoria_impuesto}
+              onChange={(e) => {
+                setTieneCambios(true);
+                setDetalleForm({
+                  ...detalleForm,
+                  categoria_impuesto: e.target.value,
+                  tasa_impuesto: e.target.value === "Gravado 15%" ? 15 : 0,
+                });
+              }}
+            >
+              <option value="Gravado 15%">Gravado 15%</option>
+              <option value="Exento">Exento</option>
+              <option value="Exonerado">Exonerado</option>
+            </CSelect>
+          </FormControl>
+
+          {/* Subtotal */}
+          <FormControl>
+            <FormLabel fontSize="sm">Subtotal</FormLabel>
+            <Input size="sm" value={detalleForm.subtotal.toFixed(2)} isReadOnly />
+          </FormControl>
+
+          {/* Botón agregar */}
+          <Flex align="flex-end">
+            {editandoDetalleId ? (
+              <Button
+                size="sm"
+                colorScheme="teal"
+                leftIcon={<FaSave />}
+                onClick={() => {
+                  setTieneCambios(true);
+                  confirmarEdicionDetalle();
                 }}
-              />
-            </FormControl>
-          </Grid>
-        </Box>
-      </GridItem>
-
-      {/* ===========================================
-            ÓRDENES RECIENTES
-      ============================================ */}
-      <GridItem>
-        <Box p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-          <Flex justify="space-between" align="center" mb={2}>
-            <Heading size="md" color={accent}>Órdenes recientes</Heading>
-            <Text fontSize="sm" color={subtle}>Selecciona una para editar/ver detalles</Text>
+              >
+                Actualizar
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                colorScheme="teal"
+                leftIcon={<FaPlus />}
+                onClick={() => {
+                  setTieneCambios(true);
+                  agregarDetalle();
+                }}
+              >
+                Agregar
+              </Button>
+            )}
           </Flex>
+        </Grid>
 
-          <Divider mb={3} />
+        {/* ======================
+             TABLA DE DETALLES
+          ====================== */}
+        <Table size="sm" variant="simple">
+          <Thead bg="teal.100">
+            <Tr>
+              <Th textAlign="center">Insumo</Th>
+              <Th textAlign="center">Cantidad</Th>
+              <Th textAlign="center">Unidad</Th>
+              <Th textAlign="center">Precio Unitario</Th>
+              <Th textAlign="center">Descuento</Th>
+              <Th textAlign="center">Subtotal</Th>
+              <Th textAlign="center">Total</Th>
+              <Th textAlign="center">Acciones</Th>
+            </Tr>
+          </Thead>
+
+          <Tbody>
+            {detallesVisibles.map((d) => (
+              <Tr key={d.id_detalle_oc}>
+                <Td textAlign="center">{d.nombre_insumo}</Td>
+                <Td textAlign="center">{Number(d.cantidad)}</Td>
+                <Td textAlign="center">{d.unidad_medida}</Td>
+                <Td textAlign="center">L. {Number(d.precio_unitario).toFixed(2)}</Td>
+                <Td textAlign="center">L. {Number(d.descuento).toFixed(2)}</Td>
+                <Td textAlign="center">L. {Number(d.subtotal).toFixed(2)}</Td>
+                <Td textAlign="center">
+                  L. {(
+                    Number(d.subtotal) *
+                    (1 + Number(d.tasa_impuesto || 0) / 100)
+                  ).toFixed(2)}
+                </Td>
+
+                <Td textAlign="center">
+                  <HStack spacing={2} justify="center">
+                    <Button
+                      size="xs"
+                      colorScheme="teal"
+                      leftIcon={<FaEdit />}
+                      onClick={() => {
+                        setTieneCambios(true);
+                        cargarDetalleParaEditar(d);
+                      }}
+                    >
+                      Editar
+                    </Button>
+
+                    <Button
+                      size="xs"
+                      colorScheme="red"
+                      leftIcon={<FaTrash />}
+                      onClick={() => {
+                        setTieneCambios(true);
+                        eliminarDetalleLocal(d);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  </HStack>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </Box>
+
+      {/* =======================
+          FLETE
+      ======================== */}
+      <Box mt={4} maxW="200px">
+        <FormLabel fontSize="sm">Flete</FormLabel>
+        <Input
+          size="sm"
+          type="number"
+          value={flete}
+          onChange={(e) => {
+            setTieneCambios(true);
+            setFlete(Number(e.target.value) || 0);
+          }}
+        />
+      </Box>
+
+      {/* =============================
+            RESUMEN DE FACTURA
+      ============================= */}
+      <Box
+        mt={6}
+        p={4}
+        bg="gray.50"
+        border="1px solid"
+        borderColor="gray.200"
+        borderRadius="md"
+      >
+        <Heading
+          size="md"
+          mb={4}
+          color={accent}
+          display="flex"
+          alignItems="center"
+          gap={2}
+        >
+          <Icon as={FaReceipt} /> Resumen de Factura
+        </Heading>
+
+        <Grid
+          templateColumns={{ base: "1fr", md: "1fr 1fr" }}
+          gap={4}
+          fontSize="sm"
+        >
+          <VStack align="stretch" spacing={2}>
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Subtotal:</Text>
+              <Text>L. {totales.subtotal.toFixed(2)}</Text>
+            </Flex>
+
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Descuentos y Rebajas:</Text>
+              <Text>L. {totales.descuentos.toFixed(2)}</Text>
+            </Flex>
+
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Flete:</Text>
+              <Text>L. {totales.flete.toFixed(2)}</Text>
+            </Flex>
+
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Importe Exento:</Text>
+              <Text>L. {totales.importeExento.toFixed(2)}</Text>
+            </Flex>
+          </VStack>
 
           <VStack align="stretch" spacing={2}>
-            {ordenesRecientes.map((o) => (
-              <Flex
-                key={o.id_orden_compra}
-                p={2}
-                bg="teal.50"
-                border="1px solid"
-                borderColor="teal.100"
-                borderRadius="md"
-                justify="space-between"
-                align="center"
-              >
-                <HStack spacing={4}>
-                  <Badge colorScheme="teal">OC-{o.id_orden_compra}</Badge>
-                  <Text fontSize="sm">{o.nombre_proveedor}</Text>
-                  <Badge>{o.nombre_estado}</Badge>
-                  <Text fontSize="sm">
-                    {o.fecha_orden ? o.fecha_orden.slice(0, 10) : ""}
-                  </Text>
-                </HStack>
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Importe Gravado 15%:</Text>
+              <Text>L. {totales.importeGravado15.toFixed(2)}</Text>
+            </Flex>
 
-                <HStack>
-                  <Button
-                    size="xs"
-                    leftIcon={<FaFolderOpen />}
-                    colorScheme="teal"
-                    variant="ghost"
-                    onClick={() => {
-                     
-                      abrirOrden(o.id_orden_compra);
-                    }}
-                  >
-                    Abrir
-                  </Button>
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Importe Exonerado:</Text>
+              <Text>L. {totales.importeExonerado.toFixed(2)}</Text>
+            </Flex>
 
-                 <Button
-  size="xs"
-  leftIcon={<FaTrash />}
-  colorScheme="red"
-  variant="ghost"
-  onClick={() => {
-    setOrdenAEliminar(o.id_orden_compra);
-    setModalEliminar(true);
-  }}
->
-  Borrar
-</Button>
+            <Flex justify="space-between">
+              <Text fontWeight="medium">Impuesto 15%:</Text>
+              <Text>L. {totales.impuesto15.toFixed(2)}</Text>
+            </Flex>
 
-                </HStack>
-              </Flex>
-            ))}
+            <Divider />
 
-            {!ordenesRecientes.length && (
-              <Text fontSize="sm" color={subtle}>
-                No hay órdenes aún.
+            <Flex justify="space-between">
+              <Text fontWeight="bold" fontSize="lg">
+                TOTAL:
               </Text>
-            )}
+              <Text fontWeight="bold" fontSize="lg" color={accent}>
+                L. {totales.total.toFixed(2)}
+              </Text>
+            </Flex>
           </VStack>
-        </Box>
-      </GridItem>
-    </Grid>
+        </Grid>
+      </Box>
 
-    {/* =============================
-         DETALLES DE ORDEN
-       ============================= */}
-    <Box mt={5} p={4} bg={cardBg} border="1px solid" borderColor={border} borderRadius="md">
-      <Flex justify="space-between" align="center" mb={3}>
-        <Heading size="md" color={accent}>Detalles de la Orden</Heading>
+      {/* =============================
+            MODALES 
+      ============================= */}
 
-        <Button
-          size="sm"
-          leftIcon={<FaSave />}
-          colorScheme="teal"
-          onClick={guardarOrdenCompleta}
-          isLoading={loading}
-        >
-          Guardar Orden
-        </Button>
-      </Flex>
-
-      {/* ==================================
-           FORMULARIO DE DETALLES
-         ================================== */}
-      <Grid templateColumns={{ base: "1fr", md: "repeat(8,1fr)" }} gap={3} mb={3}>
-        
-        {/* Insumo */}
-        <FormControl>
-          <FormLabel fontSize="sm">Insumo</FormLabel>
-          <CSelect
-            size="sm"
-            bg="white"
-            value={detalleForm.id_insumo}
-            onChange={(e) => {
-              setTieneCambios(true);
-              const id = e.target.value;
-              const ins = insumos.find((i) => Number(i.id_insumo) === Number(id));
-
-              if (ins) {
-                const cantidad = Number(detalleForm.cantidad || 0);
-                const precio = Number(ins.precio_unitario || 0);
-                const descuento = Number(detalleForm.descuento || 0);
-                const subtotalCalc = (cantidad * precio) - descuento;
-
-                setDetalleForm((prev) => ({
-                  ...prev,
-                  id_insumo: id,
-                  nombre_insumo: ins.nombre_insumo,
-                  unidad_medida: ins.unidad_medida,
-                  precio_unitario: precio,
-                  subtotal: subtotalCalc > 0 ? subtotalCalc : 0,
-                }));
-              } else {
-                setDetalleForm((prev) => ({
-                  ...prev,
-                  id_insumo: id,
-                  nombre_insumo: "",
-                  unidad_medida: "",
-                  precio_unitario: "",
-                  subtotal: 0,
-                }));
-              }
-            }}
-          >
-            <option value="">— Seleccione —</option>
-            {insumos.map((i) => (
-              <option key={i.id_insumo} value={i.id_insumo}>
-                {`${i.nombre_insumo} — ${i.unidad_medida} — L. ${parseFloat(i.precio_unitario).toFixed(2)}`}
-              </option>
-            ))}
-          </CSelect>
-        </FormControl>
-
-        {/* Cantidad */}
-        <FormControl>
-          <FormLabel fontSize="sm">Cantidad</FormLabel>
-          <Input
-            size="sm"
-            type="number"
-            value={detalleForm.cantidad}
-            onChange={(e) => {
-              setTieneCambios(true);
-              setDetalleForm({ ...detalleForm, cantidad: e.target.value });
-            }}
-          />
-        </FormControl>
-
-        {/* Precio */}
-        <FormControl>
-          <FormLabel fontSize="sm">Precio Unitario</FormLabel>
-          <Input
-            size="sm"
-            type="number"
-            value={detalleForm.precio_unitario}
-            onChange={(e) => {
-              setTieneCambios(true);
-              setDetalleForm({ ...detalleForm, precio_unitario: e.target.value });
-            }}
-          />
-        </FormControl>
-
-        {/* Descuento */}
-        <FormControl>
-          <FormLabel fontSize="sm">Descuento</FormLabel>
-          <Input
-            size="sm"
-            type="number"
-            value={detalleForm.descuento}
-            onChange={(e) => {
-              setTieneCambios(true);
-              setDetalleForm({ ...detalleForm, descuento: e.target.value });
-            }}
-          />
-        </FormControl>
-
-        {/* Unidad */}
-        <FormControl>
-          <FormLabel fontSize="sm">Unidad</FormLabel>
-          <CSelect
-            size="sm"
-            bg="white"
-            value={detalleForm.unidad_medida}
-            onChange={(e) => {
-              setTieneCambios(true);
-              setDetalleForm({ ...detalleForm, unidad_medida: e.target.value });
-            }}
-          >
-            <option value="">— Seleccione —</option>
-            <option value="unidad">Unidad</option>
-            <option value="caja">Caja</option>
-            <option value="litro">Litro</option>
-            <option value="galon">Galón</option>
-            <option value="fardo">Fardo</option>
-          </CSelect>
-        </FormControl>
-
-        {/* Impuesto */}
-        <FormControl>
-          <FormLabel fontSize="sm">Categoría Impuesto</FormLabel>
-          <CSelect
-            size="sm"
-            bg="white"
-            value={detalleForm.categoria_impuesto}
-            onChange={(e) => {
-              setTieneCambios(true);
-              setDetalleForm({
-                ...detalleForm,
-                categoria_impuesto: e.target.value,
-                tasa_impuesto: e.target.value === "Gravado 15%" ? 15 : 0,
-              });
-            }}
-          >
-            <option value="Gravado 15%">Gravado 15%</option>
-            <option value="Exento">Exento</option>
-            <option value="Exonerado">Exonerado</option>
-          </CSelect>
-        </FormControl>
-
-        {/* Subtotal */}
-        <FormControl>
-          <FormLabel fontSize="sm">Subtotal</FormLabel>
-          <Input size="sm" value={detalleForm.subtotal.toFixed(2)} isReadOnly />
-        </FormControl>
-
-        {/* Botón agregar */}
-        <Flex align="flex-end">
-          {editandoDetalleId ? (
-            <Button
-              size="sm"
-              colorScheme="teal"
-              leftIcon={<FaSave />}
-              onClick={() => {
-                setTieneCambios(true);
-                confirmarEdicionDetalle();
-              }}
-            >
-              Actualizar
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              colorScheme="teal"
-              leftIcon={<FaPlus />}
-              onClick={() => {
-                setTieneCambios(true);
-                agregarDetalle();
-              }}
-            >
-              Agregar
-            </Button>
-          )}
-        </Flex>
-
-      </Grid>
-
-      {/* ======================
-           TABLA DE DETALLES
-        ====================== */}
-      <Table size="sm" variant="simple">
-        <Thead bg="teal.100">
-          <Tr>
-            <Th textAlign="center">Insumo</Th>
-            <Th textAlign="center">Cantidad</Th>
-            <Th textAlign="center">Unidad</Th>
-            <Th textAlign="center">Precio Unitario</Th>
-            <Th textAlign="center">Descuento</Th>
-            <Th textAlign="center">Subtotal</Th>
-            <Th textAlign="center">Total</Th>
-            <Th textAlign="center">Acciones</Th>
-          </Tr>
-        </Thead>
-
-        <Tbody>
-          {detallesVisibles.map((d) => (
-            <Tr key={d.id_detalle_oc}>
-              <Td textAlign="center">{d.nombre_insumo}</Td>
-              <Td textAlign="center">{Number(d.cantidad)}</Td>
-              <Td textAlign="center">{d.unidad_medida}</Td>
-              <Td textAlign="center">L. {Number(d.precio_unitario).toFixed(2)}</Td>
-              <Td textAlign="center">L. {Number(d.descuento).toFixed(2)}</Td>
-              <Td textAlign="center">L. {Number(d.subtotal).toFixed(2)}</Td>
-              <Td textAlign="center">
-                L. {(
-                  Number(d.subtotal) *
-                  (1 + Number(d.tasa_impuesto || 0) / 100)
-                ).toFixed(2)}
-              </Td>
-
-              <Td textAlign="center">
-                <HStack spacing={2} justify="center">
-                  <Button
-                    size="xs"
-                    colorScheme="teal"
-                    leftIcon={<FaEdit />}
-                    onClick={() => {
-                      setTieneCambios(true);
-                      cargarDetalleParaEditar(d);
-                    }}
-                  >
-                    Editar
-                  </Button>
-
-                  <Button
-                    size="xs"
-                    colorScheme="red"
-                    leftIcon={<FaTrash />}
-                    onClick={() => {
-                      setTieneCambios(true);
-                      eliminarDetalleLocal(d);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
-                </HStack>
-              </Td>
-            </Tr>
-          ))}
-        </Tbody>
-      </Table>
-    </Box>
-
-    {/* =======================
-        FLETE
-    ======================== */}
-    <Box mt={4} maxW="200px">
-      <FormLabel fontSize="sm">Flete</FormLabel>
-      <Input
-        size="sm"
-        type="number"
-        value={flete}
-        onChange={(e) => {
-          setTieneCambios(true);
-          setFlete(Number(e.target.value) || 0);
-        }}
-      />
-    </Box>
-
-    {/* =============================
-          RESUMEN DE FACTURA
-    ============================= */}
-    <Box
-      mt={6}
-      p={4}
-      bg="gray.50"
-      border="1px solid"
-      borderColor="gray.200"
-      borderRadius="md"
-    >
-      <Heading size="md" mb={4} color={accent} display="flex" alignItems="center" gap={2}>
-        <Icon as={FaReceipt} /> Resumen de Factura
-      </Heading>
-
-      <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={4} fontSize="sm">
-        <VStack align="stretch" spacing={2}>
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Subtotal:</Text>
-            <Text>L. {totales.subtotal.toFixed(2)}</Text>
-          </Flex>
-
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Descuentos y Rebajas:</Text>
-            <Text>L. {totales.descuentos.toFixed(2)}</Text>
-          </Flex>
-
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Flete:</Text>
-            <Text>L. {totales.flete.toFixed(2)}</Text>
-          </Flex>
-
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Importe Exento:</Text>
-            <Text>L. {totales.importeExento.toFixed(2)}</Text>
-          </Flex>
-        </VStack>
-
-        <VStack align="stretch" spacing={2}>
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Importe Gravado 15%:</Text>
-            <Text>L. {totales.importeGravado15.toFixed(2)}</Text>
-          </Flex>
-
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Importe Exonerado:</Text>
-            <Text>L. {totales.importeExonerado.toFixed(2)}</Text>
-          </Flex>
-
-          <Flex justify="space-between">
-            <Text fontWeight="medium">Impuesto 15%:</Text>
-            <Text>L. {totales.impuesto15.toFixed(2)}</Text>
-          </Flex>
-
-          <Divider />
-
-          <Flex justify="space-between">
-            <Text fontWeight="bold" fontSize="lg">TOTAL:</Text>
-            <Text fontWeight="bold" fontSize="lg" color={accent}>
-              L. {totales.total.toFixed(2)}
-            </Text>
-          </Flex>
-        </VStack>
-      </Grid>
-    </Box>
-
-    {/* =============================
-          MODALES
-    ============================= */}
-
-{/* ============================
-   MODAL NUEVO PROVEEDOR
-============================ */}
+  {/* MODAL NUEVO PROVEEDOR */}
 <Modal isOpen={modalProv} onClose={() => setModalProv(false)} isCentered>
   <ModalOverlay />
   <ModalContent>
     <ModalHeader>Nuevo Proveedor</ModalHeader>
     <ModalCloseButton />
     <ModalBody pb={4}>
-
-      {/* Nombre */}
-      <FormControl mb={3}>
+      {/* =======================
+          NOMBRE (solo letras)
+      ======================= */}
+      <FormControl mb={3} isInvalid={!!provMsg.nombre}>
         <FormLabel>Nombre</FormLabel>
         <Input
-          placeholder="Ingrese nombre del proveedor solo letras"
+          placeholder="Ingrese nombre del proveedor (solo letras)"
           value={provForm.nombre}
           onChange={(e) => {
-            const v = e.target.value;
-            if (v !== "" && !soloLetras(v)) return;
-            setProvForm({ ...provForm, nombre: v });
+            const raw = e.target.value;
+
+            // 🔒 BLOQUEO REAL: si trae algo inválido, NO actualiza el estado
+            if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]*$/.test(raw)) {
+              const tieneNumero = /[0-9]/.test(raw);
+              const tieneEspecial = /[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/.test(raw);
+
+              let msg = "Solo se permiten letras y espacios.";
+              if (tieneNumero) msg = "No se permiten números, solo letras.";
+              if (tieneEspecial)
+                msg = "No se permiten caracteres especiales, solo letras.";
+
+              setProvMsg((m) => ({ ...m, nombre: msg }));
+              return; // ✅ no deja que entre
+            }
+
+            // ✅ permitido: actualiza y limpia error
+            setProvForm((p) => ({ ...p, nombre: raw }));
+            setProvMsg((m) => ({ ...m, nombre: "" }));
+          }}
+          onBlur={() => {
+            // si quiere requerido en blur:
+            const err = validarRequerido(provForm.nombre, "Nombre");
+            setProvMsg((m) => ({ ...m, nombre: err || "" }));
           }}
         />
+
+        {!!provMsg.nombre && (
+          <FormHelperText color="orange.400" mt={1}>
+            ⚠ {provMsg.nombre}
+          </FormHelperText>
+        )}
       </FormControl>
 
-      {/* RTN */}
-      <FormControl mb={3}>
-        <FormLabel>RTN</FormLabel>
+      {/* =======================
+          RTN / ID (solo números)
+      ======================= */}
+      <FormControl mb={3} isInvalid={!!provMsg.rtn}>
+        <FormLabel>RTN / ID</FormLabel>
         <Input
-          placeholder="ID 13 Digitos/ RTN 14 Digitos"
+          placeholder="ID 13 dígitos / RTN 14 dígitos"
           maxLength={14}
           value={provForm.rtn}
           onChange={(e) => {
-            setProvForm({
-              ...provForm,
-              rtn: e.target.value.replace(/\D/g, "")
-            });
+            const raw = e.target.value;
+
+            // 🔒 BLOQUEO REAL: si trae letras/símbolos, NO actualiza
+            if (!/^[0-9]*$/.test(raw)) {
+              setProvMsg((m) => ({
+                ...m,
+                rtn: "RTN o ID: no se permiten letras ni símbolos, solo números.",
+              }));
+              return; // ✅ no deja que entre
+            }
+
+            const v = raw.slice(0, 14);
+            setProvForm((p) => ({ ...p, rtn: v }));
+
+            // 🟡 Guía en vivo de longitud (muestra debajo)
+            if (v.length === 0) {
+              setProvMsg((m) => ({ ...m, rtn: "" }));
+            } else if (v.length < 13) {
+              setProvMsg((m) => ({
+                ...m,
+                rtn: "Debe tener 13 (ID) o 14 (RTN) dígitos.",
+              }));
+            } else if (v.length === 13) {
+              setProvMsg((m) => ({
+                ...m,
+                rtn: "Detectado: Identidad (13 dígitos).",
+              }));
+            } else {
+              setProvMsg((m) => ({
+                ...m,
+                rtn: "Detectado: RTN (14 dígitos).",
+              }));
+            }
+          }}
+          onBlur={() => {
+            const err = validarRTN(provForm.rtn, true);
+            setProvMsg((m) => ({ ...m, rtn: err || "" }));
           }}
         />
+
+        {!!provMsg.rtn && (
+          <FormHelperText color="orange.400" mt={1}>
+            ⚠ {provMsg.rtn}
+          </FormHelperText>
+        )}
       </FormControl>
 
-      {/* Teléfono */}
-      <FormControl mb={3}>
+      {/* =======================
+          TELÉFONO (solo números + formato)
+      ======================= */}
+      <FormControl mb={3} isInvalid={!!provMsg.telefono}>
         <FormLabel>Teléfono</FormLabel>
         <Input
           placeholder="9999-9999"
           maxLength={9}
           value={provForm.telefono}
-          onChange={(e) =>
-            setProvForm({
-              ...provForm,
-              telefono: formatearTelefono(e.target.value)
-            })
-          }
+          onChange={(e) => {
+            const raw = e.target.value;
+
+            // 🔒 BLOQUEO REAL:
+            // Permitimos SOLO dígitos y guion, y guion solo después de 4 dígitos (opcional)
+            if (!/^[0-9-]*$/.test(raw)) {
+              setProvMsg((m) => ({
+                ...m,
+                telefono: "Teléfono: no se permiten letras ni símbolos, solo números.",
+              }));
+              return;
+            }
+
+            // ✅ limpiar a dígitos y formatear
+            const digits = raw.replace(/\D/g, "").slice(0, 8);
+            const formatted = formatearTelefono(digits);
+
+            setProvForm((p) => ({ ...p, telefono: formatted }));
+
+            // 🟡 mensaje en vivo
+            if (digits.length === 0) setProvMsg((m) => ({ ...m, telefono: "" }));
+            else if (digits.length < 8)
+              setProvMsg((m) => ({
+                ...m,
+                telefono: "Debe tener 8 dígitos (9999-9999).",
+              }));
+            else setProvMsg((m) => ({ ...m, telefono: "" }));
+          }}
+          onBlur={() => {
+            const err = validarTelefono(provForm.telefono, true);
+            setProvMsg((m) => ({ ...m, telefono: err || "" }));
+          }}
         />
+
+        {!!provMsg.telefono && (
+          <FormHelperText color="orange.400" mt={1}>
+            ⚠ {provMsg.telefono}
+          </FormHelperText>
+        )}
       </FormControl>
 
-      {/* Correo */}
-      <FormControl mb={3}>
+      {/* =======================
+          CORREO (valida en vivo, no bloquea)
+      ======================= */}
+      <FormControl mb={3} isInvalid={!!provMsg.correo}>
         <FormLabel>Correo</FormLabel>
         <Input
           placeholder="correo@dominio.com"
           value={provForm.correo}
           onChange={(e) => {
-            setProvForm({ ...provForm, correo: e.target.value });
+            const v = e.target.value;
+            setProvForm((p) => ({ ...p, correo: v }));
+
+            // Validación en vivo (suave)
+            if (v.trim() === "") {
+              setProvMsg((m) => ({ ...m, correo: "" }));
+            } else {
+              const err = validarEmail(v, false);
+              setProvMsg((m) => ({ ...m, correo: err || "" }));
+            }
+          }}
+          onBlur={() => {
+            const err = validarEmail(provForm.correo, true);
+            setProvMsg((m) => ({ ...m, correo: err || "" }));
           }}
         />
+
+        {!!provMsg.correo && (
+          <FormHelperText color="orange.400" mt={1}>
+            ⚠ {provMsg.correo}
+          </FormHelperText>
+        )}
       </FormControl>
 
-      {/* Dirección */}
-      <FormControl mb={3}>
+      {/* =======================
+          DIRECCIÓN (normal / opcional)
+      ======================= */}
+      <FormControl mb={3} isInvalid={!!provMsg.direccion}>
         <FormLabel>Dirección</FormLabel>
         <Textarea
           placeholder="Ingrese dirección completa"
           value={provForm.direccion}
           onChange={(e) => {
-            setProvForm({ ...provForm, direccion: e.target.value });
+            const v = e.target.value;
+            setProvForm((p) => ({ ...p, direccion: v }));
+
+            // Si la quiere obligatoria EN VIVO, descomente:
+            // const err = validarRequerido(v, "Dirección");
+            // setProvMsg((m) => ({ ...m, direccion: err || "" }));
+          }}
+          onBlur={() => {
+            // Si la quiere obligatoria al salir del campo:
+            // const err = validarRequerido(provForm.direccion, "Dirección");
+            // setProvMsg((m) => ({ ...m, direccion: err || "" }));
+            setProvMsg((m) => ({ ...m, direccion: "" }));
           }}
         />
-      </FormControl>
 
+        {!!provMsg.direccion && (
+          <FormHelperText color="orange.400" mt={1}>
+            ⚠ {provMsg.direccion}
+          </FormHelperText>
+        )}
+      </FormControl>
     </ModalBody>
 
     <ModalFooter>
@@ -2222,235 +2350,327 @@ const buildUnifiedRows = async () => {
     </ModalFooter>
   </ModalContent>
 </Modal>
-{/* ============================
-   MODAL EDITAR PROVEEDOR
-============================ */}
-<Modal isOpen={modalEditarProv} onClose={() => setModalEditarProv(false)} isCentered>
+
+    {/* MODAL EDITAR PROVEEDOR */}
+<Modal
+  isOpen={modalEditarProv}
+  onClose={() => setModalEditarProv(false)}
+  isCentered
+>
   <ModalOverlay />
   <ModalContent>
     <ModalHeader>Editar Proveedor</ModalHeader>
     <ModalCloseButton />
-    <ModalBody pb={4}>
 
-      {/* Nombre */}
+    <ModalBody pb={4}>
+      {/* ======================= NOMBRE ======================= */}
       <FormControl mb={3}>
         <FormLabel>Nombre</FormLabel>
         <Input
           value={proveedorEdit?.nombre || ""}
+          placeholder="Solo letras"
           onChange={(e) => {
-            const v = e.target.value;
-            if (v !== "" && !soloLetras(v)) return;
-            setProveedorEdit({ ...proveedorEdit, nombre: v });
+            const raw = e.target.value;
+
+            // 🔒 BLOQUEO REAL (solo letras y espacios)
+            if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]*$/.test(raw)) {
+              return; // no deja escribir números ni símbolos
+            }
+
+            setProveedorEdit({
+              ...proveedorEdit,
+              nombre: raw,
+            });
+          }}
+          onBlur={() => {
+            const err = validarSoloLetras(
+              proveedorEdit?.nombre,
+              "Nombre del proveedor",
+              true
+            );
+
+            if (err) {
+              return toast({
+                title: "Nombre inválido",
+                description: err,
+                status: "warning",
+              });
+            }
           }}
         />
       </FormControl>
 
-      {/* RTN */}
+      {/* ======================= RTN ======================= */}
       <FormControl mb={3}>
-        <FormLabel>RTN</FormLabel>
+        <FormLabel>RTN / ID</FormLabel>
         <Input
           value={proveedorEdit?.rtn || ""}
           maxLength={14}
+          placeholder="13 o 14 dígitos"
           onChange={(e) => {
+            const raw = e.target.value;
+
+            // 🔒 SOLO números
+            if (!/^[0-9]*$/.test(raw)) return;
+
             setProveedorEdit({
               ...proveedorEdit,
-              rtn: e.target.value.replace(/\D/g, "")
+              rtn: raw.slice(0, 14),
             });
+          }}
+          onBlur={() => {
+            const err = validarRTN(proveedorEdit?.rtn, true);
+
+            if (err) {
+              return toast({
+                title: "RTN inválido",
+                description: err,
+                status: "warning",
+              });
+            }
           }}
         />
       </FormControl>
 
-      {/* Teléfono */}
+      {/* ======================= TELÉFONO ======================= */}
       <FormControl mb={3}>
         <FormLabel>Teléfono</FormLabel>
         <Input
           value={proveedorEdit?.telefono || ""}
           maxLength={9}
+          placeholder="9999-9999"
           onChange={(e) => {
+            const raw = e.target.value;
+
+            // 🔒 solo números y guion
+            if (!/^[0-9-]*$/.test(raw)) return;
+
+            const digits = raw.replace(/\D/g, "").slice(0, 8);
+            const formatted = formatearTelefono(digits);
+
             setProveedorEdit({
               ...proveedorEdit,
-              telefono: formatearTelefono(e.target.value)
+              telefono: formatted,
             });
+          }}
+          onBlur={() => {
+            const err = validarTelefono(proveedorEdit?.telefono, true);
+
+            if (err) {
+              return toast({
+                title: "Teléfono inválido",
+                description: err,
+                status: "warning",
+              });
+            }
           }}
         />
       </FormControl>
 
-      {/* Correo */}
+      {/* ======================= CORREO ======================= */}
       <FormControl mb={3}>
         <FormLabel>Correo</FormLabel>
         <Input
           value={proveedorEdit?.correo || ""}
+          placeholder="correo@dominio.com"
           onChange={(e) => {
-            setProveedorEdit({ ...proveedorEdit, correo: e.target.value });
+            setProveedorEdit({
+              ...proveedorEdit,
+              correo: e.target.value,
+            });
+          }}
+          onBlur={() => {
+            const err = validarEmail(proveedorEdit?.correo, true);
+
+            if (err) {
+              return toast({
+                title: "Correo inválido",
+                description: err,
+                status: "warning",
+              });
+            }
           }}
         />
       </FormControl>
 
-      {/* Dirección */}
+      {/* ======================= DIRECCIÓN ======================= */}
       <FormControl mb={3}>
         <FormLabel>Dirección</FormLabel>
         <Textarea
           value={proveedorEdit?.direccion || ""}
+          placeholder="Ingrese dirección completa"
           onChange={(e) => {
-            setProveedorEdit({ ...proveedorEdit, direccion: e.target.value });
+            setProveedorEdit({
+              ...proveedorEdit,
+              direccion: e.target.value,
+            });
           }}
         />
-      </FormControl>
-
-    </ModalBody>
-
-    <ModalFooter>
-      <Button colorScheme="teal" mr={3} onClick={guardarProveedorEditado}>
-        Guardar cambios
-      </Button>
-      <Button onClick={() => setModalEditarProv(false)}>Cancelar</Button>
-    </ModalFooter>
-  </ModalContent>
-</Modal>
-
-    <Modal isOpen={modalEliminarProv} onClose={() => setModalEliminarProv(false)} isCentered>
-  <ModalOverlay />
-  <ModalContent>
-    <ModalHeader>Eliminar proveedor</ModalHeader>
-    <ModalCloseButton />
-    <ModalBody>
-      ¿Está seguro que desea eliminar este proveedor?
-    </ModalBody>
-    <ModalFooter>
-      <Button colorScheme="red" mr={3} onClick={eliminarProveedor}>
-        Eliminar
-      </Button>
-      <Button onClick={() => setModalEliminarProv(false)}>Cancelar</Button>
-    </ModalFooter>
-  </ModalContent>
-</Modal>
-    {/* ... aquí siguen TUS MODALES completos tal como los tenías ...
-        No los incluyo para no duplicar 2000 líneas.
-    */}
-
-    {/* =============================
-      🛑 MODAL DE SALIDA SIN GUARDAR
-    ============================= */}
-    <Modal isOpen={salirModal.isOpen} onClose={salirModal.onClose} isCentered>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>Salir sin guardar</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody>
-          Tienes cambios sin guardar. ¿Deseas salir del módulo de Compras?
-        </ModalBody>
-        <ModalFooter>
-          <Button
-            colorScheme="red"
-            mr={3}
-            onClick={() => {
-              salirModal.onClose();
-              setTieneCambios(false);
-              handleNavigate(rutaPendiente);
-            }}
-          >
-            Salir sin guardar
-          </Button>
-          <Button onClick={salirModal.onClose}>Cancelar</Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-
-     {/* ============================
-   MODAL EXPORTAR REPORTE
-============================ */}
-<Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered>
-  <ModalOverlay />
-  <ModalContent>
-    <ModalHeader>Exportar Reporte</ModalHeader>
-    <ModalCloseButton />
-    <ModalBody>
-      <FormControl mb={3}>
-        <FormLabel>Formato</FormLabel>
-        <CSelect
-          value={exportFormat}
-          onChange={(e) => setExportFormat(e.target.value)}
-        >
-          <option value="excel">Excel (.xlsx)</option>
-          <option value="pdf">PDF (.pdf)</option>
-        </CSelect>
-      </FormControl>
-
-      <FormControl>
-        <FormLabel>Columnas a exportar</FormLabel>
-
-        <Checkbox
-          isChecked={allChecked}
-          isIndeterminate={isIndeterminate}
-          onChange={(e) =>
-            setSelectedColumns(
-              e.target.checked ? ALL_COLUMNS.map((c) => c.key) : []
-            )
-          }
-          mb={2}
-        >
-          Seleccionar todas
-        </Checkbox>
-
-        <Box maxH="200px" overflowY="auto" p={2} border="1px solid #ddd" borderRadius="md">
-          {ALL_COLUMNS.map((c) => (
-            <Checkbox
-              key={c.key}
-              isChecked={selectedColumns.includes(c.key)}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setSelectedColumns([...selectedColumns, c.key]);
-                } else {
-                  setSelectedColumns(selectedColumns.filter((x) => x !== c.key));
-                }
-              }}
-              display="block"
-              mb={1}
-            >
-              {c.label}
-            </Checkbox>
-          ))}
-        </Box>
       </FormControl>
     </ModalBody>
 
     <ModalFooter>
       <Button
         colorScheme="teal"
-        onClick={exportarReporte}
-        isLoading={loading}
+        mr={3}
+        onClick={guardarProveedorEditado}
       >
-        Exportar
+        Guardar cambios
       </Button>
-      <Button ml={3} onClick={exportModal.onClose}>
+
+      <Button onClick={() => setModalEditarProv(false)}>
         Cancelar
       </Button>
     </ModalFooter>
   </ModalContent>
 </Modal>
-<Modal isOpen={modalEliminar} onClose={() => setModalEliminar(false)} isCentered>
-  <ModalOverlay />
-  <ModalContent>
-    <ModalHeader>Eliminar orden</ModalHeader>
-    <ModalCloseButton />
-    <ModalBody>
-      ¿Está seguro de eliminar esta orden de compra?
-    </ModalBody>
-    <ModalFooter>
-      <Button
-        colorScheme="red"
-        onClick={() => {
-          eliminarOrden(ordenAEliminar);
-          setModalEliminar(false);
-        }}
-      >
-        Eliminar
-      </Button>
-      <Button onClick={() => setModalEliminar(false)}>Cancelar</Button>
-    </ModalFooter>
-  </ModalContent>
-</Modal>
 
-  </Box>
-);
+      {/* MODAL ELIMINAR PROVEEDOR */}
+      <Modal
+        isOpen={modalEliminarProv}
+        onClose={() => setModalEliminarProv(false)}
+        isCentered
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Eliminar proveedor</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>¿Está seguro que desea eliminar este proveedor?</ModalBody>
+          <ModalFooter>
+            <Button colorScheme="red" mr={3} onClick={eliminarProveedor}>
+              Eliminar
+            </Button>
+            <Button onClick={() => setModalEliminarProv(false)}>Cancelar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL SALIR SIN GUARDAR */}
+      <Modal isOpen={salirModal.isOpen} onClose={salirModal.onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Salir sin guardar</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            Tienes cambios sin guardar. ¿Deseas salir del módulo de Compras?
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              colorScheme="red"
+              mr={3}
+              onClick={() => {
+                salirModal.onClose();
+                setTieneCambios(false);
+                handleNavigate(rutaPendiente);
+              }}
+            >
+              Salir sin guardar
+            </Button>
+            <Button onClick={salirModal.onClose}>Cancelar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL EXPORTAR */}
+      <Modal
+        isOpen={exportModal.isOpen}
+        onClose={exportModal.onClose}
+        isCentered
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Exportar Reporte</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FormControl mb={3}>
+              <FormLabel>Formato</FormLabel>
+              <CSelect
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+              >
+                <option value="excel">Excel (.xlsx)</option>
+                <option value="pdf">PDF (.pdf)</option>
+              </CSelect>
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>Columnas a exportar</FormLabel>
+
+              <Checkbox
+                isChecked={allChecked}
+                isIndeterminate={isIndeterminate}
+                onChange={(e) =>
+                  setSelectedColumns(
+                    e.target.checked ? ALL_COLUMNS.map((c) => c.key) : []
+                  )
+                }
+                mb={2}
+              >
+                Seleccionar todas
+              </Checkbox>
+
+              <Box
+                maxH="200px"
+                overflowY="auto"
+                p={2}
+                border="1px solid #ddd"
+                borderRadius="md"
+              >
+                {ALL_COLUMNS.map((c) => (
+                  <Checkbox
+                    key={c.key}
+                    isChecked={selectedColumns.includes(c.key)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedColumns([...selectedColumns, c.key]);
+                      } else {
+                        setSelectedColumns(
+                          selectedColumns.filter((x) => x !== c.key)
+                        );
+                      }
+                    }}
+                    display="block"
+                    mb={1}
+                  >
+                    {c.label}
+                  </Checkbox>
+                ))}
+              </Box>
+            </FormControl>
+          </ModalBody>
+
+          <ModalFooter>
+            <Button colorScheme="teal" onClick={exportarReporte} isLoading={loading}>
+              Exportar
+            </Button>
+            <Button ml={3} onClick={exportModal.onClose}>
+              Cancelar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL ELIMINAR ORDEN */}
+      <Modal isOpen={modalEliminar} onClose={() => setModalEliminar(false)} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Eliminar orden</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>¿Está seguro de eliminar esta orden de compra?</ModalBody>
+          <ModalFooter>
+            <Button
+              colorScheme="red"
+              onClick={() => {
+                eliminarOrden(ordenAEliminar);
+                setModalEliminar(false);
+              }}
+            >
+              Eliminar
+            </Button>
+            <Button onClick={() => setModalEliminar(false)}>Cancelar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </Box>
+  );
 }
