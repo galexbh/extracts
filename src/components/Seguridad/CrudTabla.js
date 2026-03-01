@@ -223,7 +223,7 @@ export default function CrudTabla({
       await reloadData();
     } catch (err) {
       console.error("❌ Error al eliminar:", err);
-      toast({ title: "Error al eliminar", status: "error" });
+      toast({ title: "Error al eliminar", description: err.response?.data?.error || err.message, status: "error" });
     } finally {
       setLoading(false);
     }
@@ -273,6 +273,20 @@ export default function CrudTabla({
         } else {
           inputField = <Text color="red.400">⚠️ Campo custom sin render()</Text>;
         }
+        break;
+
+      case "boolean":
+        inputField = (
+          <Checkbox
+            isChecked={!!value}
+            onChange={(e) => handleChangeField(f, e.target.checked)}
+            colorScheme="teal"
+            size="lg"
+            mt={2}
+          >
+            {f.label}
+          </Checkbox>
+        );
         break;
 
       case "select":

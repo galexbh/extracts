@@ -5,6 +5,8 @@
 const express = require("express");
 const router = express.Router();
 const { pool } = require("../db"); // ✅ necesario para el endpoint de accesos
+const verifyRoleAccess = require("../middleware/verifyRoleAccess"); // 🔐 Middleware módulo
+const verifyPermission = require("../middleware/verifyObjectPermission"); // 🔐 Middleware CRUD granular
 
 // ============================================================
 // 🧩 IMPORTAR CONTROLADORES
@@ -79,26 +81,27 @@ router.get("/usuarios/rol", async (req, res) => {
 });
 
 router.get("/usuarios/:id", usuariosCtrl.getUsuarioById);
-router.post("/usuarios", usuariosCtrl.insertUsuario);
-router.put("/usuarios/:id_usuario", usuariosCtrl.updateUsuario);
-router.delete("/usuarios/:id", usuariosCtrl.deleteUsuario);
+router.post("/usuarios", verifyPermission("Usuarios", "create"), usuariosCtrl.insertUsuario);
+router.put("/usuarios/:id_usuario", verifyPermission("Usuarios", "update"), usuariosCtrl.updateUsuario);
+router.delete("/usuarios/:id", verifyPermission("Usuarios", "delete"), usuariosCtrl.deleteUsuario);
 
 // ============================================================
 // 🧩 ROLES
 // ============================================================
 router.get("/roles", rolesCtrl.getRoles);
 router.get("/roles/:id", rolesCtrl.getRolById);
-router.post("/roles", rolesCtrl.insertRol);
-router.put("/roles/:id_rol", rolesCtrl.updateRol);
-router.delete("/roles/:id", rolesCtrl.deleteRol);
+router.post("/roles", verifyPermission("Roles", "create"), rolesCtrl.insertRol);
+router.put("/roles/:id_rol", verifyPermission("Roles", "update"), rolesCtrl.updateRol);
+router.delete("/roles/:id", verifyPermission("Roles", "delete"), rolesCtrl.deleteRol);
 
 // ============================================================
 // 🔐 PERMISOS
 // ============================================================
 router.get("/permisos", permisosCtrl.getPermisos);
-router.post("/permisos", permisosCtrl.insertPermiso);
-router.put("/permisos/:id_permiso", permisosCtrl.updatePermiso);
-router.delete("/permisos/:id", permisosCtrl.deletePermiso);
+router.get("/permisos/:id", permisosCtrl.getPermisoById);
+router.post("/permisos", verifyPermission("Permisos", "create"), permisosCtrl.insertPermiso);
+router.put("/permisos/:id_permiso", verifyPermission("Permisos", "update"), permisosCtrl.updatePermiso);
+router.delete("/permisos/:id", verifyPermission("Permisos", "delete"), permisosCtrl.deletePermiso);
 
 // ============================================================
 // 🧍 PERSONAS
@@ -140,9 +143,10 @@ router.delete("/telefonos/:id", telefonosCtrl.deleteTelefono);
 // 🧱 OBJETOS
 // ============================================================
 router.get("/objetos", objetosCtrl.getObjetos);
-router.post("/objetos", objetosCtrl.insertObjeto);
-router.put("/objetos/:id_objeto", objetosCtrl.updateObjeto);
-router.delete("/objetos/:id", objetosCtrl.deleteObjeto);
+router.get("/objetos/:id", objetosCtrl.getObjetoById);
+router.post("/objetos", verifyPermission("Objetos", "create"), objetosCtrl.insertObjeto);
+router.put("/objetos/:id_objeto", verifyPermission("Objetos", "update"), objetosCtrl.updateObjeto);
+router.delete("/objetos/:id", verifyPermission("Objetos", "delete"), objetosCtrl.deleteObjeto);
 
 // ============================================================
 // 🔹 NUEVO ENDPOINT → Obtener accesos del usuario logueado

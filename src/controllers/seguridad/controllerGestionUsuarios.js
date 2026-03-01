@@ -8,6 +8,28 @@ const bcrypt = require("bcryptjs");
 
 console.log("[FIREBASE] ✅ Admin inicializado correctamente");
 
+// 🛡️ Bitácora — registro de auditoría
+const registrarBitacora = async ({ id_usuario, tabla, accion, descripcion, detalle }) => {
+  try {
+    await pool.query(
+      `INSERT INTO seguridad.tbl_ms_bitacora
+        (id_usuario, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $1, NOW());`,
+      [id_usuario, tabla, accion, descripcion, detalle || null]
+    );
+  } catch (err) {
+    console.error("[Bitácora] ❌ Error:", err.message);
+  }
+};
+
+const findUserId = async (email) => {
+  const r = await pool.query(
+    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
+    [email]
+  );
+  return r.rows.length > 0 ? r.rows[0].id_usuario : null;
+};
+
 // ============================================================
 // 🌐 Traducir errores de Firebase Admin al español
 // ============================================================
@@ -174,6 +196,17 @@ const insertUsuario = async (req, res) => {
     );
 
     res.json({ message: "✅ Usuario creado en Firebase y PostgreSQL" });
+
+    // 📋 Bitácora
+    const creadorEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_creador = creadorEmail ? await findUserId(creadorEmail) : null;
+    await registrarBitacora({
+      id_usuario: id_creador,
+      tabla: "seguridad.tbl_usuarios",
+      accion: "INSERT",
+      descripcion: `Usuario "${username}" creado por ${creadorEmail || "desconocido"}`,
+      detalle: JSON.stringify({ nombre_usuario, username, id_rol, id_estado_usuario }),
+    });
   } catch (err) {
     console.error("[API] ❌ Error creando usuario:", err);
     res.status(500).json({ error: traducirError(err) });
@@ -255,6 +288,20 @@ const updateUsuario = async (req, res) => {
         ? "✅ Usuario actualizado en Firebase y PostgreSQL"
         : "✅ Usuario actualizado solo en PostgreSQL (sin UID Firebase)",
     });
+
+    // 📋 Bitácora
+    const modEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_mod = modEmail ? await findUserId(modEmail) : null;
+    await registrarBitacora({
+      id_usuario: id_mod,
+      tabla: "seguridad.tbl_usuarios",
+      accion: "UPDATE",
+      descripcion: `Usuario ID ${id_usuario} actualizado por ${modEmail || "desconocido"}`,
+      detalle: JSON.stringify({
+        antes: { username: emailActual },
+        despues: { username: newEmail, id_rol, id_estado_usuario },
+      }),
+    });
   } catch (err) {
     console.error("[API] ❌ Error actualizando usuario:", err);
     res.status(500).json({ error: traducirError(err) });
@@ -294,6 +341,17 @@ const deleteUsuario = async (req, res) => {
     }
 
     await pool.query(`CALL seguridad.sp_usuarios_delete($1);`, [parseInt(id)]);
+
+    // 📋 Bitácora
+    const delEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_del = delEmail ? await findUserId(delEmail) : null;
+    await registrarBitacora({
+      id_usuario: id_del,
+      tabla: "seguridad.tbl_usuarios",
+      accion: "DELETE",
+      descripcion: `Usuario ID ${id} eliminado por ${delEmail || "desconocido"}`,
+      detalle: JSON.stringify({ id_usuario: id, uid_firebase: result.rows[0]?.uid_firebase }),
+    });
 
     res.json({
       message: "✅ Usuario eliminado correctamente (Firebase + PostgreSQL)",
