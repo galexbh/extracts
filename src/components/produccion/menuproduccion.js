@@ -19,7 +19,7 @@ import { FaBoxes, FaClipboardList, FaIndustry, FaTools } from 'react-icons/fa';
 
 const ITEMS = [
   { label: 'Productos',      to: '/app/produccion/productos',       icon: FaBoxes,         desc: 'Catálogo y stock de productos.' },
-  { label: 'Recetas',        to: '/app/produccion/recetas',         icon: FaClipboardList, desc: 'Ingredientes y cantidades por producto.' },
+  //{ label: 'Recetas',        to: '/app/produccion/recetas',         icon: FaClipboardList, desc: 'Ingredientes y cantidades por producto.' },
   { label: 'Producción',     to: '/app/produccion/produccion',      icon: FaIndustry,      desc: 'Órdenes y control de producción.' },
   { label: 'Insumos', to: '/app/produccion/insumos',  icon: FaTools,         desc: 'Catálogo y stock de Insumos.' },
 ];
