@@ -136,6 +136,7 @@ export default function ReportesContabilidad() {
                   name="desde"
                   value={filtros.desde}
                   onChange={handleChangeFiltro}
+                  max={filtros.hasta || undefined}
                   size="sm"
                 />
               </FormControl>
@@ -146,6 +147,7 @@ export default function ReportesContabilidad() {
                   name="hasta"
                   value={filtros.hasta}
                   onChange={handleChangeFiltro}
+                  min={filtros.desde || undefined}
                   size="sm"
                 />
               </FormControl>
@@ -155,6 +157,14 @@ export default function ReportesContabilidad() {
               size="sm"
               colorScheme="teal"
               onClick={() => {
+                if (filtros.desde && filtros.hasta && new Date(filtros.desde) > new Date(filtros.hasta)) {
+                  toast({
+                    title: "Rango de fechas inválido",
+                    description: "La fecha 'Desde' no puede ser mayor que la fecha 'Hasta'.",
+                    status: "warning",
+                  });
+                  return;
+                }
                 cargarProductosMasVendidos();
                 cargarVentasVendedor();
                 cargarPedidosDiarios();

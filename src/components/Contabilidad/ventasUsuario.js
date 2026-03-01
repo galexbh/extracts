@@ -49,20 +49,32 @@ export default function VentasPorUsuario() {
 
   // ===== Datos DEMO (adaptados a EXTRACTUS) =====
   const [ventas] = useState([
-    { id_venta: 1, usuario: "Osmany", fecha: "2025-07-30",
-      items: [ { producto: "MARACUYA", cantidad: 2, precio: 180 },
-               { producto: "LIMON",     cantidad: 1, precio: 170 } ] },
-    { id_venta: 2, usuario: "Fanny",  fecha: "2025-08-01",
-      items: [ { producto: "NARANJA",  cantidad: 1, precio: 175 } ] },
-    { id_venta: 3, usuario: "Edi",    fecha: "2025-08-01",
-      items: [ { producto: "MARACUYA", cantidad: 3, precio: 180 },
-               { producto: "MORA",     cantidad: 1, precio: 185 } ] },
-    { id_venta: 4, usuario: "Osmany", fecha: "2025-08-02",
-      items: [ { producto: "TAMARINDO", cantidad: 1, precio: 165 } ] },
-    { id_venta: 5, usuario: "Fanny",  fecha: "2025-08-03",
-      items: [ { producto: "MORA",     cantidad: 2, precio: 185 } ] },
-    { id_venta: 6, usuario: "Edi",    fecha: "2025-08-05",
-      items: [ { producto: "LIMON",    cantidad: 1, precio: 170 } ] },
+    {
+      id_venta: 1, usuario: "Osmany", fecha: "2025-07-30",
+      items: [{ producto: "MARACUYA", cantidad: 2, precio: 180 },
+      { producto: "LIMON", cantidad: 1, precio: 170 }]
+    },
+    {
+      id_venta: 2, usuario: "Fanny", fecha: "2025-08-01",
+      items: [{ producto: "NARANJA", cantidad: 1, precio: 175 }]
+    },
+    {
+      id_venta: 3, usuario: "Edi", fecha: "2025-08-01",
+      items: [{ producto: "MARACUYA", cantidad: 3, precio: 180 },
+      { producto: "MORA", cantidad: 1, precio: 185 }]
+    },
+    {
+      id_venta: 4, usuario: "Osmany", fecha: "2025-08-02",
+      items: [{ producto: "TAMARINDO", cantidad: 1, precio: 165 }]
+    },
+    {
+      id_venta: 5, usuario: "Fanny", fecha: "2025-08-03",
+      items: [{ producto: "MORA", cantidad: 2, precio: 185 }]
+    },
+    {
+      id_venta: 6, usuario: "Edi", fecha: "2025-08-05",
+      items: [{ producto: "LIMON", cantidad: 1, precio: 170 }]
+    },
   ]);
 
   // ===== Filtros =====
@@ -284,7 +296,13 @@ export default function VentasPorUsuario() {
         </Flex>
 
         <Menu>
-          <MenuButton as={Button} colorScheme="green" size="sm" rightIcon={<ChevronDownIcon />}>
+          <MenuButton
+            as={Button}
+            colorScheme="green"
+            size="sm"
+            rightIcon={<ChevronDownIcon />}
+            isDisabled={fromDate && toDate && fromDate > toDate}
+          >
             Exportar
           </MenuButton>
           <MenuList>
@@ -349,8 +367,8 @@ export default function VentasPorUsuario() {
             <Tr>
               {selectedDetailCols.map((col, i) => (
                 <Th key={col} textAlign="center"
-                    borderRight={i < selectedDetailCols.length - 1 ? "1px solid" : undefined}
-                    borderColor={border} borderBottom="1px solid">
+                  borderRight={i < selectedDetailCols.length - 1 ? "1px solid" : undefined}
+                  borderColor={border} borderBottom="1px solid">
                   {col}
                 </Th>
               ))}

@@ -177,11 +177,54 @@ exports.crearPago = async (req, res) => {
     });
   }
 
+  // Validación rápida: El monto a pagar nunca puede ser <= 0
+  const monto = Number(monto_pagado);
+  if (isNaN(monto) || monto <= 0) {
+    return res.status(400).json({
+      error: "El monto a pagar debe ser numérico y mayor a 0",
+    });
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
+    // ===============================================
+    // 🛡️ REGLA: Comprobar el Saldo Actual de la Factura
+    // ===============================================
+    const facRes = await client.query(
+      `SELECT total_a_pagar FROM ventasyreserva.tbl_facturas WHERE id_factura = $1 FOR UPDATE`,
+      [id_factura]
+    );
+
+    if (facRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Factura no encontrada para recibir el pago." });
+    }
+
+    const totalDeuda = Number(facRes.rows[0].total_a_pagar) || 0;
+
+    const pagosRes = await client.query(
+      `SELECT COALESCE(SUM(monto_pagado), 0) AS total_pagado
+       FROM ventasyreserva.tbl_pagos_factura
+       WHERE id_factura = $1`,
+      [id_factura]
+    );
+
+    const pagadoHastaAhora = Number(pagosRes.rows[0].total_pagado) || 0;
+    const saldoPendiente = totalDeuda - pagadoHastaAhora;
+
+    // ⛔ Si el monto_pagado es mayor al saldo pendiente, abortar la transacción
+    // Se usa toFixed(2) y pequeños deltas técnicos para redondos por si acaso
+    if (monto > (saldoPendiente + 0.01)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: `No puedes procesar un pago mayor al saldo restante (L. ${saldoPendiente.toFixed(2)})`
+      });
+    }
+
+    // Insertar Pago
     const insertRes = await client.query(
       `
       INSERT INTO ventasyreserva.tbl_pagos_factura

@@ -112,15 +112,41 @@ export default function Roles() {
   ).length;
 
   // ============================================================
+  // ✅ Funciones de validación y sanitización
+  // ============================================================
+  const sanitizeTexto = (valor) => {
+    if (!valor) return "";
+    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
+  };
+
+  const validarNombreRol = (v) => {
+    if (!v || v.trim() === "") return "El nombre del rol es obligatorio.";
+    const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+    if (!regex.test(v)) return "Solo se permiten letras y espacios.";
+    return null;
+  };
+
+  const validarAccesos = (v) => {
+    if (!Array.isArray(v) || v.length === 0) return "Debe asignar al menos un acceso.";
+    return null;
+  };
+
+  // ============================================================
   // ✅ Campos del CRUD
   // ============================================================
   const fields = [
-    { name: "nombre_rol", label: "Nombre del Rol", type: "text", required: true },
+    {
+      name: "nombre_rol", label: "Nombre del Rol", type: "text", required: true,
+      placeholderText: "Ej. Administrador, Vendedor",
+      validate: validarNombreRol,
+      sanitize: sanitizeTexto,
+    },
     { name: "descripcion", label: "Descripción", type: "textarea" },
     {
       name: "accesos",
       label: "Accesos",
       type: "custom",
+      validate: validarAccesos,
       render: (value, onChange) => (
         <CheckboxGroup
           value={Array.isArray(value) ? value : []}
@@ -146,8 +172,8 @@ export default function Roles() {
       Array.isArray(r.accesos)
         ? r.accesos.join(", ")
         : typeof r.accesos === "string"
-        ? r.accesos.replace(/[\[\]"]/g, "")
-        : "-",
+          ? r.accesos.replace(/[\[\]"]/g, "")
+          : "-",
   };
 
   // ============================================================

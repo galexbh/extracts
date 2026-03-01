@@ -2,7 +2,7 @@
 // 📁 src/components/Compras/Proveedores.js
 // ============================================================
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Box,
   Flex,
@@ -35,6 +35,9 @@ export default function Proveedores() {
   const [data, setData] = useState([]);
   const [estados, setEstados] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 🔹 Ref para controlar el modo de guardado ("normal" o "orden")
+  const modoRef = useRef("normal");
 
   // ============================================================
   // 🔹 Cargar proveedores desde la API
@@ -144,6 +147,7 @@ export default function Proveedores() {
       placeholderText: "Ej. Distribuidora Central",
       validate: validarNombre,
       sanitize: sanitizeTexto,
+      sanitizeWarning: "⚠️ Solo se permiten letras y espacios.",
     },
     {
       name: "rtn",
@@ -153,6 +157,7 @@ export default function Proveedores() {
       placeholderText: "Ej. 0801-1990-12345",
       validate: validarRTN,
       sanitize: sanitizeRTN,
+      sanitizeWarning: "⚠️ Solo se permiten números y guiones.",
     },
     {
       name: "telefono",
@@ -161,6 +166,7 @@ export default function Proveedores() {
       placeholderText: "Ej. 9999-9999",
       validate: validarTelefono,
       sanitize: sanitizeTelefono,
+      sanitizeWarning: "⚠️ Solo se permiten números, guiones y +.",
     },
     {
       name: "correo",
@@ -175,6 +181,7 @@ export default function Proveedores() {
       type: "text",
       placeholderText: "Ej. Col. Kennedy, Tegucigalpa",
       sanitize: sanitizeDireccion,
+      sanitizeWarning: "⚠️ Solo se permiten letras, números, comas, puntos y #.",
     },
 
     // ✅ SOLO EDITAR — NO mostrar al crear
@@ -244,7 +251,7 @@ export default function Proveedores() {
           duration: 4000,
           isClosable: true,
         });
-        return;
+        return false; // ✅ Mantener modal abierto
       }
 
       toast({
@@ -280,6 +287,7 @@ export default function Proveedores() {
         duration: 4000,
         isClosable: true,
       });
+      return false; // ✅ Mantener modal abierto en caso de error
     }
   };
 
@@ -304,6 +312,7 @@ export default function Proveedores() {
         duration: 4000,
         isClosable: true,
       });
+      return false; // ✅ Mantener modal abierto en caso de error
     }
   };
 
@@ -374,18 +383,18 @@ export default function Proveedores() {
           fields={fields}
           idKey="id_proveedor"
           initialData={data}
-          onInsert={(nuevo) => handleInsert(nuevo, "normal")}
+          onInsert={(nuevo) => handleInsert(nuevo, modoRef.current || "normal")}
           onUpdate={handleUpdate}
           onDelete={handleDelete}
           onReload={cargarProveedores}
           apiUrl="/compras/proveedores"
-          customButtons={(formData, onClose) => (
+          customButtons={(formData, onClose, handleSave) => (
             <HStack justify="center" spacing={4} mt={4}>
               <Button
                 colorScheme="teal"
                 onClick={() => {
-                  handleInsert(formData, "normal");
-                  onClose();
+                  modoRef.current = "normal";
+                  handleSave();
                 }}
               >
                 Guardar
@@ -393,8 +402,8 @@ export default function Proveedores() {
               <Button
                 colorScheme="green"
                 onClick={() => {
-                  handleInsert(formData, "orden");
-                  onClose();
+                  modoRef.current = "orden";
+                  handleSave();
                 }}
               >
                 Guardar y crear Orden

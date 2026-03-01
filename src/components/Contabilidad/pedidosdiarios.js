@@ -285,7 +285,13 @@ export default function PedidosDiarios() {
             {data.length} registro(s)
           </Text>
           <Menu>
-            <MenuButton as={Button} colorScheme="teal" size="sm" rightIcon={<ChevronDownIcon />}>
+            <MenuButton
+              as={Button}
+              colorScheme="teal"
+              size="sm"
+              rightIcon={<ChevronDownIcon />}
+              isDisabled={fromDate && toDate && fromDate > toDate}
+            >
               Exportar
             </MenuButton>
             <MenuList>

@@ -64,14 +64,17 @@ exports.getObjetos = async (_req, res) => {
    ============================================================ */
 exports.insertObjeto = async (req, res) => {
   try {
-    const { nombre_objeto, descripcion } = req.body;
+    let { nombre_objeto, descripcion } = req.body;
     const username =
       req.headers["x-user-email"] ||
       req.headers["X-User-Email"] ||
       req.headers["x-User-Email"];
 
-    console.log("🧩 Header recibido:", req.headers); // 👈 AGREGAR ESTO
-    console.log("📧 Username recibido:", username);  // 👈 AGREGAR ESTO
+    // 🛡️ Validaciones
+    nombre_objeto = nombre_objeto ? nombre_objeto.trim() : null;
+    if (!nombre_objeto) {
+      return res.status(400).json({ error: "El nombre del objeto es obligatorio." });
+    }
 
     if (!username) {
       return res.status(400).json({ error: "Falta el usuario logueado (x-user-email)" });
@@ -107,11 +110,17 @@ exports.insertObjeto = async (req, res) => {
 exports.updateObjeto = async (req, res) => {
   try {
     const { id_objeto } = req.params;
-    const { nombre_objeto, descripcion } = req.body;
-    const username = req.headers["x-user-email"]; // 👈 Usuario actual
+    let { nombre_objeto, descripcion } = req.body;
+    const username = req.headers["x-user-email"];
+
+    // 🛡️ Validaciones
+    nombre_objeto = nombre_objeto ? nombre_objeto.trim() : null;
+    if (!nombre_objeto) {
+      return res.status(400).json({ error: "El nombre del objeto es obligatorio." });
+    }
 
     const userResult = await pool.query(
-      "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username = $1",
+      "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1",
       [username]
     );
 

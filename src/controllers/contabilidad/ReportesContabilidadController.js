@@ -10,9 +10,17 @@ const { pool } = require("../../db");
 exports.productosMasVendidos = async (req, res) => {
   const { desde, hasta, top } = req.query;
 
-  const fDesde = desde || "2000-01-01";
-  const fHasta = hasta || "2999-12-31";
+  const fDesde = desde ? desde : "2000-01-01";
+  const fHasta = hasta ? hasta : "2999-12-31";
   const limit = Number(top) || 10;
+
+  // 🛡️ Validaciones
+  if (limit <= 0) {
+    return res.status(400).json({ error: "El parámetro top debe ser mayor a 0." });
+  }
+  if (new Date(fDesde) > new Date(fHasta)) {
+    return res.status(400).json({ error: "La fecha inicial no puede ser mayor a la fecha final." });
+  }
 
   try {
     const q = `
@@ -48,8 +56,13 @@ exports.productosMasVendidos = async (req, res) => {
 exports.ventasPorVendedor = async (req, res) => {
   const { desde, hasta } = req.query;
 
-  const fDesde = desde || "2000-01-01";
-  const fHasta = hasta || "2999-12-31";
+  const fDesde = desde ? desde : "2000-01-01";
+  const fHasta = hasta ? hasta : "2999-12-31";
+
+  // 🛡️ Validaciones
+  if (new Date(fDesde) > new Date(fHasta)) {
+    return res.status(400).json({ error: "La fecha inicial no puede ser mayor a la fecha final." });
+  }
 
   try {
     const q = `
@@ -79,8 +92,13 @@ exports.ventasPorVendedor = async (req, res) => {
 exports.pedidosDiarios = async (req, res) => {
   const { desde, hasta } = req.query;
 
-  const fDesde = desde || "2000-01-01";
-  const fHasta = hasta || "2999-12-31";
+  const fDesde = desde ? desde : "2000-01-01";
+  const fHasta = hasta ? hasta : "2999-12-31";
+
+  // 🛡️ Validaciones
+  if (new Date(fDesde) > new Date(fHasta)) {
+    return res.status(400).json({ error: "La fecha inicial no puede ser mayor a la fecha final." });
+  }
 
   try {
     const q = `

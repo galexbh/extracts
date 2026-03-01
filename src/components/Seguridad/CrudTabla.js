@@ -48,6 +48,8 @@ export default function CrudTabla({
   idKey,
   initialData = [],
   onReload,
+  onInsert,
+  onUpdate,
   formData,
   setFormData,
   customButtons,
@@ -162,6 +164,27 @@ export default function CrudTabla({
 
       setLoading(true);
 
+      // ✅ Delegar a callbacks del padre si están definidos
+      // Si el callback retorna false, el modal se mantiene abierto (ej: duplicado)
+      const isNew = !editing[idKey];
+      if (isNew && typeof onInsert === "function") {
+        const result = await onInsert(editing);
+        if (result !== false) {
+          handleOnClose();
+          await reloadData();
+        }
+        return;
+      }
+      if (!isNew && typeof onUpdate === "function") {
+        const result = await onUpdate(editing);
+        if (result !== false) {
+          handleOnClose();
+          await reloadData();
+        }
+        return;
+      }
+
+      // Fallback: llamada directa si no hay callbacks
       const method = editing[idKey] ? "put" : "post";
       const url = editing[idKey] ? `${apiUrl}/${editing[idKey]}` : apiUrl;
 
@@ -244,6 +267,14 @@ export default function CrudTabla({
     let inputField = null;
 
     switch (f.type) {
+      case "custom":
+        if (typeof f.render === "function") {
+          inputField = f.render(value, (newVal) => handleChangeField(f, newVal));
+        } else {
+          inputField = <Text color="red.400">⚠️ Campo custom sin render()</Text>;
+        }
+        break;
+
       case "select":
         inputField = (
           <Select
@@ -291,13 +322,14 @@ export default function CrudTabla({
 
     // Mensaje: aviso de caracter tiene prioridad sobre error de validación
     const warnActive = sanitizeWarn[f.name];
+    const warnMsg = f.sanitizeWarning || "⚠️ Carácter no permitido. Se ha eliminado automáticamente.";
 
     return (
       <>
         {inputField}
         {warnActive ? (
           <Text color="orange.500" fontSize="xs" mt={1} fontWeight="medium">
-            ⚠️ Solo se permiten letras y espacios. No se admiten números ni caracteres especiales.
+            {warnMsg}
           </Text>
         ) : error ? (
           <Text color="red.500" fontSize="sm" mt={1}>
@@ -475,13 +507,20 @@ export default function CrudTabla({
         <ModalContent mx="auto" w={{ base: "90%", md: "600px" }} bg={modalBg}>
           <ModalHeader>{editing[idKey] ? "Editar" : "Agregar"}</ModalHeader>
 
-          <ModalBody>
-            {fields.map((f) => (
-              <FormControl key={f.name} mt={3}>
-                {f.type !== "boolean" && <FormLabel mb={1}>{f.label}</FormLabel>}
-                {renderField(f)}
-              </FormControl>
-            ))}
+          <ModalBody maxH="70vh" overflowY="auto">
+            {fields
+              .filter((f) => {
+                const isEditing = !!editing[idKey];
+                if (isEditing && f.showOnEdit === false) return false;
+                if (!isEditing && f.showOnCreate === false) return false;
+                return true;
+              })
+              .map((f) => (
+                <FormControl key={f.name} mt={3} isInvalid={!!errors[f.name]}>
+                  {f.type !== "boolean" && <FormLabel mb={1}>{f.label}</FormLabel>}
+                  {renderField(f)}
+                </FormControl>
+              ))}
           </ModalBody>
 
           <ModalFooter>

@@ -65,10 +65,32 @@ export default function Objetos() {
   }, [cargarObjetos]);
 
   // ============================================================
+  // 🔹 Funciones de validación y sanitización
+  // ============================================================
+  const sanitizeTexto = (valor) => {
+    if (!valor) return "";
+    return valor.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s._\-]/g, "");
+  };
+
+  const validarNombreObjeto = (v) => {
+    if (!v || v.trim() === "") return "El nombre del objeto es obligatorio.";
+    if (v.trim().length < 2) return "El nombre debe tener al menos 2 caracteres.";
+    return null;
+  };
+
+  // ============================================================
   // 🔹 Campos del formulario CRUD
   // ============================================================
   const fields = [
-    { name: "nombre_objeto", label: "Nombre del Objeto", type: "text", required: true },
+    {
+      name: "nombre_objeto",
+      label: "Nombre del Objeto",
+      type: "text",
+      required: true,
+      placeholderText: "Ej. Módulo Ventas, Botón Reportes",
+      validate: validarNombreObjeto,
+      sanitize: sanitizeTexto,
+    },
     { name: "descripcion", label: "Descripción", type: "textarea" },
   ];
 

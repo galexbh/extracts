@@ -320,7 +320,13 @@ export default function ProductoVendido() {
 
         {/* Exportar (igual a pedidosdiarios: formato -> modal columnas) */}
         <Menu>
-          <MenuButton as={Button} colorScheme="green" size="sm" rightIcon={<ChevronDownIcon />}>
+          <MenuButton
+            as={Button}
+            colorScheme="green"
+            size="sm"
+            rightIcon={<ChevronDownIcon />}
+            isDisabled={fromDate && toDate && fromDate > toDate}
+          >
             Exportar
           </MenuButton>
           <MenuList>

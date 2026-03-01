@@ -37,10 +37,37 @@ exports.getProveedores = async (req, res) => {
 // ============================================================
 exports.insertProveedor = async (req, res) => {
   try {
-    const { nombre, rtn, telefono, correo, direccion, id_estado_proveedor, modo } = req.body;
+    let { nombre, rtn, telefono, correo, direccion, id_estado_proveedor, modo } = req.body;
 
-    if (!nombre || !rtn) {
-      return res.status(400).json({ error: "Los campos nombre y RTN son obligatorios." });
+    // 🛡️ Sanitización
+    nombre = nombre ? nombre.trim() : null;
+    rtn = rtn ? rtn.trim() : null;
+    telefono = telefono ? telefono.trim() : null;
+    correo = correo ? correo.trim().toLowerCase() : null;
+    direccion = direccion ? direccion.trim() : null;
+
+    // 🛡️ Validaciones
+    if (!nombre || nombre.length < 3) {
+      return res.status(400).json({ error: "El nombre del proveedor es obligatorio (mín 3 caracteres)." });
+    }
+
+    if (!rtn) {
+      return res.status(400).json({ error: "El RTN es obligatorio." });
+    }
+    const rtnDigitos = rtn.replace(/-/g, "");
+    if (!/^\d{13,14}$/.test(rtnDigitos)) {
+      return res.status(400).json({ error: "El RTN debe tener entre 13 y 14 dígitos numéricos." });
+    }
+
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      return res.status(400).json({ error: "El correo electrónico no tiene un formato válido." });
+    }
+
+    if (telefono) {
+      const telDigitos = telefono.replace(/[-+\s]/g, "");
+      if (!/^\d{8,}$/.test(telDigitos)) {
+        return res.status(400).json({ error: "El teléfono debe tener al menos 8 dígitos." });
+      }
     }
 
     const estadoFinal = id_estado_proveedor || 1;
@@ -48,11 +75,10 @@ exports.insertProveedor = async (req, res) => {
     // Verificar duplicado
     const existe = await pool.query(
       `SELECT id_proveedor FROM compras.tbl_proveedores WHERE LOWER(nombre)=LOWER($1) OR rtn=$2`,
-      [nombre.trim(), rtn.trim()]
+      [nombre, rtn]
     );
 
     if (existe.rows.length > 0) {
-      // Si se usa modo orden (desde OrdenCompra), devolver ID existente
       if (modo === "orden") {
         return res.json({
           message: "Proveedor ya existente, redirigiendo a creación de orden.",
@@ -60,7 +86,6 @@ exports.insertProveedor = async (req, res) => {
           existente: true,
         });
       }
-
       return res.status(400).json({ error: "Ya existe un proveedor con ese nombre o RTN." });
     }
 
@@ -88,7 +113,38 @@ exports.insertProveedor = async (req, res) => {
 exports.updateProveedor = async (req, res) => {
   try {
     const { id_proveedor } = req.params;
-    const { nombre, rtn, telefono, correo, direccion, id_estado_proveedor } = req.body;
+    let { nombre, rtn, telefono, correo, direccion, id_estado_proveedor } = req.body;
+
+    // 🛡️ Sanitización
+    nombre = nombre ? nombre.trim() : null;
+    rtn = rtn ? rtn.trim() : null;
+    telefono = telefono ? telefono.trim() : null;
+    correo = correo ? correo.trim().toLowerCase() : null;
+    direccion = direccion ? direccion.trim() : null;
+
+    // 🛡️ Validaciones
+    if (!nombre || nombre.length < 3) {
+      return res.status(400).json({ error: "El nombre del proveedor es obligatorio (mín 3 caracteres)." });
+    }
+
+    if (!rtn) {
+      return res.status(400).json({ error: "El RTN es obligatorio." });
+    }
+    const rtnDigitos = rtn.replace(/-/g, "");
+    if (!/^\d{13,14}$/.test(rtnDigitos)) {
+      return res.status(400).json({ error: "El RTN debe tener entre 13 y 14 dígitos numéricos." });
+    }
+
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      return res.status(400).json({ error: "El correo electrónico no tiene un formato válido." });
+    }
+
+    if (telefono) {
+      const telDigitos = telefono.replace(/[-+\s]/g, "");
+      if (!/^\d{8,}$/.test(telDigitos)) {
+        return res.status(400).json({ error: "El teléfono debe tener al menos 8 dígitos." });
+      }
+    }
 
     const result = await pool.query(
       `UPDATE compras.tbl_proveedores

@@ -74,8 +74,22 @@ exports.insertRol = async (req, res) => {
   try {
     let { nombre_rol, descripcion, accesos } = req.body;
 
+    // 🛡️ Validaciones
+    nombre_rol = nombre_rol ? nombre_rol.trim() : null;
+    if (!nombre_rol) {
+      return res.status(400).json({ error: "El nombre del rol es obligatorio." });
+    }
+
+    // Parsear accesos si llega como string
+    if (typeof accesos === "string") {
+      try { accesos = JSON.parse(accesos); } catch { accesos = []; }
+    }
+    if (!Array.isArray(accesos) || accesos.length === 0) {
+      return res.status(400).json({ error: "Debe asignar al menos un acceso al rol." });
+    }
+
     // 🧠 Asegurar formato JSON antes de enviar a PostgreSQL
-    if (Array.isArray(accesos)) accesos = JSON.stringify(accesos);
+    accesos = JSON.stringify(accesos);
 
     await pool.query(
       "CALL seguridad.sp_roles_insert($1, $2, $3);",
@@ -97,8 +111,22 @@ exports.updateRol = async (req, res) => {
     const { id_rol } = req.params;
     let { nombre_rol, descripcion, accesos } = req.body;
 
+    // 🛡️ Validaciones
+    nombre_rol = nombre_rol ? nombre_rol.trim() : null;
+    if (!nombre_rol) {
+      return res.status(400).json({ error: "El nombre del rol es obligatorio." });
+    }
+
+    // Parsear accesos si llega como string
+    if (typeof accesos === "string") {
+      try { accesos = JSON.parse(accesos); } catch { accesos = []; }
+    }
+    if (!Array.isArray(accesos) || accesos.length === 0) {
+      return res.status(400).json({ error: "Debe asignar al menos un acceso al rol." });
+    }
+
     // 🧠 Asegurar formato JSON
-    if (Array.isArray(accesos)) accesos = JSON.stringify(accesos);
+    accesos = JSON.stringify(accesos);
 
     await pool.query(
       "CALL seguridad.sp_roles_update($1, $2, $3, $4);",
