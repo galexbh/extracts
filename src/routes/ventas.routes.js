@@ -4,6 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 // CONTROLADORES
 const clientesCtrl = require("../controllers/ventas/ClientesController");
@@ -18,9 +19,9 @@ const facturasRoutes = require("./facturas.routes");
 
 router.get("/clientes", clientesCtrl.getClientes);
 router.get("/clientes/:id_cliente", clientesCtrl.getClienteById);
-router.post("/clientes", clientesCtrl.insertCliente);
-router.put("/clientes/:id_cliente", clientesCtrl.updateCliente);
-router.delete("/clientes/:id_cliente", clientesCtrl.deleteCliente);
+router.post("/clientes", verifyPermission("Clientes", "create"), clientesCtrl.insertCliente);
+router.put("/clientes/:id_cliente", verifyPermission("Clientes", "update"), clientesCtrl.updateCliente);
+router.delete("/clientes/:id_cliente", verifyPermission("Clientes", "delete"), clientesCtrl.deleteCliente);
 
 // ============================================================
 // 🔹 PEDIDOS + PRODUCTOS
@@ -31,8 +32,6 @@ router.use("/ventasyreserva", ventasyreservaRoutes);
 // ============================================================
 // 🔹 FACTURAS
 // ============================================================
-// Todas las rutas quedan bajo:  /ventas/facturas
-
 router.use("/facturas", facturasRoutes);
 
 // ============================================================

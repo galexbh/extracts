@@ -4,6 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 // ============================================================
 // 📦 Controllers
@@ -24,18 +25,18 @@ const produccionCtrl = require("../controllers/produccion/ordenes.controller");
 // ============================================================
 router.get("/productos", productosCtrl.getProductos);
 router.get("/productos/:id", productosCtrl.getProductoById);
-router.post("/productos", productosCtrl.insertProducto);
-router.put("/productos/:id", productosCtrl.updateProducto);
-router.delete("/productos/:id", productosCtrl.deleteProducto);
+router.post("/productos", verifyPermission("Productos", "create"), productosCtrl.insertProducto);
+router.put("/productos/:id", verifyPermission("Productos", "update"), productosCtrl.updateProducto);
+router.delete("/productos/:id", verifyPermission("Productos", "delete"), productosCtrl.deleteProducto);
 
 
 // ============================================================
 // 🔹 INSUMOS — Catálogo de Producción
 // ============================================================
 router.get("/insumos", insumosCtrl.getInsumos);
-router.post("/insumos", insumosCtrl.insertInsumo);
-router.put("/insumos/:id_insumo", insumosCtrl.updateInsumo);
-router.delete("/insumos/:id_insumo", insumosCtrl.deleteInsumo);
+router.post("/insumos", verifyPermission("Insumos", "create"), insumosCtrl.insertInsumo);
+router.put("/insumos/:id_insumo", verifyPermission("Insumos", "update"), insumosCtrl.updateInsumo);
+router.delete("/insumos/:id_insumo", verifyPermission("Insumos", "delete"), insumosCtrl.deleteInsumo);
 
 
 // ============================================================
@@ -51,10 +52,10 @@ router.get("/pedidos-pendientes", produccionCtrl.getPedidosPendientes);
 router.get("/pedidos/:id_pedido/detalle", produccionCtrl.getDetallePedido);
 
 // Iniciar orden de producción
-router.post("/ordenes/iniciar/:id_pedido", produccionCtrl.iniciarProduccion);
+router.post("/ordenes/iniciar/:id_pedido", verifyPermission("Produccion", "create"), produccionCtrl.iniciarProduccion);
 
 // Registrar insumos usados + descontar inventario
-router.post("/ordenes/:id_orden/insumos", produccionCtrl.registrarInsumosUsados);
+router.post("/ordenes/:id_orden/insumos", verifyPermission("Produccion", "create"), produccionCtrl.registrarInsumosUsados);
 
 
 // ============================================================

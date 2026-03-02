@@ -57,15 +57,23 @@ const listarBitacora = async (req, res) => {
       SELECT
         b.id_bitacora,
         b.fecha_evento AS fecha,
-        COALESCE(u.username, 'Desconocido') AS usuario,
+        COALESCE(
+          u.username,
+          CASE
+            WHEN b.descripcion ~ 'por [^ ]+@[^ ]+'
+            THEN substring(b.descripcion FROM 'por ([^ ]+@[^ ]+)')
+            WHEN b.descripcion ~ 'por [^ ]+'
+            THEN substring(b.descripcion FROM 'por ([^ ]+)')
+            ELSE 'Sistema'
+          END
+        ) AS usuario,
+        COALESCE(u.nombre_usuario, '') AS nombre_usuario,
         b.id_objeto,
         o.nombre_objeto AS nombre_objeto,
         b.tabla,
         b.accion,
         b.descripcion,
-        b.detalle,
-        b.id_usuario_creado,
-        b.fecha_creado
+        b.detalle
       FROM seguridad.tbl_ms_bitacora b
       LEFT JOIN seguridad.tbl_usuarios u
         ON b.id_usuario::text = u.id_usuario::text

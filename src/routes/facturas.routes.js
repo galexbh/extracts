@@ -3,6 +3,7 @@
 // ============================================================
 const express = require("express");
 const router = express.Router();
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 const {
   listarFacturas,
@@ -18,9 +19,9 @@ const {
 
 router.get("/", listarFacturas);
 router.get("/:id", obtenerFactura);
-router.post("/", crearFactura);
-router.put("/:id", actualizarFactura);
-router.delete("/:id", eliminarFactura);
+router.post("/", verifyPermission("Facturas", "create"), crearFactura);
+router.put("/:id", verifyPermission("Facturas", "update"), actualizarFactura);
+router.delete("/:id", verifyPermission("Facturas", "delete"), eliminarFactura);
 
 
 module.exports = router;

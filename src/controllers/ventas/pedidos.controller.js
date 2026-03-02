@@ -3,6 +3,28 @@
 // ============================================================
 const { pool } = require("../../db");
 
+// 🛡️ Bitácora — registro de auditoría
+const registrarBitacora = async ({ id_usuario, tabla, accion, descripcion, detalle }) => {
+  try {
+    await pool.query(
+      `INSERT INTO seguridad.tbl_ms_bitacora
+        (id_usuario, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $1, NOW());`,
+      [id_usuario, tabla, accion, descripcion, detalle || null]
+    );
+  } catch (err) {
+    console.error("[Bitácora] ❌ Error:", err.message);
+  }
+};
+
+const findUserId = async (email) => {
+  const r = await pool.query(
+    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
+    [email]
+  );
+  return r.rows.length > 0 ? r.rows[0].id_usuario : null;
+};
+
 // ____________________________________________________________
 // 🔧 Helper: obtener rol del usuario por email
 // Devuelve: { id_usuario, nombre_rol, accesos }
@@ -257,6 +279,16 @@ exports.insertPedido = async (req, res) => {
 
     res.status(201).json({ id_pedido, creado_por });
 
+    // 📋 Bitácora
+    const id_usuario = creado_por ? await findUserId(creado_por) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_pedidos",
+      accion: "INSERT",
+      descripcion: `Pedido #${id_pedido} creado por ${creado_por || "desconocido"}`,
+      detalle: JSON.stringify({ id_pedido, id_cliente, productos: productos.length }),
+    });
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [POST pedido] error:", error);
@@ -340,6 +372,17 @@ exports.updatePedido = async (req, res) => {
 
     res.json({ message: "Pedido actualizado correctamente" });
 
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_pedidos",
+      accion: "UPDATE",
+      descripcion: `Pedido #${id_pedido} actualizado por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({ id_pedido, id_cliente, id_estado_pedido, productos: productos.length }),
+    });
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [PUT pedido] error:", error);
@@ -374,6 +417,17 @@ exports.deletePedido = async (req, res) => {
     await client.query("COMMIT");
 
     res.json({ message: "Pedido eliminado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_pedidos",
+      accion: "DELETE",
+      descripcion: `Pedido #${id_pedido} eliminado por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({ id_pedido }),
+    });
 
   } catch (error) {
     await client.query("ROLLBACK");

@@ -3,6 +3,28 @@
 // ============================================================
 const { pool } = require("../../db");
 
+// 🛡️ Bitácora — registro de auditoría
+const registrarBitacora = async ({ id_usuario, tabla, accion, descripcion, detalle }) => {
+  try {
+    await pool.query(
+      `INSERT INTO seguridad.tbl_ms_bitacora
+        (id_usuario, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $1, NOW());`,
+      [id_usuario, tabla, accion, descripcion, detalle || null]
+    );
+  } catch (err) {
+    console.error("[Bitácora] ❌ Error:", err.message);
+  }
+};
+
+const findUserId = async (email) => {
+  const r = await pool.query(
+    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
+    [email]
+  );
+  return r.rows.length > 0 ? r.rows[0].id_usuario : null;
+};
+
 // ============================================================
 // 🔹 LISTAR FACTURAS
 // ============================================================
@@ -261,6 +283,17 @@ exports.crearFactura = async (req, res) => {
     await client.query("COMMIT");
     res.json({ message: "Factura creada y stock actualizado" });
 
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_facturas",
+      accion: "INSERT",
+      descripcion: `Factura #${data.numero_factura} creada por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({ numero_factura: data.numero_factura, id_cliente: data.id_cliente, total: calcTotal(data.items, data.aplica_isv_15), items: data.items.length }),
+    });
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error creando factura:", error);
@@ -411,6 +444,17 @@ exports.actualizarFactura = async (req, res) => {
     await client.query("COMMIT");
     res.json({ message: "Factura actualizada correctamente" });
 
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_facturas",
+      accion: "UPDATE",
+      descripcion: `Factura ID ${id} actualizada por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({ id_factura: id, numero_factura: data.numero_factura, items: data.items.length }),
+    });
+
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error actualizando factura:", error);
@@ -456,6 +500,17 @@ exports.eliminarFactura = async (req, res) => {
 
     await client.query("COMMIT");
     res.json({ message: "Factura eliminada correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_facturas",
+      accion: "DELETE",
+      descripcion: `Factura ID ${id} eliminada por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({ id_factura: id, productos_devueltos: detalle.rows.length }),
+    });
 
   } catch (error) {
     await client.query("ROLLBACK");

@@ -114,21 +114,23 @@ exports.insertPermiso = async (req, res) => {
 
     // 🛡️ Validación: verificar que el rol existe
     const rolExiste = await pool.query(
-      "SELECT id_rol FROM seguridad.tbl_roles WHERE id_rol = $1;",
+      "SELECT id_rol, nombre_rol FROM seguridad.tbl_roles WHERE id_rol = $1;",
       [id_rol]
     );
     if (rolExiste.rows.length === 0) {
       return res.status(404).json({ error: "El rol seleccionado no existe." });
     }
+    const nombre_rol = rolExiste.rows[0].nombre_rol;
 
     // 🛡️ Validación: verificar que el objeto existe
     const objetoExiste = await pool.query(
-      "SELECT id_objeto FROM seguridad.tbl_objetos WHERE id_objeto = $1;",
+      "SELECT id_objeto, nombre_objeto FROM seguridad.tbl_objetos WHERE id_objeto = $1;",
       [id_objeto]
     );
     if (objetoExiste.rows.length === 0) {
       return res.status(404).json({ error: "El objeto seleccionado no existe." });
     }
+    const nombre_objeto = objetoExiste.rows[0].nombre_objeto;
 
     // 🛡️ Validación: duplicados (mismo rol + mismo objeto)
     const duplicado = await pool.query(
@@ -168,8 +170,8 @@ exports.insertPermiso = async (req, res) => {
       id_objeto: parseInt(id_objeto),
       tabla: "seguridad.tbl_permisos",
       accion: "INSERT",
-      descripcion: `Permiso creado (Rol: ${id_rol}, Objeto: ${id_objeto}) por ${username}`,
-      detalle: JSON.stringify({ id_rol, id_objeto, can_create, can_read, can_update, can_delete }),
+      descripcion: `Permiso creado: ${nombre_rol} → ${nombre_objeto} por ${username}`,
+      detalle: JSON.stringify({ nombre_rol, nombre_objeto, can_create, can_read, can_update, can_delete }),
     });
 
     res.status(201).json({ message: `✅ Permiso creado correctamente por ${username}` });
@@ -204,11 +206,22 @@ exports.updatePermiso = async (req, res) => {
       });
     }
 
-    // Obtener datos anteriores para bitácora
+    // Obtener datos anteriores para bitácora (con nombres)
     const anterior = await pool.query(
-      "SELECT id_rol, id_objeto, can_create, can_read, can_update, can_delete FROM seguridad.tbl_permisos WHERE id_permiso = $1;",
+      `SELECT p.can_create, p.can_read, p.can_update, p.can_delete,
+              r.nombre_rol, o.nombre_objeto
+       FROM seguridad.tbl_permisos p
+       LEFT JOIN seguridad.tbl_roles r ON p.id_rol = r.id_rol
+       LEFT JOIN seguridad.tbl_objetos o ON p.id_objeto = o.id_objeto
+       WHERE p.id_permiso = $1;`,
       [id_permiso]
     );
+
+    // Resolver nombres nuevos
+    const rolRes = await pool.query("SELECT nombre_rol FROM seguridad.tbl_roles WHERE id_rol = $1", [id_rol]);
+    const objRes = await pool.query("SELECT nombre_objeto FROM seguridad.tbl_objetos WHERE id_objeto = $1", [id_objeto]);
+    const nombre_rol = rolRes.rows[0]?.nombre_rol || id_rol;
+    const nombre_objeto = objRes.rows[0]?.nombre_objeto || id_objeto;
 
     const id_usuario_modificado = await findUserId(username);
     if (!id_usuario_modificado) {
@@ -231,15 +244,16 @@ exports.updatePermiso = async (req, res) => {
     );
 
     // 📋 Bitácora
+    const antData = anterior.rows[0] || {};
     await registrarBitacora({
       id_usuario: id_usuario_modificado,
       id_objeto: parseInt(id_objeto),
       tabla: "seguridad.tbl_permisos",
       accion: "UPDATE",
-      descripcion: `Permiso ID ${id_permiso} actualizado por ${username}`,
+      descripcion: `Permiso actualizado: ${nombre_rol} → ${nombre_objeto} por ${username}`,
       detalle: JSON.stringify({
-        antes: anterior.rows[0] || {},
-        despues: { id_rol, id_objeto, can_create, can_read, can_update, can_delete },
+        antes: { nombre_rol: antData.nombre_rol, nombre_objeto: antData.nombre_objeto, can_create: antData.can_create, can_read: antData.can_read, can_update: antData.can_update, can_delete: antData.can_delete },
+        despues: { nombre_rol, nombre_objeto, can_create, can_read, can_update, can_delete },
       }),
     });
 

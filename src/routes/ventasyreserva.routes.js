@@ -4,6 +4,7 @@
 // ============================================================
 const express = require("express");
 const router = express.Router();
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 // Controlador principal de pedidos
 const pedidosCtrl = require("../controllers/ventas/pedidos.controller");
@@ -29,13 +30,13 @@ router.get("/pedidos", pedidosCtrl.getPedidos);
 router.get("/pedidos/:id_pedido", pedidosCtrl.getPedidoById);
 
 // Crear un nuevo pedido con sus detalles
-router.post("/pedidos", pedidosCtrl.insertPedido);
+router.post("/pedidos", verifyPermission("Pedidos", "create"), pedidosCtrl.insertPedido);
 
 // Actualizar pedido y sus detalles
-router.put("/pedidos/:id_pedido", pedidosCtrl.updatePedido);
+router.put("/pedidos/:id_pedido", verifyPermission("Pedidos", "update"), pedidosCtrl.updatePedido);
 
 // Eliminar pedido (y su detalle)
-router.delete("/pedidos/:id_pedido", pedidosCtrl.deletePedido);
+router.delete("/pedidos/:id_pedido", verifyPermission("Pedidos", "delete"), pedidosCtrl.deletePedido);
 
 // Listar estados de pedido
 router.get("/estados-pedido", pedidosCtrl.getEstadosPedido);
