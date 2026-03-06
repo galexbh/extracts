@@ -3,6 +3,7 @@
 // ============================================================
 
 const { pool } = require("../../db");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
 // 🔹 LISTAR ÓRDENES DE COMPRA
@@ -129,6 +130,17 @@ exports.insertOrdenCompra = async (req, res) => {
       flete: result.rows[0].flete,
       message: "✅ Orden creada correctamente.",
     });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_orden_compra",
+      accion: "INSERT",
+      descripcion: `Orden de compra #${result.rows[0].id_orden_compra} creada por ${userEmail || "desconocido"}`,
+      detalle: { id_orden_compra: result.rows[0].id_orden_compra, id_proveedor, factura_proveedor },
+    });
   } catch (error) {
     console.error("❌ Error al insertar orden:", error);
     res.status(500).json({ error: "Error al insertar orden" });
@@ -252,6 +264,16 @@ exports.updateOrdenCompra = async (req, res) => {
     await pool.query("COMMIT");
     res.json({ message: "✅ Orden actualizada correctamente" });
 
+    // 📋 Bitácora
+    const id_usuario = usuario !== "Sistema" ? await findUserId(usuario) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_orden_compra",
+      accion: "UPDATE",
+      descripcion: `Orden #${id_orden_compra} actualizada por ${usuario}`,
+      detalle: { id_orden_compra, estado_anterior: prevNombre, estado_nuevo: nuevoNombre, id_proveedor },
+    });
+
   } catch (error) {
     await pool.query("ROLLBACK");
     console.error("❌ Error al actualizar orden:", error);
@@ -276,6 +298,17 @@ exports.deleteOrdenCompra = async (req, res) => {
 
     res.json({
       message: "🗑 Orden eliminada correctamente.",
+    });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_orden_compra",
+      accion: "DELETE",
+      descripcion: `Orden #${id_orden_compra} eliminada por ${userEmail || "desconocido"}`,
+      detalle: { id_orden_compra },
     });
   } catch (error) {
     await pool.query("ROLLBACK");

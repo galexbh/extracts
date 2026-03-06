@@ -76,6 +76,11 @@ export default function CrudTabla({
   const [loading, setLoading] = useState(false);
   const [sanitizeWarn, setSanitizeWarn] = useState({}); // ⚠️ aviso de carácter bloqueado
 
+  // 🔄 Sincronizar rows cuando initialData cambia (paginación, recarga, etc.)
+  useEffect(() => {
+    setRows(initialData || []);
+  }, [initialData]);
+
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   // ============================================================

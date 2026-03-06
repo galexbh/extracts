@@ -3,6 +3,7 @@
 // ============================================================
 
 const { pool } = require("../../db");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
 // 🔧 Helpers internos
@@ -144,7 +145,7 @@ exports.getDetalleOrdenCompraById = async (req, res) => {
 // ============================================================
 exports.insertDetalleOrdenCompra = async (req, res) => {
   try {
-     const usuario = req.headers["x-user-email"] || "Sistema";
+    const usuario = req.headers["x-user-email"] || "Sistema";
 
     const {
       id_orden_compra,
@@ -185,10 +186,10 @@ exports.insertDetalleOrdenCompra = async (req, res) => {
 
     // 4️⃣ Si la orden está RECIBIDA, sincronizar inventario (Entrada)
     if (nombreEstado && nombreEstado.toUpperCase() === "RECIBIDO") {
- await syncMovimientoEntradaDetalle(
-  { id_detalle_oc, id_insumo, cantidad, usuario },
-  "upsert"
-);
+      await syncMovimientoEntradaDetalle(
+        { id_detalle_oc, id_insumo, cantidad, usuario },
+        "upsert"
+      );
     }
 
     await pool.query("COMMIT");
@@ -196,6 +197,16 @@ exports.insertDetalleOrdenCompra = async (req, res) => {
     res.status(201).json({
       message: "✅ Detalle insertado correctamente",
       id_detalle_oc,
+    });
+
+    // 📋 Bitácora
+    const id_usuario = usuario !== "Sistema" ? await findUserId(usuario) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_detalle_ordencompra",
+      accion: "INSERT",
+      descripcion: `Detalle #${id_detalle_oc} insertado en orden #${id_orden_compra} por ${usuario}`,
+      detalle: { id_detalle_oc, id_orden_compra, id_insumo, cantidad, precio_unitario },
     });
   } catch (error) {
     await pool.query("ROLLBACK");
@@ -266,6 +277,16 @@ exports.updateDetalleOrdenCompra = async (req, res) => {
     await pool.query("COMMIT");
 
     res.json({ message: "✅ Detalle actualizado correctamente" });
+
+    // 📋 Bitácora
+    const id_usuario = usuario !== "Sistema" ? await findUserId(usuario) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_detalle_ordencompra",
+      accion: "UPDATE",
+      descripcion: `Detalle #${id_detalle_oc} actualizado por ${usuario}`,
+      detalle: { id_detalle_oc, id_insumo, cantidad, precio_unitario },
+    });
   } catch (error) {
     await pool.query("ROLLBACK");
     console.error("❌ Error al actualizar detalle:", error);
@@ -297,6 +318,17 @@ exports.deleteDetalleOrdenCompra = async (req, res) => {
     await pool.query("COMMIT");
 
     res.json({ message: "🗑️ Detalle eliminado correctamente" });
+
+    // 📋 Bitácora
+    const usuario = req.headers["x-user-email"] || "Sistema";
+    const id_usuario = usuario !== "Sistema" ? await findUserId(usuario) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_detalle_ordencompra",
+      accion: "DELETE",
+      descripcion: `Detalle #${id_detalle_oc} eliminado por ${usuario}`,
+      detalle: { id_detalle_oc },
+    });
   } catch (error) {
     await pool.query("ROLLBACK");
     console.error("❌ Error al eliminar detalle:", error);

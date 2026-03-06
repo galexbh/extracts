@@ -3,48 +3,15 @@
 // ✅ Versión FINAL — Paginación, Bitácora, Validaciones ERP
 // ============================================================
 const { pool } = require("../../db");
+const { registrarBitacora, extractUsername, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
-// 🛡️ Utilidades
+// 🛡️ Utilidades locales
 // ============================================================
 
 const sanitizeTexto = (valor) => {
   if (!valor) return "";
   return valor.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s._\-]/g, "").trim();
-};
-
-const extractUsername = (req) => {
-  return (
-    req.headers["x-user-email"] ||
-    req.headers["X-User-Email"] ||
-    req.headers["x-User-Email"] ||
-    null
-  );
-};
-
-const findUserId = async (username) => {
-  const result = await pool.query(
-    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
-    [username]
-  );
-  return result.rows.length > 0 ? result.rows[0].id_usuario : null;
-};
-
-/**
- * Registra una acción en la bitácora del sistema.
- */
-const registrarBitacora = async ({ id_usuario, id_objeto, tabla, accion, descripcion, detalle }) => {
-  try {
-    await pool.query(
-      `INSERT INTO seguridad.tbl_ms_bitacora 
-        (id_usuario, id_objeto, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), $1, NOW());`,
-      [id_usuario, id_objeto || null, tabla, accion, descripcion, detalle || null]
-    );
-  } catch (err) {
-    // No interrumpir la operación principal si falla la bitácora
-    console.error("[Bitácora] ❌ Error registrando en bitácora:", err.message);
-  }
 };
 
 // ============================================================

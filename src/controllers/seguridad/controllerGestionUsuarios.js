@@ -5,30 +5,9 @@
 const { pool } = require("../../db");
 const admin = require("../../firebaseAdmin");
 const bcrypt = require("bcryptjs");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 
 console.log("[FIREBASE] ✅ Admin inicializado correctamente");
-
-// 🛡️ Bitácora — registro de auditoría
-const registrarBitacora = async ({ id_usuario, tabla, accion, descripcion, detalle }) => {
-  try {
-    await pool.query(
-      `INSERT INTO seguridad.tbl_ms_bitacora
-        (id_usuario, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
-       VALUES ($1, $2, $3, $4, $5, NOW(), $1, NOW());`,
-      [id_usuario, tabla, accion, descripcion, detalle || null]
-    );
-  } catch (err) {
-    console.error("[Bitácora] ❌ Error:", err.message);
-  }
-};
-
-const findUserId = async (email) => {
-  const r = await pool.query(
-    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
-    [email]
-  );
-  return r.rows.length > 0 ? r.rows[0].id_usuario : null;
-};
 
 // ============================================================
 // 🌐 Traducir errores de Firebase Admin al español

@@ -3,6 +3,7 @@
 // ============================================================
 
 const { pool } = require("../../db");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
 // 🔹 LISTAR PROVEEDORES
@@ -101,6 +102,17 @@ exports.insertProveedor = async (req, res) => {
       message: "✅ Proveedor agregado correctamente",
       id_proveedor: result.rows[0].id_proveedor,
     });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_proveedores",
+      accion: "INSERT",
+      descripcion: `Proveedor "${nombre}" creado por ${userEmail || "desconocido"}`,
+      detalle: { nombre, rtn, telefono, correo, id_proveedor: result.rows[0].id_proveedor },
+    });
   } catch (error) {
     console.error("❌ Error al insertar proveedor:", error);
     res.status(500).json({ error: error.message });
@@ -157,6 +169,17 @@ exports.updateProveedor = async (req, res) => {
       return res.status(404).json({ error: "Proveedor no encontrado" });
 
     res.json({ message: "✅ Proveedor actualizado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_proveedores",
+      accion: "UPDATE",
+      descripcion: `Proveedor ID ${id_proveedor} actualizado por ${userEmail || "desconocido"}`,
+      detalle: { id_proveedor, nombre, rtn, telefono, correo },
+    });
   } catch (error) {
     console.error("❌ Error al actualizar proveedor:", error);
     res.status(500).json({ error: "Error al actualizar proveedor" });
@@ -169,8 +192,25 @@ exports.updateProveedor = async (req, res) => {
 exports.deleteProveedor = async (req, res) => {
   const { id } = req.params;
   try {
+    // Datos antes de eliminar para bitácora
+    const prevData = await pool.query(
+      "SELECT nombre, rtn FROM compras.tbl_proveedores WHERE id_proveedor=$1", [Number(id)]
+    );
+
     await pool.query("DELETE FROM compras.tbl_proveedores WHERE id_proveedor=$1", [Number(id)]);
     res.json({ message: "🗑️ Proveedor eliminado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    const datos = prevData.rows[0] || {};
+    await registrarBitacora({
+      id_usuario,
+      tabla: "compras.tbl_proveedores",
+      accion: "DELETE",
+      descripcion: `Proveedor "${datos.nombre || id}" eliminado por ${userEmail || "desconocido"}`,
+      detalle: { id_proveedor: id, ...datos },
+    });
   } catch (error) {
     if (error.code === "23503") {
       return res.status(400).json({

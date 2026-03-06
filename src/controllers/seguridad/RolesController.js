@@ -3,39 +3,7 @@
 // ✅ Versión mejorada — Duplicados, dependencias, bitácora
 // ============================================================
 const { pool } = require("../../db");
-
-// ============================================================
-// 🛡️ Utilidades reutilizables
-// ============================================================
-const extractUsername = (req) => {
-  return (
-    req.headers["x-user-email"] ||
-    req.headers["X-User-Email"] ||
-    req.headers["x-User-Email"] ||
-    null
-  );
-};
-
-const findUserId = async (username) => {
-  const result = await pool.query(
-    "SELECT id_usuario FROM seguridad.tbl_usuarios WHERE username ILIKE $1;",
-    [username]
-  );
-  return result.rows.length > 0 ? result.rows[0].id_usuario : null;
-};
-
-const registrarBitacora = async ({ id_usuario, tabla, accion, descripcion, detalle }) => {
-  try {
-    await pool.query(
-      `INSERT INTO seguridad.tbl_ms_bitacora
-        (id_usuario, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
-       VALUES ($1, $2, $3, $4, $5, NOW(), $1, NOW());`,
-      [id_usuario, tabla, accion, descripcion, detalle || null]
-    );
-  } catch (err) {
-    console.error("[Bitácora] ❌ Error registrando:", err.message);
-  }
-};
+const { registrarBitacora, extractUsername, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
 // 🔹 GET: listar todos los roles
