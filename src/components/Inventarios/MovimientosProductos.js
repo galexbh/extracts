@@ -198,7 +198,7 @@ export default function MovimientosProductos() {
         <Heading size="md" color="teal.700">Movimientos de Productos</Heading>
 
         <HStack>
-          <Button leftIcon={<FaPlus />} colorScheme="green" onClick={() => setModal(true)}>Nuevo</Button>
+      
           <Button leftIcon={<FaBroom />} onClick={limpiarFiltros}>Limpiar</Button>
           <Button leftIcon={<FaSync />} colorScheme="teal" onClick={() => cargarMovimientos()}>Refrescar</Button>
           <Button leftIcon={<FaFilePdf />} colorScheme="red" onClick={exportarPDF}>PDF</Button>
