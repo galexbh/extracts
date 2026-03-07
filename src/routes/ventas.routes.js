@@ -17,8 +17,8 @@ const facturasRoutes = require("./facturas.routes");
 // 🔹 CLIENTES
 // ============================================================
 
-router.get("/clientes", clientesCtrl.getClientes);
-router.get("/clientes/:id_cliente", clientesCtrl.getClienteById);
+router.get("/clientes", verifyPermission("Clientes", "read"), clientesCtrl.getClientes);
+router.get("/clientes/:id_cliente", verifyPermission("Clientes", "read"), clientesCtrl.getClienteById);
 router.post("/clientes", verifyPermission("Clientes", "create"), clientesCtrl.insertCliente);
 router.put("/clientes/:id_cliente", verifyPermission("Clientes", "update"), clientesCtrl.updateCliente);
 router.delete("/clientes/:id_cliente", verifyPermission("Clientes", "delete"), clientesCtrl.deleteCliente);

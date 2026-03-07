@@ -30,16 +30,28 @@ import {
   StatHelpText,
   Text,
   HStack,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure,
+  FormControl,
+  FormLabel,
+  Select,
+  Input,
 } from "@chakra-ui/react";
 
 import {
   FaArrowLeft,
-  FaFilePdf,
-  FaFileExcel,
+  FaFileExport,
   FaUserFriends,
   FaCheckCircle,
   FaUserSlash,
 } from "react-icons/fa";
+import { DownloadIcon } from "@chakra-ui/icons";
 
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "../Seguridad/CrudTabla";
@@ -90,6 +102,18 @@ export default function Clientes() {
   const [tiposCliente, setTiposCliente] = useState([]);
   const [estadosCliente, setEstadosCliente] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal de exportación
+  const exportModal = useDisclosure();
+  const [exportFormat, setExportFormat] = useState("excel");
+  const [expNombre, setExpNombre] = useState("");
+  const [expEstado, setExpEstado] = useState("");
+  const [expTipo, setExpTipo] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  // Colores del modal
+  const modalHeadBg = useColorModeValue("teal.50", "gray.700");
+  const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
   // 🔹 Cargar clientes desde la API
@@ -270,42 +294,96 @@ export default function Clientes() {
 
 
   // ============================================================
-  // 🧾 Exportar PDF (logo + fecha/hora)
+  // 🔧 Helpers de exportación
   // ============================================================
-  const handleExportPDF = async () => {
-    try {
-      const doc = new jsPDF("landscape");
-      const fechaHora = new Date().toLocaleString("es-HN");
+  const buildFilterText = (filters = {}) => {
+    const parts = [];
+    if (filters.nombre) parts.push(`Nombre: ${filters.nombre}`);
+    if (filters.estado) parts.push(`Estado: ${filters.estado}`);
+    if (filters.tipo) parts.push(`Tipo: ${filters.tipo}`);
+    return parts.length > 0 ? parts.join("  |  ") : "Sin filtros aplicados";
+  };
 
+  const getFilteredData = (filters = {}) => {
+    let filtered = [...data];
+    if (filters.nombre) {
+      const q = filters.nombre.toLowerCase();
+      filtered = filtered.filter(r => (r.nombre_cliente || "").toLowerCase().includes(q));
+    }
+    if (filters.estado) {
+      const q = filters.estado.toLowerCase();
+      filtered = filtered.filter(r => (r.estado_cliente || r.nombre_estado || "").toLowerCase() === q);
+    }
+    if (filters.tipo) {
+      const q = filters.tipo.toLowerCase();
+      filtered = filtered.filter(r => (r.tipo_cliente || r.nombre_tipo || "").toLowerCase() === q);
+    }
+    return filtered;
+  };
+
+  const imgToDataURL = (src) =>
+    new Promise((resolve, reject) => {
       const img = new Image();
-      img.src = extractusLogo;
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) { reject(e); }
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
 
-      await new Promise((resolve, reject) => {
-        img.onload = () => {
-          doc.addImage(img, "PNG", 245, 5, 20, 15);
-          resolve();
-        };
-        img.onerror = (err) => reject(err);
-      });
+  // ============================================================
+  // 📤 Exportar PDF — Estilo profesional
+  // ============================================================
+  const handleExportPDF = async (filters = {}) => {
+    try {
+      setExporting(true);
+      const rows = getFilteredData(filters);
 
-      doc.setFontSize(14);
-      doc.text("Listado de Clientes", 14, 15);
+      if (rows.length === 0) {
+        toast({ title: "No hay datos para exportar", status: "warning", duration: 3000, isClosable: true });
+        return;
+      }
+
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.width;
+
+      // ── Logo ──
+      try {
+        const dataURL = await imgToDataURL(extractusLogo);
+        doc.addImage(dataURL, "PNG", 40, 20, 45, 45);
+      } catch (e) { /* sin logo */ }
+
+      // ── Título ──
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(25, 55, 80);
+      doc.text("REPORTE DE CLIENTES", pageWidth / 2, 45, { align: "center" });
+
+      // ── Fecha/hora ──
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.text(`Generado: ${fechaHora}`, 14, 22);
+      doc.setTextColor(90);
+      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
 
-      const columns = [
-        "ID",
-        "Nombre",
-        "RTN / ID",
-        "Tipo Cliente",
-        "Dirección",
-        "Teléfono",
-        "Correo",
-        "Estado",
-        "Fecha Creación",
-      ];
+      // ── Filtros ──
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
 
-      const rows = data.map((r) => [
+      // ── Línea separadora ──
+      doc.setDrawColor(0, 158, 115);
+      doc.setLineWidth(1);
+      doc.line(40, 90, pageWidth - 40, 90);
+
+      // ── Tabla ──
+      const tableData = rows.map(r => [
         r.id_cliente,
         r.nombre_cliente,
         r.rtn || "",
@@ -314,55 +392,114 @@ export default function Clientes() {
         r.telefono || "",
         r.correo_electronico || "",
         r.estado_cliente || r.nombre_estado || "",
-        r.fecha_creacion
-          ? new Date(r.fecha_creacion).toISOString().split("T")[0]
-          : "",
+        r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
       ]);
 
       autoTable(doc, {
-        head: [columns],
-        body: rows,
-        startY: 28,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [0, 158, 115] },
+        startY: 105,
+        head: [["ID", "Nombre", "RTN / ID", "Tipo", "Dirección", "Teléfono", "Correo", "Estado", "Fecha"]],
+        body: tableData,
+        styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
+        headStyles: {
+          fillColor: [0, 158, 115],
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        didDrawPage: () => {
+          const ps = doc.internal.pageSize;
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+        },
       });
 
-      doc.save(`Clientes_${new Date().toISOString().slice(0, 10)}.pdf`);
+      // ── Resumen ──
+      const finalY = doc.lastAutoTable.finalY + 25;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(25, 55, 80);
+      doc.text("RESUMEN", 40, finalY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60);
+      let y = finalY + 18;
+      doc.text(`Total de clientes exportados: ${rows.length}`, 50, y);
+      y += 16;
+      const activos = rows.filter(r => (r.estado_cliente || r.nombre_estado || "").toLowerCase() === "activo").length;
+      const inactivos = rows.length - activos;
+      doc.text(`Activos: ${activos}`, 50, y); y += 16;
+      doc.text(`Inactivos: ${inactivos}`, 50, y);
+
+      doc.save(`Clientes_Extractus_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
       console.error("❌ Error exportando PDF:", err);
-      toast({
-        title: "Error al exportar PDF",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-        position: "top",
-      });
+      toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
+    } finally {
+      setExporting(false);
     }
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // 📊 Exportar Excel — Estilo profesional
   // ============================================================
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (filters = {}) => {
     try {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Clientes");
+      setExporting(true);
+      const rows = getFilteredData(filters);
 
-      sheet.addRow([
-        "ID",
-        "Nombre",
-        "RTN / ID",
-        "Tipo Cliente",
-        "Dirección",
-        "Teléfono",
-        "Correo",
-        "Estado",
-        "Fecha Creación",
-      ]);
+      if (rows.length === 0) {
+        toast({ title: "No hay datos para exportar", status: "warning", duration: 3000, isClosable: true });
+        return;
+      }
 
-      data.forEach((r) => {
-        sheet.addRow([
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Extractus ERP";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Clientes");
+
+      // ── Título + Filtros ──
+      ws.mergeCells("A1:I1");
+      const titleCell = ws.getCell("A1");
+      titleCell.value = "Reporte de Clientes — Extractus";
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
+      titleCell.alignment = { horizontal: "center" };
+
+      ws.mergeCells("A2:I2");
+      const filterCell = ws.getCell("A2");
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
+      filterCell.alignment = { horizontal: "center" };
+
+      // ── Columnas ──
+      const columns = [
+        { header: "ID", key: "id", width: 8 },
+        { header: "Nombre", key: "nombre", width: 25 },
+        { header: "RTN / ID", key: "rtn", width: 18 },
+        { header: "Tipo", key: "tipo", width: 15 },
+        { header: "Dirección", key: "direccion", width: 30 },
+        { header: "Teléfono", key: "telefono", width: 14 },
+        { header: "Correo", key: "correo", width: 28 },
+        { header: "Estado", key: "estado", width: 12 },
+        { header: "Fecha Creación", key: "fecha", width: 16 },
+      ];
+
+      // Header en fila 4
+      const headerRow = 4;
+      columns.forEach((col, i) => {
+        const cell = ws.getCell(headerRow, i + 1);
+        cell.value = col.header;
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF009E73" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = { bottom: { style: "thin", color: { argb: "FF007A5A" } } };
+      });
+
+      // ── Datos ──
+      rows.forEach((r, idx) => {
+        const rowNum = headerRow + 1 + idx;
+        const values = [
           r.id_cliente,
           r.nombre_cliente,
           r.rtn || "",
@@ -371,33 +508,36 @@ export default function Clientes() {
           r.telefono || "",
           r.correo_electronico || "",
           r.estado_cliente || r.nombre_estado || "",
-          r.fecha_creacion
-            ? new Date(r.fecha_creacion).toISOString().split("T")[0]
-            : "",
-        ]);
+          r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
+        ];
+        values.forEach((v, i) => { ws.getCell(rowNum, i + 1).value = v; });
+        // Zebra
+        if (idx % 2 === 1) {
+          for (let i = 1; i <= columns.length; i++) {
+            ws.getCell(rowNum, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F7F0" } };
+          }
+        }
       });
 
-      sheet.getRow(1).font = { bold: true };
-      sheet.columns.forEach((col) => {
-        col.width = 20;
+      // ── Auto-width ──
+      columns.forEach((col, i) => {
+        let maxLen = col.header.length;
+        rows.forEach(r => {
+          const vals = [r.id_cliente, r.nombre_cliente, r.rtn, r.tipo_cliente || r.nombre_tipo, r.direccion, r.telefono, r.correo_electronico, r.estado_cliente || r.nombre_estado, ""];
+          const v = String(vals[i] ?? "");
+          if (v.length > maxLen) maxLen = v.length;
+        });
+        ws.getColumn(i + 1).width = Math.min(Math.max(col.width, maxLen + 2), 50);
       });
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      saveAs(blob, `Clientes_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const buffer = await wb.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `Clientes_Extractus_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
       console.error("❌ Error exportando Excel:", err);
-      toast({
-        title: "Error al exportar Excel",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-        position: "top",
-      });
+      toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -455,28 +595,19 @@ export default function Clientes() {
               </Text>
             </Box>
 
-            <HStack spacing={2}>
-              <Tooltip label="Exportar listado a PDF">
-                <Button
-                  size="sm"
-                  colorScheme="red"
-                  leftIcon={<FaFilePdf />}
-                  onClick={handleExportPDF}
-                >
-                  PDF
-                </Button>
-              </Tooltip>
-              <Tooltip label="Exportar listado a Excel">
-                <Button
-                  size="sm"
-                  colorScheme="green"
-                  leftIcon={<FaFileExcel />}
-                  onClick={handleExportExcel}
-                >
-                  Excel
-                </Button>
-              </Tooltip>
-            </HStack>
+            <Button
+              size="sm"
+              colorScheme="teal"
+              leftIcon={<FaFileExport />}
+              onClick={() => {
+                setExpNombre(""); setExpEstado(""); setExpTipo("");
+                setExportFormat("excel");
+                exportModal.onOpen();
+              }}
+              isDisabled={exporting}
+            >
+              Exportar
+            </Button>
           </Flex>
         </CardHeader>
 
@@ -593,6 +724,92 @@ export default function Clientes() {
           </Box>
         </CardBody>
       </Card>
+
+      {/* 📤 Modal de Exportación */}
+      <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader bg={modalHeadBg} borderTopRadius="md">
+            <HStack spacing={2}>
+              <DownloadIcon color="teal.500" />
+              <Text>Exportar Clientes</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody py={5}>
+            <Text fontSize="sm" color="gray.500" mb={4}>
+              Selecciona el formato y los filtros para generar tu reporte.
+              Si no aplicas filtros, se exportarán todos los clientes.
+            </Text>
+
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato</FormLabel>
+              <Select value={exportFormat} onChange={e => setExportFormat(e.target.value)} bg={inputBg}>
+                <option value="excel">📊 Excel (.xlsx)</option>
+                <option value="pdf">📄 PDF (.pdf)</option>
+              </Select>
+            </FormControl>
+
+            <Divider my={4} />
+
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+
+            <FormControl mb={3}>
+              <FormLabel fontSize="sm">Por nombre</FormLabel>
+              <Input
+                placeholder="Ej: Juan Perez"
+                value={expNombre}
+                onChange={e => setExpNombre(e.target.value)}
+                size="sm"
+                bg={inputBg}
+              />
+            </FormControl>
+
+            <FormControl mb={3}>
+              <FormLabel fontSize="sm">Por estado</FormLabel>
+              <Select placeholder="Todos los estados" value={expEstado} onChange={e => setExpEstado(e.target.value)} size="sm" bg={inputBg}>
+                {estadosCliente.map(e => (
+                  <option key={e.id_estado_cliente} value={e.nombre_estado}>{e.nombre_estado}</option>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl mb={3}>
+              <FormLabel fontSize="sm">Por tipo de cliente</FormLabel>
+              <Select placeholder="Todos los tipos" value={expTipo} onChange={e => setExpTipo(e.target.value)} size="sm" bg={inputBg}>
+                {tiposCliente.map(t => (
+                  <option key={t.id_tipo_cliente} value={t.nombre_tipo}>{t.nombre_tipo}</option>
+                ))}
+              </Select>
+            </FormControl>
+          </ModalBody>
+
+          <ModalFooter>
+            <Button
+              colorScheme="teal"
+              leftIcon={<DownloadIcon />}
+              isLoading={exporting}
+              loadingText="Generando..."
+              onClick={async () => {
+                const filters = {
+                  nombre: expNombre || undefined,
+                  estado: expEstado || undefined,
+                  tipo: expTipo || undefined,
+                };
+                if (exportFormat === "pdf") {
+                  await handleExportPDF(filters);
+                } else {
+                  await handleExportExcel(filters);
+                }
+                exportModal.onClose();
+              }}
+            >
+              Exportar
+            </Button>
+            <Button ml={3} onClick={exportModal.onClose}>Cancelar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

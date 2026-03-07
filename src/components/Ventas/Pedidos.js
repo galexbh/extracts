@@ -41,6 +41,13 @@ import {
   InputLeftElement,
   FormLabel,
   FormControl,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
 } from "@chakra-ui/react";
 import {
   FaPlus,
@@ -50,12 +57,14 @@ import {
   FaEdit,
   FaFilePdf,
   FaFileExcel,
+  FaFileExport,
   FaTimes,
   FaArrowLeft,
   FaSearch,
   FaChevronLeft,
   FaChevronRight,
 } from "react-icons/fa";
+import { DownloadIcon } from "@chakra-ui/icons";
 
 import { useNavigate } from "react-router-dom";
 import api from "../../api/apiClient";
@@ -87,6 +96,18 @@ export default function Pedidos() {
   const [editando, setEditando] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Export modal
+  const exportModal = useDisclosure();
+  const [exportFormat, setExportFormat] = useState("excel");
+  const [expCliente, setExpCliente] = useState("");
+  const [expEstado, setExpEstado] = useState("");
+  const [expDesde, setExpDesde] = useState("");
+  const [expHasta, setExpHasta] = useState("");
+
+  const modalHeadBg = useColorModeValue("teal.50", "gray.700");
+  const modalInputBg = useColorModeValue("white", "gray.600");
 
   const [idCliente, setIdCliente] = useState("");
   const [fechaReserva, setFechaReserva] = useState("");
@@ -116,6 +137,7 @@ export default function Pedidos() {
   const textColor = useColorModeValue("gray.800", "gray.100");
   const tealHeaderBg = useColorModeValue("teal.500", "teal.700");
   const emptyTextColor = useColorModeValue("gray.400", "gray.500");
+  const labelColor = useColorModeValue("gray.500", "gray.300");
 
   const formatearL = (n) =>
     `L. ${Number(n || 0).toLocaleString("es-HN", {
@@ -379,143 +401,275 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 📄 Exportación PDF / Excel
+  // 📄 Exportación individual (per-row) — sin cambios
   // ============================================================
-  const exportarPDF = async (pedido = null) => {
+  const exportarPDFIndividual = async (pedido) => {
     try {
       const doc = new jsPDF();
       doc.addImage(logo, "PNG", 15, 10, 25, 15);
       doc.setFontSize(16);
-      doc.text("EXTRACTUS - Detalle de Pedidos", 105, 20, {
-        align: "center",
+      doc.text("EXTRACTUS - Detalle de Pedido", 105, 20, { align: "center" });
+
+      const res = await api.get(`/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`);
+      const enc = res.data.pedido;
+      const detalle = res.data.detalle;
+
+      doc.setFontSize(12);
+      doc.text(`Pedido #${enc.id_pedido}`, 14, 40);
+      doc.text(`Cliente: ${enc.nombre_cliente}`, 14, 46);
+      doc.text(`Reserva: ${enc.fecha_reserva?.substring(0, 10)}`, 14, 52);
+      doc.text(`Entrega: ${enc.fecha_entrega?.substring(0, 10)}`, 14, 58);
+
+      autoTable(doc, {
+        startY: 68,
+        head: [["Producto", "Unidad", "Cantidad", "Precio Unitario", "Subtotal"]],
+        body: detalle.map(d => [
+          d.nombre_producto, d.unidad_medida, d.cantidad,
+          formatearL(d.precio_unitario), formatearL(d.subtotal),
+        ]),
+        headStyles: { fillColor: [0, 128, 128] },
       });
 
-      const renderPedido = (enc, detalle, addPageFirst = false) => {
-        if (addPageFirst) doc.addPage();
-
-        const startY = doc.lastAutoTable
-          ? doc.lastAutoTable.finalY + 20
-          : 40;
-
-        doc.setFontSize(12);
-        doc.text(`Pedido #${enc.id_pedido}`, 14, startY);
-        doc.text(`Cliente: ${enc.nombre_cliente}`, 14, startY + 6);
-        doc.text(`Reserva: ${enc.fecha_reserva}`, 14, startY + 12);
-        doc.text(`Entrega: ${enc.fecha_entrega}`, 14, startY + 18);
-
-        autoTable(doc, {
-          startY: startY + 28,
-          head: [
-            ["Producto", "Unidad", "Cantidad", "Precio Unitario", "Subtotal"],
-          ],
-          body: detalle.map((d) => [
-            d.nombre_producto,
-            d.unidad_medida,
-            d.cantidad,
-            formatearL(d.precio_unitario),
-            formatearL(d.subtotal),
-          ]),
-          headStyles: { fillColor: [0, 128, 128] },
-        });
-
-        const total = detalle.reduce((acc, d) => acc + Number(d.subtotal), 0);
-        doc.text(
-          `Total: ${formatearL(total)}`,
-          160,
-          doc.lastAutoTable.finalY + 10
-        );
-      };
-
-      if (pedido) {
-        const res = await api.get(
-          `/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`
-        );
-        renderPedido(res.data.pedido, res.data.detalle, false);
-        doc.save(`Pedido_${pedido.id_pedido}.pdf`);
-        return;
-      }
-
-      // Bug #4 corregido: el primer pedido no agrega página, los demás sí
-      for (let i = 0; i < pedidos.length; i++) {
-        const res = await api.get(
-          `/ventas/ventasyreserva/pedidos/${pedidos[i].id_pedido}`
-        );
-        renderPedido(res.data.pedido, res.data.detalle, i > 0);
-      }
-
-      doc.save("Pedidos_Completos.pdf");
+      const total = detalle.reduce((acc, d) => acc + Number(d.subtotal), 0);
+      doc.text(`Total: ${formatearL(total)}`, 160, doc.lastAutoTable.finalY + 10);
+      doc.save(`Pedido_${pedido.id_pedido}.pdf`);
     } catch (err) {
-      toast({
-        title: "Error exportando PDF",
-        description: err.message,
-        status: "error",
-      });
+      toast({ title: "Error exportando PDF", description: err.message, status: "error" });
     }
   };
 
-  const exportarExcel = async (pedido = null) => {
+  const exportarExcelIndividual = async (pedido) => {
     try {
+      const res = await api.get(`/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`);
       const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet(`Pedido_${pedido.id_pedido}`);
+      ws.addRow(["Producto", "Unidad", "Cantidad", "Precio Unitario", "Subtotal"]);
+      ws.getRow(1).font = { bold: true };
+      res.data.detalle.forEach(d => ws.addRow([d.nombre_producto, d.unidad_medida, d.cantidad, d.precio_unitario, d.subtotal]));
+      ws.columns.forEach(col => { col.width = 20; });
+      const buffer = await wb.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `Pedido_${pedido.id_pedido}.xlsx`);
+    } catch (err) {
+      toast({ title: "Error exportando Excel", description: err.message, status: "error" });
+    }
+  };
 
-      if (pedido) {
-        const res = await api.get(
-          `/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`
-        );
-        const ws = wb.addWorksheet(`Pedido_${pedido.id_pedido}`);
+  // ============================================================
+  // 🔧 Helpers de exportación masiva
+  // ============================================================
+  const buildFilterText = (f = {}) => {
+    const parts = [];
+    if (f.cliente) parts.push(`Cliente: ${f.cliente}`);
+    if (f.estado) parts.push(`Estado: ${f.estado}`);
+    if (f.desde) parts.push(`Desde: ${f.desde}`);
+    if (f.hasta) parts.push(`Hasta: ${f.hasta}`);
+    return parts.length > 0 ? parts.join("  |  ") : "Sin filtros aplicados";
+  };
 
-        ws.addRow([
-          "Producto",
-          "Unidad",
-          "Cantidad",
-          "Precio Unitario",
-          "Subtotal",
-        ]);
+  const getFilteredExportData = (f = {}) => {
+    let data = [...pedidos];
+    if (f.cliente) {
+      const q = f.cliente.toLowerCase();
+      data = data.filter(p => (p.nombre_cliente || "").toLowerCase().includes(q));
+    }
+    if (f.estado) {
+      data = data.filter(p => p.estado_pedido === f.estado);
+    }
+    if (f.desde) {
+      data = data.filter(p => p.fecha_reserva && p.fecha_reserva.substring(0, 10) >= f.desde);
+    }
+    if (f.hasta) {
+      data = data.filter(p => p.fecha_entrega && p.fecha_entrega.substring(0, 10) <= f.hasta);
+    }
+    return data;
+  };
 
-        res.data.detalle.forEach((d) =>
-          ws.addRow([
-            d.nombre_producto,
-            d.unidad_medida,
-            d.cantidad,
-            d.precio_unitario,
-            d.subtotal,
-          ])
-        );
-      } else {
-        const ws = wb.addWorksheet("Pedidos");
+  const imgToDataURL = (src) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) { reject(e); }
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
 
-        ws.addRow(["ID", "Cliente", "Reserva", "Entrega", "Total"]);
-
-        for (const p of pedidos) {
-          const res = await api.get(
-            `/ventas/ventasyreserva/pedidos/${p.id_pedido}`
-          );
-
-          const total = res.data.detalle.reduce(
-            (acc, d) => acc + Number(d.subtotal),
-            0
-          );
-
-          ws.addRow([
-            p.id_pedido,
-            p.nombre_cliente,
-            p.fecha_reserva,
-            p.fecha_entrega,
-            total,
-          ]);
-        }
+  // ============================================================
+  // 📤 Exportar PDF masivo — Estilo profesional
+  // ============================================================
+  const exportarPDFMasivo = async (filters = {}) => {
+    try {
+      setExporting(true);
+      const rows = getFilteredExportData(filters);
+      if (rows.length === 0) {
+        toast({ title: "No hay pedidos para exportar", status: "warning", duration: 3000 });
+        return;
       }
 
-      const buffer = await wb.xlsx.writeBuffer();
-      saveAs(
-        new Blob([buffer]),
-        pedido ? `Pedido_${pedido.id_pedido}.xlsx` : "Pedidos.xlsx"
-      );
-    } catch (err) {
-      toast({
-        title: "Error exportando Excel",
-        description: err.message,
-        status: "error",
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.width;
+
+      try {
+        const dataURL = await imgToDataURL(logo);
+        doc.addImage(dataURL, "PNG", 40, 20, 45, 45);
+      } catch (e) { /* sin logo */ }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(25, 55, 80);
+      doc.text("REPORTE DE PEDIDOS", pageWidth / 2, 45, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(90);
+      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
+
+      doc.setDrawColor(0, 128, 128);
+      doc.setLineWidth(1);
+      doc.line(40, 90, pageWidth - 40, 90);
+
+      const tableData = rows.map(p => [
+        p.id_pedido,
+        p.nombre_cliente || "",
+        p.creado_por || "—",
+        p.fecha_reserva?.substring(0, 10) || "",
+        p.fecha_entrega?.substring(0, 10) || "",
+        p.estado_pedido || "",
+        formatearL(p.total),
+      ]);
+
+      autoTable(doc, {
+        startY: 105,
+        head: [["ID", "Cliente", "Vendedor", "F. Reserva", "F. Entrega", "Estado", "Total"]],
+        body: tableData,
+        styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
+        headStyles: { fillColor: [0, 128, 128], textColor: 255, fontStyle: "bold" },
+        didDrawPage: () => {
+          const ps = doc.internal.pageSize;
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+        },
       });
+
+      const finalY = doc.lastAutoTable.finalY + 25;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(25, 55, 80);
+      doc.text("RESUMEN", 40, finalY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60);
+      let y = finalY + 18;
+      doc.text(`Total de pedidos: ${rows.length}`, 50, y); y += 16;
+      const totalVentas = rows.reduce((a, p) => a + Number(p.total || 0), 0);
+      doc.text(`Monto total: ${formatearL(totalVentas)}`, 50, y);
+
+      doc.save(`Pedidos_Extractus_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast({ title: "PDF generado correctamente", status: "success", duration: 2500 });
+    } catch (err) {
+      toast({ title: "Error al generar PDF", description: err.message, status: "error" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ============================================================
+  // 📊 Exportar Excel masivo — Estilo profesional
+  // ============================================================
+  const exportarExcelMasivo = async (filters = {}) => {
+    try {
+      setExporting(true);
+      const rows = getFilteredExportData(filters);
+      if (rows.length === 0) {
+        toast({ title: "No hay pedidos para exportar", status: "warning", duration: 3000 });
+        return;
+      }
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Extractus ERP";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Pedidos");
+
+      ws.mergeCells("A1:G1");
+      const titleCell = ws.getCell("A1");
+      titleCell.value = "Reporte de Pedidos — Extractus";
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF008080" } };
+      titleCell.alignment = { horizontal: "center" };
+
+      ws.mergeCells("A2:G2");
+      const filterCell = ws.getCell("A2");
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
+      filterCell.alignment = { horizontal: "center" };
+
+      const columns = [
+        { header: "ID", key: "id", width: 8 },
+        { header: "Cliente", key: "cliente", width: 25 },
+        { header: "Vendedor", key: "vendedor", width: 22 },
+        { header: "F. Reserva", key: "reserva", width: 14 },
+        { header: "F. Entrega", key: "entrega", width: 14 },
+        { header: "Estado", key: "estado", width: 14 },
+        { header: "Total", key: "total", width: 16 },
+      ];
+
+      const headerRow = 4;
+      columns.forEach((col, i) => {
+        const cell = ws.getCell(headerRow, i + 1);
+        cell.value = col.header;
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF008080" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.border = { bottom: { style: "thin", color: { argb: "FF006666" } } };
+      });
+
+      rows.forEach((p, idx) => {
+        const rowNum = headerRow + 1 + idx;
+        const values = [
+          p.id_pedido,
+          p.nombre_cliente || "",
+          p.creado_por || "—",
+          p.fecha_reserva?.substring(0, 10) || "",
+          p.fecha_entrega?.substring(0, 10) || "",
+          p.estado_pedido || "",
+          Number(p.total || 0),
+        ];
+        values.forEach((v, i) => { ws.getCell(rowNum, i + 1).value = v; });
+        if (idx % 2 === 1) {
+          for (let i = 1; i <= columns.length; i++) {
+            ws.getCell(rowNum, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0F2F1" } };
+          }
+        }
+      });
+
+      columns.forEach((col, i) => {
+        let maxLen = col.header.length;
+        rows.forEach(p => {
+          const vals = [p.id_pedido, p.nombre_cliente, p.creado_por, p.fecha_reserva?.substring(0, 10), p.fecha_entrega?.substring(0, 10), p.estado_pedido, String(p.total)];
+          const v = String(vals[i] ?? "");
+          if (v.length > maxLen) maxLen = v.length;
+        });
+        ws.getColumn(i + 1).width = Math.min(Math.max(col.width, maxLen + 2), 50);
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      saveAs(new Blob([buffer]), `Pedidos_Extractus_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast({ title: "Excel generado correctamente", status: "success", duration: 2500 });
+    } catch (err) {
+      toast({ title: "Error al generar Excel", description: err.message, status: "error" });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -571,18 +725,16 @@ export default function Pedidos() {
 
         <HStack spacing={3}>
           <Button
-            leftIcon={<FaFilePdf />}
+            leftIcon={<FaFileExport />}
             colorScheme="whiteAlpha"
-            onClick={() => exportarPDF()}
+            onClick={() => {
+              setExpCliente(""); setExpEstado(""); setExpDesde(""); setExpHasta("");
+              setExportFormat("excel");
+              exportModal.onOpen();
+            }}
+            isDisabled={exporting}
           >
-            Exportar PDF
-          </Button>
-          <Button
-            leftIcon={<FaFileExcel />}
-            colorScheme="whiteAlpha"
-            onClick={() => exportarExcel()}
-          >
-            Exportar Excel
+            Exportar
           </Button>
         </HStack>
       </Flex>
@@ -599,7 +751,7 @@ export default function Pedidos() {
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={4}>
             {/* Cliente */}
             <FormControl>
-              <FormLabel fontSize="xs" color="gray.500" mb={1}>Cliente</FormLabel>
+              <FormLabel fontSize="xs" color={labelColor} mb={1}>Cliente</FormLabel>
               <Select
                 placeholder="Seleccione Cliente"
                 value={idCliente}
@@ -617,7 +769,7 @@ export default function Pedidos() {
 
             {/* Fecha Reserva */}
             <FormControl>
-              <FormLabel fontSize="xs" color="gray.500" mb={1}>Fecha de Reserva</FormLabel>
+              <FormLabel fontSize="xs" color={labelColor} mb={1}>Fecha de Reserva</FormLabel>
               <Input
                 type="date"
                 value={fechaReserva}
@@ -629,7 +781,7 @@ export default function Pedidos() {
 
             {/* Fecha Entrega */}
             <FormControl>
-              <FormLabel fontSize="xs" color="gray.500" mb={1}>Fecha de Entrega</FormLabel>
+              <FormLabel fontSize="xs" color={labelColor} mb={1}>Fecha de Entrega</FormLabel>
               <Input
                 type="date"
                 value={fechaEntrega}
@@ -644,7 +796,7 @@ export default function Pedidos() {
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mb={4}>
             {/* Observaciones */}
             <FormControl>
-              <FormLabel fontSize="xs" color="gray.500" mb={1}>Observaciones</FormLabel>
+              <FormLabel fontSize="xs" color={labelColor} mb={1}>Observaciones</FormLabel>
               <Textarea
                 placeholder="Observaciones (opcional)"
                 value={observaciones}
@@ -981,7 +1133,7 @@ export default function Pedidos() {
                               icon={<FaFilePdf />}
                               size="sm"
                               colorScheme="red"
-                              onClick={() => exportarPDF(p)}
+                              onClick={() => exportarPDFIndividual(p)}
                             />
                           </Tooltip>
 
@@ -990,7 +1142,7 @@ export default function Pedidos() {
                               icon={<FaFileExcel />}
                               size="sm"
                               colorScheme="green"
-                              onClick={() => exportarExcel(p)}
+                              onClick={() => exportarExcelIndividual(p)}
                             />
                           </Tooltip>
                         </HStack>
@@ -1080,6 +1232,89 @@ export default function Pedidos() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+
+      {/* 📤 Modal de Exportación */}
+      <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader bg={modalHeadBg} borderTopRadius="md">
+            <HStack spacing={2}>
+              <DownloadIcon color="teal.500" />
+              <Text>Exportar Pedidos</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody py={5}>
+            <Text fontSize="sm" color="gray.500" mb={4}>
+              Selecciona el formato y los filtros para generar tu reporte.
+              Sin filtros se exportarán todos los pedidos.
+            </Text>
+
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato</FormLabel>
+              <Select value={exportFormat} onChange={e => setExportFormat(e.target.value)} bg={modalInputBg}>
+                <option value="excel">📊 Excel (.xlsx)</option>
+                <option value="pdf">📄 PDF (.pdf)</option>
+              </Select>
+            </FormControl>
+
+            <Divider my={4} />
+
+            <Text fontWeight="bold" mb={3} color="teal.400">Filtros de exportación</Text>
+
+            <FormControl mb={3}>
+              <FormLabel fontSize="sm">Por cliente</FormLabel>
+              <Input placeholder="Ej: Juan Perez" value={expCliente} onChange={e => setExpCliente(e.target.value)} size="sm" bg={modalInputBg} />
+            </FormControl>
+
+            <FormControl mb={3}>
+              <FormLabel fontSize="sm">Por estado</FormLabel>
+              <Select placeholder="Todos los estados" value={expEstado} onChange={e => setExpEstado(e.target.value)} size="sm" bg={modalInputBg}>
+                {estadosPedido.map(e => (
+                  <option key={e.id_estado_pedido} value={e.nombre}>{e.nombre}</option>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Flex gap={3}>
+              <FormControl>
+                <FormLabel fontSize="sm">Desde</FormLabel>
+                <Input type="date" value={expDesde} onChange={e => setExpDesde(e.target.value)} size="sm" bg={modalInputBg} />
+              </FormControl>
+              <FormControl>
+                <FormLabel fontSize="sm">Hasta</FormLabel>
+                <Input type="date" value={expHasta} onChange={e => setExpHasta(e.target.value)} size="sm" bg={modalInputBg} />
+              </FormControl>
+            </Flex>
+          </ModalBody>
+
+          <ModalFooter>
+            <Button
+              colorScheme="teal"
+              leftIcon={<DownloadIcon />}
+              isLoading={exporting}
+              loadingText="Generando..."
+              onClick={async () => {
+                const filters = {
+                  cliente: expCliente || undefined,
+                  estado: expEstado || undefined,
+                  desde: expDesde || undefined,
+                  hasta: expHasta || undefined,
+                };
+                if (exportFormat === "pdf") {
+                  await exportarPDFMasivo(filters);
+                } else {
+                  await exportarExcelMasivo(filters);
+                }
+                exportModal.onClose();
+              }}
+            >
+              Exportar
+            </Button>
+            <Button ml={3} onClick={exportModal.onClose}>Cancelar</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

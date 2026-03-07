@@ -5,6 +5,7 @@
 //   2. insertCliente / updateCliente: validaciones de campos requeridos
 // ============================================================
 const { pool } = require("../../db");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 
 // ─── Helper de validación ────────────────────────────────────
 function validar(data) {
@@ -48,6 +49,11 @@ function validar(data) {
     if (!/^[0-9]{13,14}$/.test(limpio))
       errores.push("El RTN / ID debe tener entre 13 y 14 dígitos numéricos.");
   }
+
+  if (!data.direccion || String(data.direccion).trim() === "")
+    errores.push("La dirección es obligatoria.");
+  else if (String(data.direccion).trim().length < 5)
+    errores.push("La dirección debe tener al menos 5 caracteres.");
 
   return errores;
 }
@@ -135,6 +141,17 @@ exports.insertCliente = async (req, res) => {
     );
 
     res.status(201).json({ message: "✅ Cliente insertado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.clientes",
+      accion: "INSERT",
+      descripcion: `Cliente "${String(nombre_cliente).trim()}" creado por ${userEmail || "desconocido"}`,
+      detalle: { nombre_cliente, rtn, telefono, correo_electronico, direccion, id_tipo_cliente, id_estado_cliente },
+    });
   } catch (error) {
     console.error("❌ Error al insertar cliente:", error);
     res.status(500).json({ error: error.message });
@@ -176,6 +193,17 @@ exports.updateCliente = async (req, res) => {
     );
 
     res.json({ message: "✅ Cliente actualizado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.clientes",
+      accion: "UPDATE",
+      descripcion: `Cliente ID ${id_cliente} actualizado por ${userEmail || "desconocido"}`,
+      detalle: { id_cliente, nombre_cliente, rtn, telefono, correo_electronico, direccion, id_tipo_cliente, id_estado_cliente },
+    });
   } catch (error) {
     console.error("❌ Error al actualizar cliente:", error);
     res.status(500).json({ error: error.message });
@@ -194,6 +222,17 @@ exports.deleteCliente = async (req, res) => {
   try {
     await pool.query(`CALL ventasyreserva.sp_eliminar_clientes($1)`, [id_cliente]);
     res.json({ message: "🗑️ Cliente eliminado correctamente" });
+
+    // 📋 Bitácora
+    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.clientes",
+      accion: "DELETE",
+      descripcion: `Cliente ID ${id_cliente} eliminado por ${userEmail || "desconocido"}`,
+      detalle: { id_cliente },
+    });
   } catch (error) {
     console.error("❌ Error al eliminar cliente:", error);
     res.status(500).json({ error: error.message });
