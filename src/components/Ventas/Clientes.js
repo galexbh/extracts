@@ -42,6 +42,8 @@ import {
   FormLabel,
   Select,
   Input,
+  Checkbox,
+  Badge,
 } from "@chakra-ui/react";
 
 import {
@@ -75,6 +77,21 @@ import {
   validarLongitudMinima,
   formatearTelefono,
 } from "../../utils/validaciones";
+
+// ── Campos disponibles para exportación ──
+const EXPORT_FIELDS = [
+  { key: "id", label: "ID" },
+  { key: "nombre", label: "Nombre" },
+  { key: "rtn", label: "RTN / ID" },
+  { key: "tipo", label: "Tipo" },
+  { key: "direccion", label: "Dirección" },
+  { key: "telefono", label: "Teléfono" },
+  { key: "correo", label: "Correo" },
+  { key: "estado", label: "Estado" },
+  { key: "fecha", label: "Fecha Creación" },
+];
+
+const ALL_FIELD_KEYS = EXPORT_FIELDS.map(f => f.key);
 
 export default function Clientes() {
   // 🎨 Colores adaptados a día/noche
@@ -110,6 +127,16 @@ export default function Clientes() {
   const [expEstado, setExpEstado] = useState("");
   const [expTipo, setExpTipo] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [selectedFields, setSelectedFields] = useState([...ALL_FIELD_KEYS]);
+
+  // Helpers de checklist
+  const toggleField = (key) =>
+    setSelectedFields((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  const allSelected = selectedFields.length === ALL_FIELD_KEYS.length;
+  const toggleAll = () =>
+    setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // Colores del modal
   const modalHeadBg = useColorModeValue("teal.50", "gray.700");
@@ -382,22 +409,26 @@ export default function Clientes() {
       doc.setLineWidth(1);
       doc.line(40, 90, pageWidth - 40, 90);
 
-      // ── Tabla ──
-      const tableData = rows.map(r => [
-        r.id_cliente,
-        r.nombre_cliente,
-        r.rtn || "",
-        r.tipo_cliente || r.nombre_tipo || "",
-        r.direccion || "",
-        r.telefono || "",
-        r.correo_electronico || "",
-        r.estado_cliente || r.nombre_estado || "",
-        r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
-      ]);
+      // ── Tabla (dinámica por campos seleccionados) ──
+      const fieldExtractors = {
+        id: r => r.id_cliente,
+        nombre: r => r.nombre_cliente,
+        rtn: r => r.rtn || "",
+        tipo: r => r.tipo_cliente || r.nombre_tipo || "",
+        direccion: r => r.direccion || "",
+        telefono: r => r.telefono || "",
+        correo: r => r.correo_electronico || "",
+        estado: r => r.estado_cliente || r.nombre_estado || "",
+        fecha: r => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
+      };
+
+      const activeFields = EXPORT_FIELDS.filter(f => selectedFields.includes(f.key));
+      const headers = activeFields.map(f => f.label);
+      const tableData = rows.map(r => activeFields.map(f => fieldExtractors[f.key](r)));
 
       autoTable(doc, {
         startY: 105,
-        head: [["ID", "Nombre", "RTN / ID", "Tipo", "Dirección", "Teléfono", "Correo", "Estado", "Fecha"]],
+        head: [headers],
         body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: {
@@ -459,31 +490,33 @@ export default function Clientes() {
       wb.created = new Date();
       const ws = wb.addWorksheet("Clientes");
 
+      // ── Columnas dinámicas por campos seleccionados ──
+      const allCols = [
+        { key: "id", header: "ID", width: 8, extract: r => r.id_cliente },
+        { key: "nombre", header: "Nombre", width: 25, extract: r => r.nombre_cliente },
+        { key: "rtn", header: "RTN / ID", width: 18, extract: r => r.rtn || "" },
+        { key: "tipo", header: "Tipo", width: 15, extract: r => r.tipo_cliente || r.nombre_tipo || "" },
+        { key: "direccion", header: "Dirección", width: 30, extract: r => r.direccion || "" },
+        { key: "telefono", header: "Teléfono", width: 14, extract: r => r.telefono || "" },
+        { key: "correo", header: "Correo", width: 28, extract: r => r.correo_electronico || "" },
+        { key: "estado", header: "Estado", width: 12, extract: r => r.estado_cliente || r.nombre_estado || "" },
+        { key: "fecha", header: "Fecha Creación", width: 16, extract: r => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "" },
+      ];
+      const columns = allCols.filter(c => selectedFields.includes(c.key));
+      const lastColLetter = String.fromCharCode(64 + columns.length); // A=1
+
       // ── Título + Filtros ──
-      ws.mergeCells("A1:I1");
+      ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
       titleCell.value = "Reporte de Clientes — Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
-      ws.mergeCells("A2:I2");
+      ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
       filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
-
-      // ── Columnas ──
-      const columns = [
-        { header: "ID", key: "id", width: 8 },
-        { header: "Nombre", key: "nombre", width: 25 },
-        { header: "RTN / ID", key: "rtn", width: 18 },
-        { header: "Tipo", key: "tipo", width: 15 },
-        { header: "Dirección", key: "direccion", width: 30 },
-        { header: "Teléfono", key: "telefono", width: 14 },
-        { header: "Correo", key: "correo", width: 28 },
-        { header: "Estado", key: "estado", width: 12 },
-        { header: "Fecha Creación", key: "fecha", width: 16 },
-      ];
 
       // Header en fila 4
       const headerRow = 4;
@@ -499,18 +532,9 @@ export default function Clientes() {
       // ── Datos ──
       rows.forEach((r, idx) => {
         const rowNum = headerRow + 1 + idx;
-        const values = [
-          r.id_cliente,
-          r.nombre_cliente,
-          r.rtn || "",
-          r.tipo_cliente || r.nombre_tipo || "",
-          r.direccion || "",
-          r.telefono || "",
-          r.correo_electronico || "",
-          r.estado_cliente || r.nombre_estado || "",
-          r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
-        ];
-        values.forEach((v, i) => { ws.getCell(rowNum, i + 1).value = v; });
+        columns.forEach((col, i) => {
+          ws.getCell(rowNum, i + 1).value = col.extract(r);
+        });
         // Zebra
         if (idx % 2 === 1) {
           for (let i = 1; i <= columns.length; i++) {
@@ -523,8 +547,7 @@ export default function Clientes() {
       columns.forEach((col, i) => {
         let maxLen = col.header.length;
         rows.forEach(r => {
-          const vals = [r.id_cliente, r.nombre_cliente, r.rtn, r.tipo_cliente || r.nombre_tipo, r.direccion, r.telefono, r.correo_electronico, r.estado_cliente || r.nombre_estado, ""];
-          const v = String(vals[i] ?? "");
+          const v = String(col.extract(r) ?? "");
           if (v.length > maxLen) maxLen = v.length;
         });
         ws.getColumn(i + 1).width = Math.min(Math.max(col.width, maxLen + 2), 50);
@@ -602,6 +625,7 @@ export default function Clientes() {
               onClick={() => {
                 setExpNombre(""); setExpEstado(""); setExpTipo("");
                 setExportFormat("excel");
+                setSelectedFields([...ALL_FIELD_KEYS]);
                 exportModal.onOpen();
               }}
               isDisabled={exporting}
@@ -782,6 +806,41 @@ export default function Clientes() {
                 ))}
               </Select>
             </FormControl>
+
+            <Divider my={4} />
+
+            {/* ── Checklist de campos ── */}
+            <Flex justify="space-between" align="center" mb={3}>
+              <HStack spacing={2}>
+                <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
+                <Badge colorScheme="teal" fontSize="xs" borderRadius="full" px={2}>
+                  {selectedFields.length} / {ALL_FIELD_KEYS.length}
+                </Badge>
+              </HStack>
+              <Checkbox
+                isChecked={allSelected}
+                isIndeterminate={selectedFields.length > 0 && !allSelected}
+                onChange={toggleAll}
+                colorScheme="teal"
+                size="sm"
+              >
+                <Text fontSize="xs">Seleccionar todos</Text>
+              </Checkbox>
+            </Flex>
+
+            <SimpleGrid columns={2} spacing={2}>
+              {EXPORT_FIELDS.map(f => (
+                <Checkbox
+                  key={f.key}
+                  isChecked={selectedFields.includes(f.key)}
+                  onChange={() => toggleField(f.key)}
+                  colorScheme="teal"
+                  size="sm"
+                >
+                  {f.label}
+                </Checkbox>
+              ))}
+            </SimpleGrid>
           </ModalBody>
 
           <ModalFooter>
@@ -790,7 +849,12 @@ export default function Clientes() {
               leftIcon={<DownloadIcon />}
               isLoading={exporting}
               loadingText="Generando..."
+              isDisabled={selectedFields.length === 0}
               onClick={async () => {
+                if (selectedFields.length === 0) {
+                  toast({ title: "Selecciona al menos un campo", status: "warning", duration: 3000, isClosable: true });
+                  return;
+                }
                 const filters = {
                   nombre: expNombre || undefined,
                   estado: expEstado || undefined,
