@@ -95,6 +95,7 @@ export default function ProductoVendido() {
   const textMuted = useColorModeValue("gray.500", "gray.400");
   const thBg = useColorModeValue("gray.50", "gray.700");
   const borderColor = useColorModeValue("gray.200", "gray.600");
+  const tooltipBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(45,55,72,0.9)");
 
   const navigate = useNavigate();
 
@@ -389,7 +390,7 @@ export default function ProductoVendido() {
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3", stroke: "#A0AEC0" }}
                   contentStyle={{
-                    background: useColorModeValue("rgba(255,255,255,0.9)", "rgba(45,55,72,0.9)"),
+                    background: tooltipBg,
                     borderRadius: "8px",
                     border: "none",
                     boxShadow: "0 4px 6px rgba(0,0,0,0.1)",

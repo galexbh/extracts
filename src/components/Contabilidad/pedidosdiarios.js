@@ -224,6 +224,7 @@ export default function PedidosDiarios() {
   const bg = useColorModeValue("white", "gray.800");
   const border = useColorModeValue("gray.200", "gray.600");
   const emptyColor = useColorModeValue("gray.400", "gray.500");
+  const headingColor = useColorModeValue("teal.600", "teal.300");
 
   if (loading)
     return (
@@ -235,7 +236,7 @@ export default function PedidosDiarios() {
   return (
     <Box p={6} bg={bg} borderRadius="md" boxShadow="lg">
       {/* Título */}
-      <Heading mb={1} size="md" color={useColorModeValue("teal.600", "teal.300")}>
+      <Heading mb={1} size="md" color={headingColor}>
         {REPORT_TITLE}
       </Heading>
 
