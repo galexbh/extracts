@@ -8,7 +8,7 @@ import {
   IconButton, Select, Flex, Badge,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
   useDisclosure, Code, VStack, FormControl, FormLabel, Divider,
-  useColorModeValue
+  useColorModeValue, Checkbox, SimpleGrid
 } from "@chakra-ui/react";
 import { ChevronLeftIcon, ChevronRightIcon, RepeatIcon, DownloadIcon, ViewIcon } from "@chakra-ui/icons";
 import { FaFileExport } from "react-icons/fa";
@@ -101,6 +101,19 @@ const formatearValor = (key, val) => {
 
 const getLabel = (key) => LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 
+// ── Campos disponibles para exportación ──
+const EXPORT_FIELDS = [
+  { key: "id", label: "ID" },
+  { key: "usuario", label: "Usuario" },
+  { key: "modulo", label: "Módulo" },
+  { key: "accion", label: "Acción" },
+  { key: "descripcion", label: "Descripción" },
+  { key: "detalle", label: "Detalle" },
+  { key: "fecha", label: "Fecha" },
+];
+
+const ALL_FIELD_KEYS = EXPORT_FIELDS.map(f => f.key);
+
 export default function Bitacora() {
   // ============================================================
   // 🎨 Paleta de colores (modo claro / oscuro)
@@ -148,6 +161,16 @@ export default function Bitacora() {
 
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
+
+  // Selector de campos para exportación
+  const [selectedFields, setSelectedFields] = useState([...ALL_FIELD_KEYS]);
+  const toggleField = (key) =>
+    setSelectedFields((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  const allSelected = selectedFields.length === ALL_FIELD_KEYS.length;
+  const toggleAll = () =>
+    setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
   // 🔄 Cargar datos desde backend
@@ -278,7 +301,7 @@ export default function Bitacora() {
 
       if (rowsToExport.length === 0) {
         toast({ title: "No hay datos para exportar", status: "warning", duration: 3000 });
-        return;
+        return false;
       }
 
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
@@ -313,29 +336,30 @@ export default function Bitacora() {
       doc.setLineWidth(1);
       doc.line(40, 90, pageWidth - 40, 90);
 
-      // ── Tabla ──
-      const tableData = rowsToExport.map(r => [
-        r.id_bitacora || "—",
-        r.usuario || "Sistema",
-        limpiarTabla(r.tabla),
-        accionTexto(r.accion),
-        limpiarDescripcion(r.descripcion, r.accion),
-        r.fecha ? new Date(r.fecha).toLocaleString() : "—",
-      ]);
+      // ── Tabla (dinámica por campos seleccionados) ──
+      const fieldExtractors = {
+        id: r => r.id_bitacora || "—",
+        usuario: r => r.usuario || "Sistema",
+        modulo: r => limpiarTabla(r.tabla),
+        accion: r => accionTexto(r.accion),
+        descripcion: r => limpiarDescripcion(r.descripcion, r.accion),
+        detalle: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "—",
+        fecha: r => r.fecha ? new Date(r.fecha).toLocaleString() : "—",
+      };
+
+      const activeFields = EXPORT_FIELDS.filter(f => selectedFields.includes(f.key));
+      const headers = activeFields.map(f => f.label);
+      const tableData = rowsToExport.map(r => activeFields.map(f => fieldExtractors[f.key](r)));
 
       autoTable(doc, {
         startY: 105,
-        head: [["ID", "Usuario", "Módulo", "Acción", "Descripción", "Fecha"]],
+        head: [headers],
         body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: {
           fillColor: [20, 120, 110],
           textColor: 255,
           fontStyle: "bold",
-        },
-        columnStyles: {
-          0: { cellWidth: 40 },
-          4: { cellWidth: 200 },
         },
         didDrawPage: () => {
           const ps = doc.internal.pageSize;
@@ -375,9 +399,11 @@ export default function Bitacora() {
 
       doc.save(`Bitacora_Extractus_${new Date().toISOString().split('T')[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
+      return true;
     } catch (err) {
       console.error("Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", status: "error", duration: 4000, isClosable: true });
+      return false;
     } finally {
       setExporting(false);
     }
@@ -393,7 +419,7 @@ export default function Bitacora() {
 
       if (rowsToExport.length === 0) {
         toast({ title: "No hay datos para exportar", status: "warning", duration: 3000 });
-        return;
+        return false;
       }
 
       const wb = new ExcelJS.Workbook();
@@ -402,29 +428,31 @@ export default function Bitacora() {
 
       const ws = wb.addWorksheet("Bitácora");
 
+      // ── Columnas dinámicas por campos seleccionados ──
+      const allCols = [
+        { key: "id", header: "ID", width: 10, extract: r => r.id_bitacora },
+        { key: "usuario", header: "Usuario", width: 25, extract: r => r.usuario || "Sistema" },
+        { key: "modulo", header: "Módulo", width: 20, extract: r => limpiarTabla(r.tabla) },
+        { key: "accion", header: "Acción", width: 18, extract: r => accionTexto(r.accion) },
+        { key: "descripcion", header: "Descripción", width: 50, extract: r => limpiarDescripcion(r.descripcion, r.accion) },
+        { key: "detalle", header: "Detalle", width: 55, extract: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "—" },
+        { key: "fecha", header: "Fecha", width: 22, extract: r => r.fecha ? new Date(r.fecha).toLocaleString() : "—" },
+      ];
+      const columns = allCols.filter(c => selectedFields.includes(c.key));
+      const lastColLetter = String.fromCharCode(64 + columns.length);
+
       // ── Header con filtros ──
-      ws.mergeCells("A1:G1");
+      ws.mergeCells(`A1:${lastColLetter}1`);
       const titleRow = ws.getCell("A1");
       titleRow.value = "Reporte de Bitácora — Extractus";
       titleRow.font = { bold: true, size: 14, color: { argb: "FF147870" } };
       titleRow.alignment = { horizontal: "center" };
 
-      ws.mergeCells("A2:G2");
+      ws.mergeCells(`A2:${lastColLetter}2`);
       const filterRow = ws.getCell("A2");
       filterRow.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
       filterRow.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterRow.alignment = { horizontal: "center" };
-
-      // ── Columnas ──
-      const columns = [
-        { header: "ID", key: "id_bitacora", width: 10 },
-        { header: "Usuario", key: "usuario", width: 25 },
-        { header: "Módulo", key: "tabla", width: 20 },
-        { header: "Acción", key: "accion", width: 18 },
-        { header: "Descripción", key: "descripcion", width: 50 },
-        { header: "Detalle", key: "detalle", width: 55 },
-        { header: "Fecha", key: "fecha", width: 22 },
-      ];
 
       // Escribir header en fila 4
       const headerRowNum = 4;
@@ -442,17 +470,8 @@ export default function Bitacora() {
       // ── Datos ──
       rowsToExport.forEach((r, idx) => {
         const rowNum = headerRowNum + 1 + idx;
-        const values = [
-          r.id_bitacora,
-          r.usuario || "Sistema",
-          limpiarTabla(r.tabla),
-          accionTexto(r.accion),
-          limpiarDescripcion(r.descripcion, r.accion),
-          r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "—",
-          r.fecha ? new Date(r.fecha).toLocaleString() : "—",
-        ];
-        values.forEach((v, i) => {
-          ws.getCell(rowNum, i + 1).value = v;
+        columns.forEach((col, i) => {
+          ws.getCell(rowNum, i + 1).value = col.extract(r);
         });
         // Alterne colores (zebra)
         if (idx % 2 === 1) {
@@ -468,13 +487,7 @@ export default function Bitacora() {
       columns.forEach((col, i) => {
         let maxLen = col.header.length;
         rowsToExport.forEach(r => {
-          let v = "";
-          switch (col.key) {
-            case "tabla": v = limpiarTabla(r.tabla); break;
-            case "accion": v = accionTexto(r.accion); break;
-            case "descripcion": v = limpiarDescripcion(r.descripcion, r.accion); break;
-            default: v = String(r[col.key] ?? "");
-          }
+          const v = String(col.extract(r) ?? "");
           if (v.length > maxLen) maxLen = v.length;
         });
         ws.getColumn(i + 1).width = Math.min(Math.max(col.width, maxLen + 2), 65);
@@ -483,9 +496,11 @@ export default function Bitacora() {
       const buffer = await wb.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), `Bitacora_Extractus_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
+      return true;
     } catch (err) {
       console.error(err);
       toast({ title: "Error al generar Excel", status: "error", duration: 2500, isClosable: true });
+      return false;
     } finally {
       setExporting(false);
     }
@@ -505,6 +520,7 @@ export default function Bitacora() {
           onClick={() => {
             setExpUsuario(""); setExpAccion(""); setExpDesde(""); setExpHasta("");
             setExportFormat("excel");
+            setSelectedFields([...ALL_FIELD_KEYS]);
             exportModal.onOpen();
           }}
           isDisabled={exporting}
@@ -684,6 +700,41 @@ export default function Bitacora() {
                 <Input type="date" value={expHasta} onChange={e => setExpHasta(e.target.value)} size="sm" />
               </FormControl>
             </Flex>
+
+            <Divider my={4} />
+
+            {/* ── Checklist de campos ── */}
+            <Flex justify="space-between" align="center" mb={3}>
+              <HStack spacing={2}>
+                <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
+                <Badge colorScheme="teal" fontSize="xs" borderRadius="full" px={2}>
+                  {selectedFields.length} / {ALL_FIELD_KEYS.length}
+                </Badge>
+              </HStack>
+              <Checkbox
+                isChecked={allSelected}
+                isIndeterminate={selectedFields.length > 0 && !allSelected}
+                onChange={toggleAll}
+                colorScheme="teal"
+                size="sm"
+              >
+                <Text fontSize="xs">Seleccionar todos</Text>
+              </Checkbox>
+            </Flex>
+
+            <SimpleGrid columns={2} spacing={2}>
+              {EXPORT_FIELDS.map(f => (
+                <Checkbox
+                  key={f.key}
+                  isChecked={selectedFields.includes(f.key)}
+                  onChange={() => toggleField(f.key)}
+                  colorScheme="teal"
+                  size="sm"
+                >
+                  {f.label}
+                </Checkbox>
+              ))}
+            </SimpleGrid>
           </ModalBody>
 
           <ModalFooter>
@@ -692,19 +743,34 @@ export default function Bitacora() {
               leftIcon={<DownloadIcon />}
               isLoading={exporting}
               loadingText="Generando..."
+              isDisabled={selectedFields.length === 0}
               onClick={async () => {
+                // Validar al menos un campo seleccionado
+                if (selectedFields.length === 0) {
+                  toast({ title: "Selecciona al menos un campo", status: "warning", duration: 3000, isClosable: true });
+                  return;
+                }
+                // Validar rango de fechas
+                if (expDesde && expHasta && expDesde > expHasta) {
+                  toast({ title: "La fecha 'Desde' no puede ser posterior a 'Hasta'", status: "warning", duration: 3000, isClosable: true });
+                  return;
+                }
                 const filters = {
                   usuario: expUsuario || undefined,
                   accion: expAccion || undefined,
                   desde: expDesde || undefined,
                   hasta: expHasta || undefined,
                 };
+                let success = false;
                 if (exportFormat === "pdf") {
-                  await exportPDF(filters);
+                  success = await exportPDF(filters);
                 } else {
-                  await exportExcel(filters);
+                  success = await exportExcel(filters);
                 }
-                exportModal.onClose();
+                // Solo cerrar modal si la exportación fue exitosa
+                if (success) {
+                  exportModal.onClose();
+                }
               }}
             >
               Exportar

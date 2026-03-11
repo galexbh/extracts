@@ -7,6 +7,7 @@ import {
   Box,
   Flex,
   FormControl,
+  FormLabel,
   Input,
   Select,
   Table,
@@ -35,6 +36,7 @@ import {
   Divider,
   HStack,
   Spinner,
+  Stack,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import { FaSyncAlt, FaFilePdf, FaFileExcel } from "react-icons/fa";
@@ -92,7 +94,7 @@ const columnExtractors = {
 /** =======================
  *  Exportar PDF / Excel
  *  ======================= */
-const exportToPDF = (data, columns) => {
+const exportToPDF = (data, columns, onCloseModal) => {
   const doc = new jsPDF();
   const m = 14;
   const w = doc.internal.pageSize.getWidth();
@@ -108,7 +110,7 @@ const exportToPDF = (data, columns) => {
     const imgW = 20;
     const imgH = (img.height * imgW) / img.width;
     doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
-  } catch {}
+  } catch { }
 
   doc.setDrawColor(0).setLineWidth(0.5).line(m, 35, w - m, 35);
 
@@ -119,7 +121,7 @@ const exportToPDF = (data, columns) => {
     theme: "grid",
     headStyles: { fillColor: [200, 255, 200], textColor: [0, 80, 0] },
     margin: { left: m, right: m },
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, halign: "center" },
     didDrawPage: () => {
       const p = doc.internal.getCurrentPageInfo().pageNumber;
       doc.setFontSize(10).text(`Página ${p}`, w / 2, h - 10, { align: "center" });
@@ -127,11 +129,12 @@ const exportToPDF = (data, columns) => {
   });
 
   doc.save("reporte_creditos.pdf");
+  if (onCloseModal) onCloseModal();
 };
 
-const exportToExcel = async (data, columns) => {
+const exportToExcel = async (data, columns, onCloseModal) => {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Créditos");
+  const ws = wb.addWorksheet("Créditos", { views: [{ state: "frozen", ySplit: 4 }] });
   const dateStr = new Date().toLocaleDateString("es-ES");
   const lastCol = excelCol(columns.length);
 
@@ -139,24 +142,45 @@ const exportToExcel = async (data, columns) => {
   Object.assign(ws.getCell("A1"), {
     value: COMPANY_NAME,
     font: { size: 14, bold: true, color: { argb: "2E7D32" } },
-    alignment: { horizontal: "center" },
+    alignment: { horizontal: "center", vertical: "middle" },
   });
+  ws.getRow(1).height = 24;
+
   ws.mergeCells(`A2:${lastCol}2`);
   Object.assign(ws.getCell("A2"), {
     value: REPORT_TITLE,
     font: { size: 12, bold: true, color: { argb: "66BB6A" } },
-    alignment: { horizontal: "center" },
+    alignment: { horizontal: "center", vertical: "middle" },
   });
+  ws.getRow(2).height = 20;
+
+  ws.mergeCells(`A3:${lastCol}3`);
+  Object.assign(ws.getCell("A3"), {
+    value: `Fecha: ${dateStr}`,
+    font: { size: 10 },
+    alignment: { horizontal: "left", vertical: "middle" },
+  });
+  ws.getRow(3).height = 18;
+
   ws.addRow([]);
-  ws.addRow(columns);
-  ws.getRow(4).eachCell((c) => {
+  const hdr = ws.addRow(columns);
+  hdr.height = 20;
+  hdr.eachCell((c) => {
     c.font = { bold: true, color: { argb: "005000" } };
     c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "CCFFCC" } };
+    c.alignment = { horizontal: "center", vertical: "middle" };
   });
 
   data.forEach((row) => ws.addRow(columns.map((c) => columnExtractors[c](row))));
+
+  ws.columns.forEach((col) => {
+    col.width = 20;
+    col.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
   const buf = await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf]), "reporte_creditos.xlsx");
+  if (onCloseModal) onCloseModal();
 };
 
 /** =======================
@@ -184,9 +208,13 @@ export default function Creditos() {
   const [selectedIds, setSelectedIds] = useState([]);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isColsOpen, onOpen: onColsOpen, onClose: onColsClose } = useDisclosure();
-  const [exportFormat, setExportFormat] = useState(null);
+  const [exportFormat, setExportFormat] = useState("pdf"); // Default value for select
   const [colsToExport, setColsToExport] = useState([...allColumns]);
   const [loading, setLoading] = useState(false);
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // ================== CRUD ==================
   const fetchCreditos = async () => {
@@ -245,6 +273,23 @@ export default function Creditos() {
     )
   );
 
+  /* ======================================
+     🔹 PAGINACIÓN
+     ====================================== */
+  const totalPages = Math.ceil(filteredCreditos.length / itemsPerPage);
+  const paginatedCreditos = filteredCreditos.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
+
+  const handleFilterChange = (e) => {
+    setFilters((f) => ({ ...f, [e.target.name]: e.target.value }));
+    setCurrentPage(1); // Reset page on filter
+  };
+
   return (
     <>
       {/* Encabezado */}
@@ -281,7 +326,7 @@ export default function Creditos() {
               <Input
                 name={key}
                 value={val}
-                onChange={(e) => setFilters((f) => ({ ...f, [e.target.name]: e.target.value }))}
+                onChange={handleFilterChange}
                 placeholder={key.replace(/_/g, " ")}
                 bg={bgFilter}
                 size="xs"
@@ -314,31 +359,13 @@ export default function Creditos() {
               >
                 + Agregar Crédito
               </Button>
-              <Menu>
-                <MenuButton as={Button} colorScheme="green" size="sm">
-                  Reporte
-                </MenuButton>
-                <MenuList>
-                  <MenuItem
-                    icon={<FaFilePdf />}
-                    onClick={() => {
-                      setExportFormat("pdf");
-                      onColsOpen();
-                    }}
-                  >
-                    Exportar a PDF
-                  </MenuItem>
-                  <MenuItem
-                    icon={<FaFileExcel />}
-                    onClick={() => {
-                      setExportFormat("excel");
-                      onColsOpen();
-                    }}
-                  >
-                    Exportar a Excel
-                  </MenuItem>
-                </MenuList>
-              </Menu>
+              <Button
+                colorScheme="green"
+                size="sm"
+                onClick={onColsOpen}
+              >
+                Exportar
+              </Button>
               <IconButton
                 colorScheme="gray"
                 size="sm"
@@ -380,29 +407,29 @@ export default function Creditos() {
                 </Tr>
               </Thead>
               <Tbody>
-                {filteredCreditos.map((c) => (
-                  <Tr key={c.id_credito}>
+                {paginatedCreditos.map((c) => (
+                  <Tr
+                    key={c.id_credito}
+                    onClick={() => {
+                      setSelectedCredito(c);
+                      onOpen();
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
                     <Td>
                       <Checkbox
                         isChecked={selectedIds.includes(c.id_credito)}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          e.stopPropagation();
                           setSelectedIds((sel) =>
                             e.target.checked
                               ? [...sel, c.id_credito]
                               : sel.filter((x) => x !== c.id_credito)
-                          )
-                        }
+                          );
+                        }}
                       />
                     </Td>
-                    <Td
-                      onClick={() => {
-                        setSelectedCredito(c);
-                        onOpen();
-                      }}
-                      style={{ cursor: "pointer" }}
-                    >
-                      {c.id_credito}
-                    </Td>
+                    <Td>{c.id_credito}</Td>
                     <Td>{c.id_cliente}</Td>
                     <Td>{c.id_detalle_pedidos}</Td>
                     <Td>{formatoLempira.format(c.monto_credito)}</Td>
@@ -415,6 +442,27 @@ export default function Creditos() {
             </Table>
           </Box>
         )}
+
+        {/* Controles de Paginación */}
+        <Flex justify="space-between" align="center" mt={4}>
+          <Button
+            size="sm"
+            onClick={prevPage}
+            isDisabled={currentPage === 1}
+          >
+            Anterior
+          </Button>
+          <Box fontSize="sm">
+            Página {currentPage} de {totalPages || 1}
+          </Box>
+          <Button
+            size="sm"
+            onClick={nextPage}
+            isDisabled={currentPage === totalPages || totalPages === 0}
+          >
+            Siguiente
+          </Button>
+        </Flex>
 
         {/* Modal agregar / editar */}
         <Modal isOpen={isOpen} onClose={onClose}>
@@ -484,6 +532,66 @@ export default function Creditos() {
                 {selectedCredito?.id_credito ? "Guardar Cambios" : "Agregar Crédito"}
               </Button>
               <Button variant="ghost" onClick={onClose} ml={3}>
+                Cancelar
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Modal Selección de Columnas (Exportar) */}
+        <Modal isOpen={isColsOpen} onClose={onColsClose} size="sm">
+          <ModalOverlay />
+          <ModalContent bg={modalBg}>
+            <ModalHeader>Exportar Créditos</ModalHeader>
+            <ModalBody>
+              <FormControl mb={4}>
+                <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+                <Select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="excel">Excel</option>
+                </Select>
+              </FormControl>
+
+              <Divider mb={4} />
+
+              <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+              <Stack spacing={2} maxHeight="200px" overflowY="auto">
+                {allColumns.map((col) => (
+                  <Checkbox
+                    key={col}
+                    isChecked={colsToExport.includes(col)}
+                    onChange={(e) =>
+                      setColsToExport((prev) =>
+                        e.target.checked
+                          ? [...prev, col]
+                          : prev.filter((x) => x !== col)
+                      )
+                    }
+                  >
+                    {col}
+                  </Checkbox>
+                ))}
+              </Stack>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                colorScheme="blue"
+                mr={3}
+                onClick={() => {
+                  if (exportFormat === "pdf") {
+                    exportToPDF(filteredCreditos, colsToExport, onColsClose);
+                  } else {
+                    exportToExcel(filteredCreditos, colsToExport, onColsClose);
+                  }
+                }}
+                disabled={colsToExport.length === 0}
+              >
+                Generar
+              </Button>
+              <Button variant="ghost" onClick={onColsClose}>
                 Cancelar
               </Button>
             </ModalFooter>

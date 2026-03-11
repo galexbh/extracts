@@ -4,16 +4,17 @@ import {
   Box, Flex, Table, Thead, Tbody, Tr, Th, Td, Button, IconButton,
   Menu, MenuButton, MenuList, MenuItem, useDisclosure, Modal, ModalOverlay,
   ModalContent, ModalHeader, ModalBody, ModalFooter, FormControl, FormLabel,
-  Input, useColorModeValue, Stack, Text, Checkbox, SimpleGrid, Heading, Divider
+  Input, useColorModeValue, Stack, Text, Checkbox, SimpleGrid, Heading, Divider, Spinner, useToast, Icon, Badge, Stat, StatNumber, StatLabel
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
-import { FaSyncAlt, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaSyncAlt, FaRegSmileWink, FaRegSadTear, FaFileInvoiceDollar, FaRegClock, FaUsersSlash } from "react-icons/fa";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import logo from "../login/log.png";
+import api from "../../api/apiClient";
 
 const COMPANY_NAME = "Extractus";
 const REPORT_TITLE = "Reporte de Clientes en Mora";
@@ -51,7 +52,7 @@ const lastColLetter = (len) => String.fromCharCode(64 + Math.max(1, len)); // A.
 
 const ALL_COLUMNS = [
   "Cliente",
-  "Numero de Pedido",
+  "ID Detalle Pedido",
   "Deuda",
   "Fecha de Inicio",
   "Fecha de Vencimiento",
@@ -60,8 +61,8 @@ const ALL_COLUMNS = [
 ];
 
 const extractors = {
-  "Cliente": (c) => c.id_cliente,
-  "Numero de Pedido": (c) => c.id_pedido,
+  "Cliente": (c) => c.nombre_cliente || c.id_cliente,
+  "ID Detalle Pedido": (c) => c.id_detalle_pedidos,
   "Deuda": (c) => c.monto_credito,
   "Fecha de Inicio": (c) => c.fecha_inicio,
   "Fecha de Vencimiento": (c) => c.fecha_vencimiento,
@@ -78,14 +79,14 @@ const exportPDF = (rows, cols) => {
   const dateStr = new Date().toLocaleDateString("es-ES");
 
   // Encabezado
-  doc.setFontSize(18).setTextColor(46,125,50).text(COMPANY_NAME, w/2, 20, { align: "center" });
-  doc.setFontSize(14).setTextColor(102,187,106).text(REPORT_TITLE, w/2, 30, { align: "center" });
+  doc.setFontSize(18).setTextColor(46, 125, 50).text(COMPANY_NAME, w / 2, 20, { align: "center" });
+  doc.setFontSize(14).setTextColor(102, 187, 106).text(REPORT_TITLE, w / 2, 30, { align: "center" });
   doc.setFontSize(10).setTextColor(0).text(`Fecha: ${dateStr}`, m, 20);
   try {
     const img = doc.getImageProperties(logo);
     const imgW = 20, imgH = (img.height * imgW) / img.width;
     doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
-  } catch {}
+  } catch { }
   doc.setDrawColor(0).setLineWidth(0.5).line(m, 35, w - m, 35);
 
   const body = rows.map((c) =>
@@ -195,17 +196,41 @@ export default function ReporteMoras() {
   const modalBg = useColorModeValue("white", "gray.800");
   const muted = useColorModeValue("gray.600", "gray.300");
 
-  const kpiBg = useColorModeValue("green.50", "green.900");
-  const kpiText = useColorModeValue("green.700", "green.200");
-  const kpiBorder = useColorModeValue("green.200", "green.700");
+  const kpiBg1 = useColorModeValue("linear(to-br, red.400, red.600)", "linear(to-br, red.600, red.900)");
+  const kpiBg2 = useColorModeValue("linear(to-br, orange.400, orange.600)", "linear(to-br, orange.600, orange.900)");
+  const kpiBg3 = useColorModeValue("linear(to-br, yellow.400, yellow.600)", "linear(to-br, yellow.600, yellow.900)");
 
-  // Demo data
-  const [creditos] = useState([
-    { id_credito:1, id_cliente:"Juan Perez",       id_pedido:5001, monto_credito:1500.5, fecha_inicio:"2025-06-20", fecha_vencimiento:"2025-07-20", id_estado_credito:"Pendiente" },
-    { id_credito:2, id_cliente:"Carmen Gutiérrez", id_pedido:5002, monto_credito:1700.0, fecha_inicio:"2025-07-01", fecha_vencimiento:"2025-08-10", id_estado_credito:"Pagado" },
-    { id_credito:3, id_cliente:"Carla Fernández",  id_pedido:5003, monto_credito:1900.0, fecha_inicio:"2025-07-05", fecha_vencimiento:"2025-07-25", id_estado_credito:"Mora" },
-    { id_credito:4, id_cliente:"Mario López",      id_pedido:5004, monto_credito:1200.0, fecha_inicio:"2025-07-15", fecha_vencimiento:"2025-08-05", id_estado_credito:"Pendiente" },
-  ]);
+  const titleColor = useColorModeValue("teal.600", "teal.300");
+  const rowHoverBg = useColorModeValue("gray.50", "gray.700");
+
+  const thBg = useColorModeValue("gray.50", "gray.700");
+  const chartBg = useColorModeValue("white", "gray.700");
+  const toast = useToast();
+
+  const [creditos, setCreditos] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch API
+  React.useEffect(() => {
+    const fetchCreditos = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get("/contabilidad/creditos");
+        setCreditos(res.data || []);
+      } catch (err) {
+        toast({
+          title: "Error cargando mora",
+          description: "No se pudieron obtener los créditos.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCreditos();
+  }, [toast]);
 
   // Filtros
   const [fNombre, setFNombre] = useState("");
@@ -215,15 +240,16 @@ export default function ReporteMoras() {
 
   // Exportación
   const { isOpen: isColsOpen, onOpen: onColsOpen, onClose: onColsClose } = useDisclosure();
-  const [exportFormat, setExportFormat] = useState(null);     // "pdf" | "excel"
+  const [exportFormat, setExportFormat] = useState("pdf");     // "pdf" | "excel", por defecto "pdf"
   const [colsToExport, setColsToExport] = useState([...ALL_COLUMNS]);
 
   // Filas en mora
   const filas = useMemo(() => {
     const base = creditos.filter((c) => {
-      const matchNombre = !fNombre || String(c.id_cliente).toLowerCase().includes(fNombre.toLowerCase());
-      const matchDesde  = !fDesde  || (c.fecha_inicio >= fDesde);
-      const matchHasta  = !fHasta  || (c.fecha_vencimiento <= fHasta);
+      const nom = c.nombre_cliente || c.id_cliente || "";
+      const matchNombre = !fNombre || String(nom).toLowerCase().includes(fNombre.toLowerCase());
+      const matchDesde = !fDesde || (c.fecha_inicio && c.fecha_inicio.substring(0, 10) >= fDesde);
+      const matchHasta = !fHasta || (c.fecha_vencimiento && c.fecha_vencimiento.substring(0, 10) <= fHasta);
       return matchNombre && matchDesde && matchHasta;
     });
     const soloMora = base.filter(isMora);
@@ -232,14 +258,14 @@ export default function ReporteMoras() {
 
   // KPIs
   const totalDeuda = useMemo(() => filas.reduce((acc, c) => acc + Number(c.monto_credito || 0), 0), [filas]);
-  const promedioDias = useMemo(() => (filas.length ? Math.round(filas.reduce((a,c)=>a+diasEnMora(c),0)/filas.length) : 0), [filas]);
+  const promedioDias = useMemo(() => (filas.length ? Math.round(filas.reduce((a, c) => a + diasEnMora(c), 0) / filas.length) : 0), [filas]);
   const maxDias = useMemo(() => (filas.length ? Math.max(...filas.map(diasEnMora)) : 0), [filas]);
 
   return (
     <>
       {/* Título y botón atrás (botón debajo del título, alineado a la izquierda) */}
       <Box px={8} pt={4}>
-        <Heading size="md" color={useColorModeValue("teal.600", "teal.300")} mb={1}>
+        <Heading size="md" color={titleColor} mb={1}>
           {REPORT_TITLE}
         </Heading>
         <Box pl={2} mb={2}>
@@ -306,96 +332,116 @@ export default function ReporteMoras() {
             />
           </Flex>
 
-          <Menu>
-            <MenuButton as={Button} colorScheme="green" size="sm" rightIcon={<ChevronDownIcon />}>
-              Exportar
-            </MenuButton>
-            <MenuList>
-              <MenuItem icon={<FaFilePdf />} onClick={() => { setExportFormat("pdf"); onColsOpen(); }}>
-                Exportar PDF
-              </MenuItem>
-              <MenuItem icon={<FaFileExcel />} onClick={() => { setExportFormat("excel"); onColsOpen(); }}>
-                Exportar Excel
-              </MenuItem>
-            </MenuList>
-          </Menu>
+          <Button colorScheme="green" size="sm" onClick={onColsOpen}>
+            Exportar
+          </Button>
         </Flex>
 
         {/* Descripción */}
-     
 
-        {/* KPIs */}
-        <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4} mb={6}>
-          <Box p={4} bg={kpiBg} border="1px solid" borderColor={kpiBorder} borderRadius="lg" boxShadow="sm">
-            <Text fontSize="xs" color={kpiText} mb={1}>Créditos en mora</Text>
-            <Text fontWeight="bold">{filas.length}</Text>
+
+        {/* KPIs Premium */}
+        <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={6} mb={8}>
+          <Box p={6} borderRadius="xl" bgGradient={kpiBg1} color="white" boxShadow="xl" position="relative" overflow="hidden">
+            <Icon as={FaUsersSlash} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+            <Stat>
+              <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Créditos en Mora</StatLabel>
+              <StatNumber fontSize="4xl" fontWeight="extrabold">{filas.length}</StatNumber>
+            </Stat>
           </Box>
-          <Box p={4} bg={kpiBg} border="1px solid" borderColor={kpiBorder} borderRadius="lg" boxShadow="sm">
-            <Text fontSize="xs" color={kpiText} mb={1}>Deuda total</Text>
-            <Text fontWeight="bold">{formatoHNL.format(totalDeuda)}</Text>
+          <Box p={6} borderRadius="xl" bgGradient={kpiBg2} color="white" boxShadow="xl" position="relative" overflow="hidden">
+            <Icon as={FaFileInvoiceDollar} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+            <Stat>
+              <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Deuda Total</StatLabel>
+              <StatNumber fontSize="4xl" fontWeight="extrabold">{formatoHNL.format(totalDeuda)}</StatNumber>
+            </Stat>
           </Box>
-          <Box p={4} bg={kpiBg} border="1px solid" borderColor={kpiBorder} borderRadius="lg" boxShadow="sm">
-            <Text fontSize="xs" color={kpiText} mb={1}>Días en mora (promedio / máx)</Text>
-            <Text fontWeight="bold">{promedioDias} / {maxDias}</Text>
+          <Box p={6} borderRadius="xl" bgGradient={kpiBg3} color="white" boxShadow="xl" position="relative" overflow="hidden">
+            <Icon as={FaRegClock} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+            <Stat>
+              <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Promedio Días Mora</StatLabel>
+              <StatNumber fontSize="4xl" fontWeight="extrabold">{promedioDias} <Text as="span" fontSize="lg">días</Text></StatNumber>
+            </Stat>
           </Box>
         </SimpleGrid>
 
-        {/* Tabla */}
-        <Box borderRadius="md" p={0}>
-          <Table size="sm" variant="simple" borderX="1px solid" borderColor={border} borderCollapse="collapse">
-            <Thead>
-              <Tr>
-                {ALL_COLUMNS.map((col, i) => (
-                  <Th
-                    key={col}
-                    textAlign="center"
-                    borderRight={i < ALL_COLUMNS.length - 1 ? "1px solid" : undefined}
-                    borderColor={border}
-                    borderBottom="1px solid"
-                  >
-                    {col}
-                  </Th>
-                ))}
-              </Tr>
-            </Thead>
-            <Tbody>
-              {filas.map((c) => (
-                <Tr key={c.id_credito}>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {extractors["Cliente"](c)}
-                  </Td>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {extractors["Numero de Pedido"](c)}
-                  </Td>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {formatoHNL.format(extractors["Deuda"](c) || 0)}
-                  </Td>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {extractors["Fecha de Inicio"](c)}
-                  </Td>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {extractors["Fecha de Vencimiento"](c)}
-                  </Td>
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {extractors["Días en Mora"](c)}
-                  </Td>
-                  <Td textAlign="center" borderBottom="1px solid">
-                    {extractors["Estado"](c)}
-                  </Td>
-                </Tr>
-              ))}
-              {filas.length === 0 && (
+        {/* Estado vacío y Tabla */}
+        {loading ? (
+          <Flex justify="center" align="center" minH="30vh">
+            <Spinner size="xl" color="teal.500" thickness="4px" />
+          </Flex>
+        ) : filas.length === 0 ? (
+          <Flex direction="column" align="center" justify="center" py={16} bg={chartBg} borderRadius="xl" boxShadow="sm" borderWidth="1px" borderColor={border}>
+            {creditos.length === 0 ? (
+              // Si la BD de créditos está vacía globalmente para mora
+              <>
+                <Icon as={FaRegSmileWink} boxSize={16} color="green.400" mb={4} />
+                <Heading size="md" color={muted} mb={2}>¡Excelente Trabajo!</Heading>
+                <Text color="gray.400" textAlign="center" maxW="sm">
+                  Actualmente no tienes clientes registrados con pagos atrasados. Todas las carteras están sanas.
+                </Text>
+              </>
+            ) : (
+              // Si hay creditos pero el filtro los oculta
+              <>
+                <Icon as={FaSyncAlt} boxSize={12} color="gray.300" mb={4} />
+                <Heading size="md" color={muted} mb={2}>Sin coincidencias</Heading>
+                <Text color="gray.400" textAlign="center" maxW="sm">
+                  Ajusta los filtros de búsqueda para encontrar clientes específicos en mora.
+                </Text>
+              </>
+            )}
+          </Flex>
+        ) : (
+          <Box borderRadius="xl" overflow="hidden" borderWidth="1px" borderColor={border} boxShadow="sm">
+            <Table size="sm" variant="simple" borderCollapse="collapse">
+              <Thead bg={thBg}>
                 <Tr>
-                  <Td colSpan={ALL_COLUMNS.length}>
-                    <Text fontStyle="italic" textAlign="center" py={3}>
-                      Sin resultados con los filtros aplicados.
-                    </Text>
-                  </Td>
+                  {ALL_COLUMNS.map((col, i) => (
+                    <Th
+                      key={col}
+                      textAlign="center"
+                      borderRight={i < ALL_COLUMNS.length - 1 ? "1px solid" : undefined}
+                      borderColor={border}
+                      color="gray.500" py={4}
+                    >
+                      {col}
+                    </Th>
+                  ))}
                 </Tr>
-              )}
-            </Tbody>
-          </Table>
-        </Box>
+              </Thead>
+              <Tbody>
+                {filas.map((c) => (
+                  <Tr key={c.id_credito} _hover={{ bg: rowHoverBg }} transition="background 0.2s">
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border} fontWeight="medium">
+                      {extractors["Cliente"](c)}
+                    </Td>
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border}>
+                      {extractors["ID Detalle Pedido"](c)}
+                    </Td>
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border} fontWeight="bold" color="red.500">
+                      {formatoHNL.format(extractors["Deuda"](c) || 0)}
+                    </Td>
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border}>
+                      {extractors["Fecha de Inicio"](c)?.substring(0, 10)}
+                    </Td>
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border}>
+                      {extractors["Fecha de Vencimiento"](c)?.substring(0, 10)}
+                    </Td>
+                    <Td textAlign="center" borderRight="1px solid" borderColor={border} color="orange.500" fontWeight="bold">
+                      {extractors["Días en Mora"](c)} días
+                    </Td>
+                    <Td textAlign="center">
+                      <Badge colorScheme="red" variant="subtle" borderRadius="full" px={2} py={0.5}>
+                        {extractors["Estado"](c)}
+                      </Badge>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        )}
       </Box>
 
       {/* Modal: seleccionar columnas para exportar */}
@@ -403,10 +449,30 @@ export default function ReporteMoras() {
         <ModalOverlay />
         <ModalContent bg={modalBg}>
           <ModalHeader>
-            Columnas a exportar {exportFormat ? `(${exportFormat.toUpperCase()})` : ""}
+            Exportar Clientes en Mora
           </ModalHeader>
           <ModalBody>
-            <Stack spacing={2}>
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+              <Box as="select"
+                width="100%"
+                padding="8px"
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={border}
+                bg={bg}
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+              >
+                <option value="pdf">PDF</option>
+                <option value="excel">Excel</option>
+              </Box>
+            </FormControl>
+
+            <Divider mb={4} />
+
+            <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+            <Stack spacing={2} maxHeight="200px" overflowY="auto">
               {ALL_COLUMNS.map((col) => (
                 <Checkbox
                   key={col}
@@ -431,6 +497,7 @@ export default function ReporteMoras() {
                 else exportXLSX(filas, colsToExport);
                 onColsClose();
               }}
+              isDisabled={colsToExport.length === 0}
             >
               Generar
             </Button>

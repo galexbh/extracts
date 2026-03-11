@@ -250,10 +250,10 @@ export default function Compras() {
     const navigate = useNavigate();
     const [rutaPendiente, setRutaPendiente] = useState(null);
     const [fechaInicioFiltroOrden, setFechaInicioFiltroOrden] = useState("");
-const [fechaFinFiltroOrden, setFechaFinFiltroOrden] = useState("");
+    const [fechaFinFiltroOrden, setFechaFinFiltroOrden] = useState("");
     const [ordenesSeleccionadas, setOrdenesSeleccionadas] = useState([]);
 
-   
+
 
     // 🔥 Sincronizar con el Sidebar
     useEffect(() => {
@@ -311,33 +311,33 @@ const [fechaFinFiltroOrden, setFechaFinFiltroOrden] = useState("");
     const [modalEliminarProv, setModalEliminarProv] = useState(false);
     const [proveedorAEliminar, setProveedorAEliminar] = useState(null);
     const [modalProv, setModalProv] = useState(false);
-const proveedoresModal = useDisclosure();
-const [proveedorExportFormat, setProveedorExportFormat] = useState("excel");
-const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState([]);
+    const proveedoresModal = useDisclosure();
+    const [proveedorExportFormat, setProveedorExportFormat] = useState("excel");
+    const [proveedoresSeleccionados, setProveedoresSeleccionados] = useState([]);
 
-const PROVEEDOR_COLUMNS = useMemo(
-    () => [
-        { key: "id_proveedor", label: "ID Proveedor" },
-        { key: "nombre", label: "Nombre" },
-        { key: "rtn", label: "RTN / ID" },
-        { key: "telefono", label: "Teléfono" },
-        { key: "correo", label: "Correo" },
-        { key: "direccion", label: "Dirección" },
-        { key: "estado", label: "Estado" },
-    ],
-    []
-);
+    const PROVEEDOR_COLUMNS = useMemo(
+        () => [
+            { key: "id_proveedor", label: "ID Proveedor" },
+            { key: "nombre", label: "Nombre" },
+            { key: "rtn", label: "RTN / ID" },
+            { key: "telefono", label: "Teléfono" },
+            { key: "correo", label: "Correo" },
+            { key: "direccion", label: "Dirección" },
+            { key: "estado", label: "Estado" },
+        ],
+        []
+    );
 
-const [selectedProveedorColumns, setSelectedProveedorColumns] = useState(
-    PROVEEDOR_COLUMNS.map((c) => c.key)
-);
+    const [selectedProveedorColumns, setSelectedProveedorColumns] = useState(
+        PROVEEDOR_COLUMNS.map((c) => c.key)
+    );
 
-const allProveedorChecked =
-    selectedProveedorColumns.length === PROVEEDOR_COLUMNS.length;
+    const allProveedorChecked =
+        selectedProveedorColumns.length === PROVEEDOR_COLUMNS.length;
 
-const isProveedorIndeterminate =
-    selectedProveedorColumns.length > 0 &&
-    selectedProveedorColumns.length < PROVEEDOR_COLUMNS.length;
+    const isProveedorIndeterminate =
+        selectedProveedorColumns.length > 0 &&
+        selectedProveedorColumns.length < PROVEEDOR_COLUMNS.length;
 
     const [provForm, setProvForm] = useState({
         nombre: "",
@@ -373,6 +373,7 @@ const isProveedorIndeterminate =
 
     // Export
     const exportModal = useDisclosure();
+    const exportProveedorModal = useDisclosure();
     const [exportFormat, setExportFormat] = useState("excel");
 
     // Todas las columnas posibles del reporte UNIFICADO (con nombres de factura)
@@ -650,25 +651,25 @@ const isProveedorIndeterminate =
     };
 
     const guardarProveedor = async () => {
-     // 1) Nombre
+        // 1) Nombre
 
-// 🔹 Validar máximo 100 caracteres
-if (provForm.nombre && provForm.nombre.length > 100) {
-    return toast({
-        title: "Nombre demasiado largo",
-        description: "El nombre del proveedor no puede exceder los 100 caracteres.",
-        status: "warning",
-    });
-}
+        // 🔹 Validar máximo 100 caracteres
+        if (provForm.nombre && provForm.nombre.length > 100) {
+            return toast({
+                title: "Nombre demasiado largo",
+                description: "El nombre del proveedor no puede exceder los 100 caracteres.",
+                status: "warning",
+            });
+        }
 
-const errNombre = validarSoloLetras(provForm.nombre, "Nombre del proveedor", true);
-if (errNombre) {
-    return toast({
-        title: "Nombre inválido",
-        description: errNombre, // 👈 mensaje específico
-        status: errNombre.includes("obligatorio") ? "warning" : "error",
-    });
-}
+        const errNombre = validarSoloLetras(provForm.nombre, "Nombre del proveedor", true);
+        if (errNombre) {
+            return toast({
+                title: "Nombre inválido",
+                description: errNombre, // 👈 mensaje específico
+                status: errNombre.includes("obligatorio") ? "warning" : "error",
+            });
+        }
 
         // 2) RTN / ID (13 o 14 dígitos)
         const errRTN = validarRTN(provForm.rtn, true);
@@ -1127,56 +1128,56 @@ if (errNombre) {
     const totales = calcTotalesFactura(detallesVisibles, flete);
 
     const ordenesRecientesFiltradas = useMemo(() => {
-    return ordenesRecientes.filter((o) => {
-        const fecha = o.fecha_orden ? o.fecha_orden.slice(0, 10) : "";
+        return ordenesRecientes.filter((o) => {
+            const fecha = o.fecha_orden ? o.fecha_orden.slice(0, 10) : "";
 
-        if (!fecha) return false;
+            if (!fecha) return false;
 
-        if (fechaInicioFiltroOrden && fecha < fechaInicioFiltroOrden) return false;
-        if (fechaFinFiltroOrden && fecha > fechaFinFiltroOrden) return false;
+            if (fechaInicioFiltroOrden && fecha < fechaInicioFiltroOrden) return false;
+            if (fechaFinFiltroOrden && fecha > fechaFinFiltroOrden) return false;
 
-        return true;
-    });
-}, [ordenesRecientes, fechaInicioFiltroOrden, fechaFinFiltroOrden]);
+            return true;
+        });
+    }, [ordenesRecientes, fechaInicioFiltroOrden, fechaFinFiltroOrden]);
 
-const rangoFechasTexto = useMemo(() => {
-    if (fechaInicioFiltroOrden && fechaFinFiltroOrden) {
-        return `${fechaInicioFiltroOrden} a ${fechaFinFiltroOrden}`;
-    }
-    if (fechaInicioFiltroOrden) {
-        return `Desde ${fechaInicioFiltroOrden}`;
-    }
-    if (fechaFinFiltroOrden) {
-        return `Hasta ${fechaFinFiltroOrden}`;
-    }
-    return "Sin filtro de fechas";
-}, [fechaInicioFiltroOrden, fechaFinFiltroOrden]);
+    const rangoFechasTexto = useMemo(() => {
+        if (fechaInicioFiltroOrden && fechaFinFiltroOrden) {
+            return `${fechaInicioFiltroOrden} a ${fechaFinFiltroOrden}`;
+        }
+        if (fechaInicioFiltroOrden) {
+            return `Desde ${fechaInicioFiltroOrden}`;
+        }
+        if (fechaFinFiltroOrden) {
+            return `Hasta ${fechaFinFiltroOrden}`;
+        }
+        return "Sin filtro de fechas";
+    }, [fechaInicioFiltroOrden, fechaFinFiltroOrden]);
 
-const toggleSeleccionOrden = (idOrden) => {
-    setOrdenesSeleccionadas((prev) =>
-        prev.includes(idOrden)
-            ? prev.filter((id) => id !== idOrden)
-            : [...prev, idOrden]
-    );
-};
-
-const toggleSeleccionTodas = () => {
-    const idsFiltrados = ordenesRecientesFiltradas.map((o) => o.id_orden_compra);
-
-    const todasSeleccionadas =
-        idsFiltrados.length > 0 &&
-        idsFiltrados.every((id) => ordenesSeleccionadas.includes(id));
-
-    if (todasSeleccionadas) {
+    const toggleSeleccionOrden = (idOrden) => {
         setOrdenesSeleccionadas((prev) =>
-            prev.filter((id) => !idsFiltrados.includes(id))
+            prev.includes(idOrden)
+                ? prev.filter((id) => id !== idOrden)
+                : [...prev, idOrden]
         );
-    } else {
-        setOrdenesSeleccionadas((prev) => [
-            ...new Set([...prev, ...idsFiltrados]),
-        ]);
-    }
-};
+    };
+
+    const toggleSeleccionTodas = () => {
+        const idsFiltrados = ordenesRecientesFiltradas.map((o) => o.id_orden_compra);
+
+        const todasSeleccionadas =
+            idsFiltrados.length > 0 &&
+            idsFiltrados.every((id) => ordenesSeleccionadas.includes(id));
+
+        if (todasSeleccionadas) {
+            setOrdenesSeleccionadas((prev) =>
+                prev.filter((id) => !idsFiltrados.includes(id))
+            );
+        } else {
+            setOrdenesSeleccionadas((prev) => [
+                ...new Set([...prev, ...idsFiltrados]),
+            ]);
+        }
+    };
 
     // =======================
     // Dataset UNIFICADO export (mapear nombres)
@@ -1189,15 +1190,15 @@ const toggleSeleccionTodas = () => {
         ]);
 
         const provs = provRes.data || [];
-let ocs = ocRes.data || [];
-let dets = detRes.data || [];
+        let ocs = ocRes.data || [];
+        let dets = detRes.data || [];
 
-if (idsOrdenesSeleccionadas.length > 0) {
-    const idsSet = new Set(idsOrdenesSeleccionadas.map(Number));
+        if (idsOrdenesSeleccionadas.length > 0) {
+            const idsSet = new Set(idsOrdenesSeleccionadas.map(Number));
 
-    ocs = ocs.filter((o) => idsSet.has(Number(o.id_orden_compra)));
-    dets = dets.filter((d) => idsSet.has(Number(d.id_orden_compra)));
-}
+            ocs = ocs.filter((o) => idsSet.has(Number(o.id_orden_compra)));
+            dets = dets.filter((d) => idsSet.has(Number(d.id_orden_compra)));
+        }
 
         const provById = new Map(provs.map((p) => [Number(p.id_proveedor), p]));
         const ocById = new Map(ocs.map((o) => [Number(o.id_orden_compra), o]));
@@ -1313,261 +1314,263 @@ if (idsOrdenesSeleccionadas.length > 0) {
     // =======================
 
     const buildProveedoresRows = () => {
-    if (!proveedores || proveedores.length === 0) return [];
+        if (!proveedores || proveedores.length === 0) return [];
 
-    return [...proveedores]
-        .map((p) => ({
-            id_proveedor: p.id_proveedor ?? "",
-            nombre: p.nombre ?? "",
-            rtn: p.rtn ?? "",
-            telefono: p.telefono ?? "",
-            correo: p.correo ?? "",
-            direccion: p.direccion ?? "",
-            estado: p.nombre_estado ?? p.estado ?? "",
-        }))
-        .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
-};
-const toggleSeleccionProveedor = (idProveedor) => {
-    setProveedoresSeleccionados((prev) =>
-        prev.includes(idProveedor)
-            ? prev.filter((id) => id !== idProveedor)
-            : [...prev, idProveedor]
-    );
-};
-
-const toggleSeleccionTodosProveedores = () => {
-    const idsVisibles = proveedores.map((p) => p.id_proveedor);
-
-    const todosSeleccionados =
-        idsVisibles.length > 0 &&
-        idsVisibles.every((id) => proveedoresSeleccionados.includes(id));
-
-    if (todosSeleccionados) {
+        return [...proveedores]
+            .map((p) => ({
+                id_proveedor: p.id_proveedor ?? "",
+                nombre: p.nombre ?? "",
+                rtn: p.rtn ?? "",
+                telefono: p.telefono ?? "",
+                correo: p.correo ?? "",
+                direccion: p.direccion ?? "",
+                estado: p.nombre_estado ?? p.estado ?? "",
+            }))
+            .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+    };
+    const toggleSeleccionProveedor = (idProveedor) => {
         setProveedoresSeleccionados((prev) =>
-            prev.filter((id) => !idsVisibles.includes(id))
+            prev.includes(idProveedor)
+                ? prev.filter((id) => id !== idProveedor)
+                : [...prev, idProveedor]
         );
-    } else {
-        setProveedoresSeleccionados((prev) => [
-            ...new Set([...prev, ...idsVisibles]),
-        ]);
-    }
-};
+    };
 
-const buildProveedoresRowsFiltrados = (idsSeleccionados = []) => {
-    let rows = buildProveedoresRows();
+    const toggleSeleccionTodosProveedores = () => {
+        const idsVisibles = proveedores.map((p) => p.id_proveedor);
 
-    if (idsSeleccionados.length > 0) {
-        const idsSet = new Set(idsSeleccionados.map(Number));
-        rows = rows.filter((r) => idsSet.has(Number(r.id_proveedor)));
-    }
+        const todosSeleccionados =
+            idsVisibles.length > 0 &&
+            idsVisibles.every((id) => proveedoresSeleccionados.includes(id));
 
-    return rows;
-};
-
-
-const exportarProveedores = async () => {
-    try {
-        if (proveedoresSeleccionados.length === 0) {
-            toast({
-                title: "Seleccione al menos un proveedor",
-                description: "Debe seleccionar uno o varios proveedores para exportar.",
-                status: "warning",
-            });
-            return;
-        }
-
-        const rows = buildProveedoresRowsFiltrados(proveedoresSeleccionados);
-
-        if (!rows.length) {
-            toast({
-                title: "No hay proveedores para exportar",
-                status: "warning",
-            });
-            return;
-        }
-
-        const fechaGeneracion = new Date();
-        const cols = PROVEEDOR_COLUMNS.filter((c) =>
-            selectedProveedorColumns.includes(c.key)
-        );
-
-        if (!cols.length) {
-            toast({
-                title: "Seleccione al menos una columna",
-                status: "warning",
-            });
-            return;
-        }
-
-        if (proveedorExportFormat === "excel") {
-            const wb = new ExcelJS.Workbook();
-            const ws = wb.addWorksheet("Proveedores");
-
-            ws.mergeCells("A1:F1");
-            ws.getCell("A1").value = "REPORTE DE PROVEEDORES";
-            ws.getCell("A1").font = { bold: true, size: 18 };
-            ws.getCell("A1").alignment = { horizontal: "center" };
-
-            ws.getCell("A2").value = `Fecha de generación: ${formatearFecha(fechaGeneracion)}`;
-            ws.getCell("A3").value = `Hora de generación: ${formatearHora(fechaGeneracion)}`;
-            ws.getCell("A4").value = `Proveedores seleccionados: ${proveedoresSeleccionados.length}`;
-
-            ws.addRow([]);
-            ws.addRow(cols.map((c) => c.label));
-
-            rows.forEach((r) => {
-                ws.addRow(cols.map((c) => r[c.key]));
-            });
-
-            const filaEncabezado = 6;
-            ws.getRow(filaEncabezado).font = {
-                bold: true,
-                color: { argb: "FFFFFFFF" },
-            };
-            ws.getRow(filaEncabezado).fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FF0F766E" },
-            };
-            ws.getRow(filaEncabezado).alignment = { horizontal: "center" };
-
-            cols.forEach((c, i) => {
-                let max = c.label.length;
-                rows.forEach((r) => {
-                    const v = r[c.key] == null ? "" : String(r[c.key]);
-                    if (v.length > max) max = v.length;
-                });
-                ws.getColumn(i + 1).width = Math.min(Math.max(15, max + 2), 35);
-            });
-
-            const buf = await wb.xlsx.writeBuffer();
-            saveAs(new Blob([buf]), "reporte_proveedores.xlsx");
-
-            toast({
-                title: "Excel de proveedores exportado",
-                status: "success",
-            });
+        if (todosSeleccionados) {
+            setProveedoresSeleccionados((prev) =>
+                prev.filter((id) => !idsVisibles.includes(id))
+            );
         } else {
-            const doc = new jsPDF({ unit: "pt", format: "a4" });
-            const pageWidth = doc.internal.pageSize.width;
+            setProveedoresSeleccionados((prev) => [
+                ...new Set([...prev, ...idsVisibles]),
+            ]);
+        }
+    };
 
-            doc.setFillColor(255, 255, 255);
-            doc.rect(0, 0, pageWidth, 130, "F");
+    const buildProveedoresRowsFiltrados = (idsSeleccionados = []) => {
+        let rows = buildProveedoresRows();
 
-            try {
-                const dataURL = await imgToDataURL(logoSrc);
-                doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
-            } catch (e) {
-                console.warn("⚠️ No se pudo cargar el logo", e);
+        if (idsSeleccionados.length > 0) {
+            const idsSet = new Set(idsSeleccionados.map(Number));
+            rows = rows.filter((r) => idsSet.has(Number(r.id_proveedor)));
+        }
+
+        return rows;
+    };
+
+
+    const exportarProveedores = async () => {
+        try {
+            if (proveedoresSeleccionados.length === 0) {
+                toast({
+                    title: "Seleccione al menos un proveedor",
+                    description: "Debe seleccionar uno o varios proveedores para exportar.",
+                    status: "warning",
+                });
+                return;
             }
 
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(18);
-            doc.setTextColor(30, 41, 59);
-            doc.text("REPORTE DE PROVEEDORES", pageWidth / 2, 45, {
-                align: "center",
-            });
+            const rows = buildProveedoresRowsFiltrados(proveedoresSeleccionados);
 
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-            doc.setTextColor(90);
+            if (!rows.length) {
+                toast({
+                    title: "No hay proveedores para exportar",
+                    status: "warning",
+                });
+                return;
+            }
 
-            doc.text(`Fecha: ${formatearFecha(fechaGeneracion)}`, 40, 90);
-            doc.text(`Hora: ${formatearHora(fechaGeneracion)}`, 40, 105);
-            doc.text(
-                `Proveedores seleccionados: ${proveedoresSeleccionados.length}`,
-                pageWidth - 220,
-                90
+            const fechaGeneracion = new Date();
+            const cols = PROVEEDOR_COLUMNS.filter((c) =>
+                selectedProveedorColumns.includes(c.key)
             );
 
-            doc.setDrawColor(15, 118, 110);
-            doc.setLineWidth(1.2);
-            doc.line(40, 118, pageWidth - 40, 118);
+            if (!cols.length) {
+                toast({
+                    title: "Seleccione al menos una columna",
+                    status: "warning",
+                });
+                return;
+            }
 
-            autoTable(doc, {
-                startY: 135,
-                head: [cols.map((c) => c.label)],
-                body: rows.map((r) => cols.map((c) => r[c.key] ?? "")),
-                styles: {
-                    fontSize: 8.5,
-                    cellPadding: 5,
-                    valign: "middle",
-                    textColor: [40, 40, 40],
-                    lineColor: [220, 220, 220],
-                    lineWidth: 0.4,
-                },
-                headStyles: {
-                    fillColor: [15, 118, 110],
-                    textColor: 255,
-                    fontStyle: "bold",
-                    halign: "center",
-                },
-                alternateRowStyles: {
-                    fillColor: [248, 250, 252],
-                },
-                margin: { left: 40, right: 40 },
-                didDrawPage: () => {
-                    const pageSize = doc.internal.pageSize;
-                    const pageHeight = pageSize.getHeight();
+            if (proveedorExportFormat === "excel") {
+                const wb = new ExcelJS.Workbook();
+                const ws = wb.addWorksheet("Proveedores");
 
-                    doc.setFontSize(9);
-                    doc.setTextColor(120);
-                    doc.text(
-                        `Página ${doc.getNumberOfPages()}`,
-                        pageSize.getWidth() - 80,
-                        pageHeight - 20
-                    );
-                },
-            });
+                ws.mergeCells("A1:F1");
+                ws.getCell("A1").value = "REPORTE DE PROVEEDORES";
+                ws.getCell("A1").font = { bold: true, size: 18 };
+                ws.getCell("A1").alignment = { horizontal: "center" };
 
-            doc.save("reporte_proveedores.pdf");
+                ws.getCell("A2").value = `Fecha de generación: ${formatearFecha(fechaGeneracion)}`;
+                ws.getCell("A3").value = `Hora de generación: ${formatearHora(fechaGeneracion)}`;
+                ws.getCell("A4").value = `Proveedores seleccionados: ${proveedoresSeleccionados.length}`;
 
+                ws.addRow([]);
+                ws.addRow(cols.map((c) => c.label));
+
+                rows.forEach((r) => {
+                    ws.addRow(cols.map((c) => r[c.key]));
+                });
+
+                const filaEncabezado = 6;
+                ws.getRow(filaEncabezado).font = {
+                    bold: true,
+                    color: { argb: "FFFFFFFF" },
+                };
+                ws.getRow(filaEncabezado).fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FF0F766E" },
+                };
+                ws.getRow(filaEncabezado).alignment = { horizontal: "center" };
+
+                cols.forEach((c, i) => {
+                    let max = c.label.length;
+                    rows.forEach((r) => {
+                        const v = r[c.key] == null ? "" : String(r[c.key]);
+                        if (v.length > max) max = v.length;
+                    });
+                    ws.getColumn(i + 1).width = Math.min(Math.max(15, max + 2), 35);
+                });
+
+                const buf = await wb.xlsx.writeBuffer();
+                saveAs(new Blob([buf]), "reporte_proveedores.xlsx");
+
+                toast({
+                    title: "Excel de proveedores exportado",
+                    status: "success",
+                });
+                exportProveedorModal.onClose();
+            } else {
+                const doc = new jsPDF({ unit: "pt", format: "a4" });
+                const pageWidth = doc.internal.pageSize.width;
+
+                doc.setFillColor(255, 255, 255);
+                doc.rect(0, 0, pageWidth, 130, "F");
+
+                try {
+                    const dataURL = await imgToDataURL(logoSrc);
+                    doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
+                } catch (e) {
+                    console.warn("⚠️ No se pudo cargar el logo", e);
+                }
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(18);
+                doc.setTextColor(30, 41, 59);
+                doc.text("REPORTE DE PROVEEDORES", pageWidth / 2, 45, {
+                    align: "center",
+                });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(90);
+
+                doc.text(`Fecha: ${formatearFecha(fechaGeneracion)}`, 40, 90);
+                doc.text(`Hora: ${formatearHora(fechaGeneracion)}`, 40, 105);
+                doc.text(
+                    `Proveedores seleccionados: ${proveedoresSeleccionados.length}`,
+                    pageWidth - 220,
+                    90
+                );
+
+                doc.setDrawColor(15, 118, 110);
+                doc.setLineWidth(1.2);
+                doc.line(40, 118, pageWidth - 40, 118);
+
+                autoTable(doc, {
+                    startY: 135,
+                    head: [cols.map((c) => c.label)],
+                    body: rows.map((r) => cols.map((c) => r[c.key] ?? "")),
+                    styles: {
+                        fontSize: 8.5,
+                        cellPadding: 5,
+                        valign: "middle",
+                        textColor: [40, 40, 40],
+                        lineColor: [220, 220, 220],
+                        lineWidth: 0.4,
+                    },
+                    headStyles: {
+                        fillColor: [15, 118, 110],
+                        textColor: 255,
+                        fontStyle: "bold",
+                        halign: "center",
+                    },
+                    alternateRowStyles: {
+                        fillColor: [248, 250, 252],
+                    },
+                    margin: { left: 40, right: 40 },
+                    didDrawPage: () => {
+                        const pageSize = doc.internal.pageSize;
+                        const pageHeight = pageSize.getHeight();
+
+                        doc.setFontSize(9);
+                        doc.setTextColor(120);
+                        doc.text(
+                            `Página ${doc.getNumberOfPages()}`,
+                            pageSize.getWidth() - 80,
+                            pageHeight - 20
+                        );
+                    },
+                });
+
+                doc.save("reporte_proveedores.pdf");
+
+                toast({
+                    title: "PDF de proveedores exportado",
+                    status: "success",
+                });
+                exportProveedorModal.onClose();
+            }
+        } catch (error) {
+            console.error(error);
             toast({
-                title: "PDF de proveedores exportado",
-                status: "success",
+                title: "Error al exportar proveedores",
+                description: error.message,
+                status: "error",
             });
         }
-    } catch (error) {
-        console.error(error);
-        toast({
-            title: "Error al exportar proveedores",
-            description: error.message,
-            status: "error",
-        });
-    }
-};
+    };
 
     const exportarReporte = async () => {
-        
-        
-         // 🔴 Validar rango de fechas
-    if (
-        fechaInicioFiltroOrden &&
-        fechaFinFiltroOrden &&
-        fechaFinFiltroOrden < fechaInicioFiltroOrden
-    ) {
-        toast({
-            title: "Rango de fechas inválido",
-            description: "La fecha final no puede ser menor que la fecha inicial.",
-            status: "warning",
-        });
-        return;
-    }
 
-    try {
 
-        if (ordenesSeleccionadas.length === 0) {
+        // 🔴 Validar rango de fechas
+        if (
+            fechaInicioFiltroOrden &&
+            fechaFinFiltroOrden &&
+            fechaFinFiltroOrden < fechaInicioFiltroOrden
+        ) {
             toast({
-                title: "Seleccione al menos una orden",
-                description: "Debe seleccionar una o varias órdenes para exportar.",
+                title: "Rango de fechas inválido",
+                description: "La fecha final no puede ser menor que la fecha inicial.",
                 status: "warning",
             });
             return;
         }
 
-        setLoading(true);
+        try {
 
-        const rows = await buildUnifiedRows(ordenesSeleccionadas);
+            if (ordenesSeleccionadas.length === 0) {
+                toast({
+                    title: "Seleccione al menos una orden",
+                    description: "Debe seleccionar una o varias órdenes para exportar.",
+                    status: "warning",
+                });
+                return;
+            }
+
+            setLoading(true);
+
+            const rows = await buildUnifiedRows(ordenesSeleccionadas);
             if (!rows.length) {
                 toast({ title: "No hay datos para exportar", status: "info" });
                 return;
@@ -1575,293 +1578,292 @@ const exportarProveedores = async () => {
 
             const cols = ALL_COLUMNS.filter((c) => selectedColumns.includes(c.key));
 
-        if (exportFormat === "excel") {
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Reporte");
+            if (exportFormat === "excel") {
+                const wb = new ExcelJS.Workbook();
+                const ws = wb.addWorksheet("Reporte");
 
-    // =========================
-    // ENCABEZADO
-    // =========================
-    ws.mergeCells("A1:F1");
-    ws.getCell("A1").value = "REPORTE DE COMPRAS DE INSUMOS";
-    ws.getCell("A1").font = { bold: true, size: 18 };
-    ws.getCell("A1").alignment = { horizontal: "center" };
+                // =========================
+                // ENCABEZADO
+                // =========================
+                ws.mergeCells("A1:F1");
+                ws.getCell("A1").value = "REPORTE DE COMPRAS DE INSUMOS";
+                ws.getCell("A1").font = { bold: true, size: 18 };
+                ws.getCell("A1").alignment = { horizontal: "center" };
 
-    ws.getCell("A2").value = `Fecha de generación: ${formatearFecha(new Date())}`;
-    ws.getCell("A3").value = `Hora de generación: ${formatearHora(new Date())}`;
-    ws.getCell("A4").value =
-        `Rango de fechas aplicado: ${
-            fechaInicioFiltroOrden || fechaFinFiltroOrden
-                ? `${fechaInicioFiltroOrden || "—"} a ${fechaFinFiltroOrden || "—"}`
-                : "Sin filtro de fechas"
-        }`;
-    ws.getCell("A5").value = `Órdenes seleccionadas: ${ordenesSeleccionadas.length}`;
+                ws.getCell("A2").value = `Fecha de generación: ${formatearFecha(new Date())}`;
+                ws.getCell("A3").value = `Hora de generación: ${formatearHora(new Date())}`;
+                ws.getCell("A4").value =
+                    `Rango de fechas aplicado: ${fechaInicioFiltroOrden || fechaFinFiltroOrden
+                        ? `${fechaInicioFiltroOrden || "—"} a ${fechaFinFiltroOrden || "—"}`
+                        : "Sin filtro de fechas"
+                    }`;
+                ws.getCell("A5").value = `Órdenes seleccionadas: ${ordenesSeleccionadas.length}`;
 
-    // =========================
-    // TABLA PRINCIPAL
-    // =========================
-    const filaInicioTabla = 7;
+                // =========================
+                // TABLA PRINCIPAL
+                // =========================
+                const filaInicioTabla = 7;
 
-    ws.addRow([]);
-    ws.addRow(cols.map((c) => c.label));
+                ws.addRow([]);
+                ws.addRow(cols.map((c) => c.label));
 
-    rows.forEach((r) => {
-        ws.addRow(cols.map((c) => r[c.key]));
-    });
+                rows.forEach((r) => {
+                    ws.addRow(cols.map((c) => r[c.key]));
+                });
 
-    const filaEncabezado = filaInicioTabla;
-    ws.getRow(filaEncabezado).font = { bold: true, color: { argb: "FFFFFFFF" } };
-    ws.getRow(filaEncabezado).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF0F766E" },
-    };
-    ws.getRow(filaEncabezado).alignment = { horizontal: "center" };
+                const filaEncabezado = filaInicioTabla;
+                ws.getRow(filaEncabezado).font = { bold: true, color: { argb: "FFFFFFFF" } };
+                ws.getRow(filaEncabezado).fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FF0F766E" },
+                };
+                ws.getRow(filaEncabezado).alignment = { horizontal: "center" };
 
-    // =========================
-    // AJUSTAR ANCHOS
-    // =========================
-    cols.forEach((c, i) => {
-        let max = c.label.length;
-        rows.forEach((r) => {
-            const v = r[c.key] == null ? "" : String(r[c.key]);
-            if (v.length > max) max = v.length;
-        });
-        ws.getColumn(i + 1).width = Math.min(Math.max(15, max + 2), 35);
-    });
+                // =========================
+                // AJUSTAR ANCHOS
+                // =========================
+                cols.forEach((c, i) => {
+                    let max = c.label.length;
+                    rows.forEach((r) => {
+                        const v = r[c.key] == null ? "" : String(r[c.key]);
+                        if (v.length > max) max = v.length;
+                    });
+                    ws.getColumn(i + 1).width = Math.min(Math.max(15, max + 2), 35);
+                });
 
-    // =========================
-    // CALCULAR TOTALES REALES
-    // =========================
-    let subtotalExcel = 0;
-    let descuentosExcel = 0;
-    let exentoExcel = 0;
-    let exoneradoExcel = 0;
-    let gravado15Excel = 0;
-    let fleteExcel = 0;
+                // =========================
+                // CALCULAR TOTALES REALES
+                // =========================
+                let subtotalExcel = 0;
+                let descuentosExcel = 0;
+                let exentoExcel = 0;
+                let exoneradoExcel = 0;
+                let gravado15Excel = 0;
+                let fleteExcel = 0;
 
-    rows.forEach((r) => {
-        const sub = Number(r.subtotal || 0);
-        const desc = Number(r.descuento || 0);
-        const cat = (r.categoria_impuesto || "").toLowerCase();
+                rows.forEach((r) => {
+                    const sub = Number(r.subtotal || 0);
+                    const desc = Number(r.descuento || 0);
+                    const cat = (r.categoria_impuesto || "").toLowerCase();
 
-        subtotalExcel += sub + desc;
-        descuentosExcel += desc;
+                    subtotalExcel += sub + desc;
+                    descuentosExcel += desc;
 
-        if (cat.includes("exento")) exentoExcel += sub;
-        else if (cat.includes("exonerado")) exoneradoExcel += sub;
-        else gravado15Excel += sub;
-    });
+                    if (cat.includes("exento")) exentoExcel += sub;
+                    else if (cat.includes("exonerado")) exoneradoExcel += sub;
+                    else gravado15Excel += sub;
+                });
 
-    // sumar flete solo una vez por orden
-    const ordenesYaSumadas = new Set();
-    rows.forEach((r) => {
-        const id = Number(r.id_orden_compra || 0);
-        if (id && !ordenesYaSumadas.has(id)) {
-            fleteExcel += Number(r.flete || 0);
-            ordenesYaSumadas.add(id);
-        }
-    });
+                // sumar flete solo una vez por orden
+                const ordenesYaSumadas = new Set();
+                rows.forEach((r) => {
+                    const id = Number(r.id_orden_compra || 0);
+                    if (id && !ordenesYaSumadas.has(id)) {
+                        fleteExcel += Number(r.flete || 0);
+                        ordenesYaSumadas.add(id);
+                    }
+                });
 
-    const impuestoExcel = gravado15Excel * 0.15;
-    const totalGeneralExcel =
-        exentoExcel +
-        exoneradoExcel +
-        gravado15Excel +
-        impuestoExcel +
-        fleteExcel;
+                const impuestoExcel = gravado15Excel * 0.15;
+                const totalGeneralExcel =
+                    exentoExcel +
+                    exoneradoExcel +
+                    gravado15Excel +
+                    impuestoExcel +
+                    fleteExcel;
 
-    // =========================
-    // RESUMEN DE TOTALES
-    // =========================
-    const filaResumen = ws.rowCount + 3;
+                // =========================
+                // RESUMEN DE TOTALES
+                // =========================
+                const filaResumen = ws.rowCount + 3;
 
-    ws.getCell(`A${filaResumen}`).value = "RESUMEN DE TOTALES";
-    ws.getCell(`A${filaResumen}`).font = { bold: true, size: 14 };
+                ws.getCell(`A${filaResumen}`).value = "RESUMEN DE TOTALES";
+                ws.getCell(`A${filaResumen}`).font = { bold: true, size: 14 };
 
-    const resumen = [
-        ["Subtotal", subtotalExcel],
-        ["Descuentos", descuentosExcel],
-        ["Flete", fleteExcel],
-        ["Importe Exento", exentoExcel],
-        ["Importe Exonerado", exoneradoExcel],
-        ["Importe Gravado 15%", gravado15Excel],
-        ["Impuesto 15%", impuestoExcel],
-        ["TOTAL GENERAL", totalGeneralExcel],
-    ];
+                const resumen = [
+                    ["Subtotal", subtotalExcel],
+                    ["Descuentos", descuentosExcel],
+                    ["Flete", fleteExcel],
+                    ["Importe Exento", exentoExcel],
+                    ["Importe Exonerado", exoneradoExcel],
+                    ["Importe Gravado 15%", gravado15Excel],
+                    ["Impuesto 15%", impuestoExcel],
+                    ["TOTAL GENERAL", totalGeneralExcel],
+                ];
 
-    resumen.forEach(([label, value], index) => {
-        const fila = filaResumen + 1 + index;
-        ws.getCell(`A${fila}`).value = label;
-        ws.getCell(`B${fila}`).value = Number(value || 0);
-        ws.getCell(`B${fila}`).numFmt = '#,##0.00';
+                resumen.forEach(([label, value], index) => {
+                    const fila = filaResumen + 1 + index;
+                    ws.getCell(`A${fila}`).value = label;
+                    ws.getCell(`B${fila}`).value = Number(value || 0);
+                    ws.getCell(`B${fila}`).numFmt = '#,##0.00';
 
-        if (label === "TOTAL GENERAL") {
-            ws.getCell(`A${fila}`).font = { bold: true };
-            ws.getCell(`B${fila}`).font = { bold: true };
-        }
-    });
+                    if (label === "TOTAL GENERAL") {
+                        ws.getCell(`A${fila}`).font = { bold: true };
+                        ws.getCell(`B${fila}`).font = { bold: true };
+                    }
+                });
 
-    const buf = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buf]), "reporte_compras_unificado.xlsx");
-    toast({ title: "Excel exportado", status: "success" });
+                const buf = await wb.xlsx.writeBuffer();
+                saveAs(new Blob([buf]), "reporte_compras_unificado.xlsx");
+                toast({ title: "Excel exportado", status: "success" });
 
 
             } else {
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.width;
-    const fechaGeneracion = new Date();
+                const doc = new jsPDF({ unit: "pt", format: "a4" });
+                const pageWidth = doc.internal.pageSize.width;
+                const fechaGeneracion = new Date();
 
-    const formattedRows = rows.map((r) => ({
-        ...r,
-        precio_unitario: formatearMoneda(r.precio_unitario),
-        subtotal: formatearMoneda(r.subtotal),
-        descuento: formatearMoneda(r.descuento),
-        total: formatearMoneda(r.total),
-        flete: formatearMoneda(r.flete),
-    }));
+                const formattedRows = rows.map((r) => ({
+                    ...r,
+                    precio_unitario: formatearMoneda(r.precio_unitario),
+                    subtotal: formatearMoneda(r.subtotal),
+                    descuento: formatearMoneda(r.descuento),
+                    total: formatearMoneda(r.total),
+                    flete: formatearMoneda(r.flete),
+                }));
 
-    // Fondo cabecera
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageWidth, 140, "F");
+                // Fondo cabecera
+                doc.setFillColor(255, 255, 255);
+                doc.rect(0, 0, pageWidth, 140, "F");
 
-    // Logo
-    try {
-        const dataURL = await imgToDataURL(logoSrc);
-        doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
-    } catch (e) {
-        console.warn("⚠️ No se pudo cargar el logo", e);
-    }
+                // Logo
+                try {
+                    const dataURL = await imgToDataURL(logoSrc);
+                    doc.addImage(dataURL, "PNG", 40, 28, 45, 45);
+                } catch (e) {
+                    console.warn("⚠️ No se pudo cargar el logo", e);
+                }
 
-    // Título
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(30, 41, 59);
-    doc.text("REPORTE DE COMPRAS DE INSUMOS", pageWidth / 2, 45, {
-        align: "center",
-    });
+                // Título
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(18);
+                doc.setTextColor(30, 41, 59);
+                doc.text("REPORTE DE COMPRAS DE INSUMOS", pageWidth / 2, 45, {
+                    align: "center",
+                });
 
-    // Subinfo
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(90);
+                // Subinfo
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.setTextColor(90);
 
-    doc.text(`Fecha: ${formatearFecha(fechaGeneracion)}`, 40, 90);
-    doc.text(`Hora: ${formatearHora(fechaGeneracion)}`, 40, 105);
-    doc.text(`Rango aplicado: ${rangoFechasTexto}`, 40, 120);
-    doc.text(`Órdenes seleccionadas: ${ordenesSeleccionadas.length}`, pageWidth - 220, 90);
+                doc.text(`Fecha: ${formatearFecha(fechaGeneracion)}`, 40, 90);
+                doc.text(`Hora: ${formatearHora(fechaGeneracion)}`, 40, 105);
+                doc.text(`Rango aplicado: ${rangoFechasTexto}`, 40, 120);
+                doc.text(`Órdenes seleccionadas: ${ordenesSeleccionadas.length}`, pageWidth - 220, 90);
 
-    // Línea separadora
-    doc.setDrawColor(15, 118, 110);
-    doc.setLineWidth(1.2);
-    doc.line(40, 132, pageWidth - 40, 132);
+                // Línea separadora
+                doc.setDrawColor(15, 118, 110);
+                doc.setLineWidth(1.2);
+                doc.line(40, 132, pageWidth - 40, 132);
 
-    autoTable(doc, {
-        startY: 150,
-        head: [cols.map((c) => c.label)],
-        body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
-        styles: {
-            fontSize: 8.5,
-            cellPadding: 5,
-            valign: "middle",
-            textColor: [40, 40, 40],
-            lineColor: [220, 220, 220],
-            lineWidth: 0.4,
-        },
-        headStyles: {
-            fillColor: [15, 118, 110],
-            textColor: 255,
-            fontStyle: "bold",
-            halign: "center",
-        },
-        alternateRowStyles: {
-            fillColor: [248, 250, 252],
-        },
-        margin: { left: 40, right: 40 },
-        didDrawPage: () => {
-            const pageSize = doc.internal.pageSize;
-            const pageHeight = pageSize.getHeight();
+                autoTable(doc, {
+                    startY: 150,
+                    head: [cols.map((c) => c.label)],
+                    body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
+                    styles: {
+                        fontSize: 8.5,
+                        cellPadding: 5,
+                        valign: "middle",
+                        textColor: [40, 40, 40],
+                        lineColor: [220, 220, 220],
+                        lineWidth: 0.4,
+                    },
+                    headStyles: {
+                        fillColor: [15, 118, 110],
+                        textColor: 255,
+                        fontStyle: "bold",
+                        halign: "center",
+                    },
+                    alternateRowStyles: {
+                        fillColor: [248, 250, 252],
+                    },
+                    margin: { left: 40, right: 40 },
+                    didDrawPage: () => {
+                        const pageSize = doc.internal.pageSize;
+                        const pageHeight = pageSize.getHeight();
 
-            doc.setFontSize(9);
-            doc.setTextColor(120);
-            doc.text(
-                `Página ${doc.getNumberOfPages()}`,
-                pageSize.getWidth() - 80,
-                pageHeight - 20
-            );
-        },
-    });
+                        doc.setFontSize(9);
+                        doc.setTextColor(120);
+                        doc.text(
+                            `Página ${doc.getNumberOfPages()}`,
+                            pageSize.getWidth() - 80,
+                            pageHeight - 20
+                        );
+                    },
+                });
 
-    const finalY = doc.lastAutoTable.finalY + 25;
+                const finalY = doc.lastAutoTable.finalY + 25;
 
-    let subtotalPDF = 0;
-    let descuentosPDF = 0;
-    let exentoPDF = 0;
-    let exoneradoPDF = 0;
-    let gravado15PDF = 0;
+                let subtotalPDF = 0;
+                let descuentosPDF = 0;
+                let exentoPDF = 0;
+                let exoneradoPDF = 0;
+                let gravado15PDF = 0;
 
-    rows.forEach((r) => {
-        const sub = Number(r.subtotal || 0);
-        const desc = Number(r.descuento || 0);
-        const cat = (r.categoria_impuesto || "").toLowerCase();
+                rows.forEach((r) => {
+                    const sub = Number(r.subtotal || 0);
+                    const desc = Number(r.descuento || 0);
+                    const cat = (r.categoria_impuesto || "").toLowerCase();
 
-        subtotalPDF += sub + desc;
-        descuentosPDF += desc;
+                    subtotalPDF += sub + desc;
+                    descuentosPDF += desc;
 
-        if (cat.includes("exento")) exentoPDF += sub;
-        else if (cat.includes("exonerado")) exoneradoPDF += sub;
-        else gravado15PDF += sub;
-    });
+                    if (cat.includes("exento")) exentoPDF += sub;
+                    else if (cat.includes("exonerado")) exoneradoPDF += sub;
+                    else gravado15PDF += sub;
+                });
 
-    const impuestoPDF = gravado15PDF * 0.15;
+                const impuestoPDF = gravado15PDF * 0.15;
 
-    let fletePDF = 0;
-    rows.forEach((r) => {
-        if (r.flete) fletePDF += Number(r.flete || 0);
-    });
+                let fletePDF = 0;
+                rows.forEach((r) => {
+                    if (r.flete) fletePDF += Number(r.flete || 0);
+                });
 
-    const totalPDF =
-        exentoPDF + exoneradoPDF + gravado15PDF + impuestoPDF + fletePDF;
+                const totalPDF =
+                    exentoPDF + exoneradoPDF + gravado15PDF + impuestoPDF + fletePDF;
 
-    // Caja resumen
-    doc.setDrawColor(210, 210, 210);
-    doc.setFillColor(250, 250, 250);
-    doc.roundedRect(40, finalY, 250, 180, 6, 6, "FD");
+                // Caja resumen
+                doc.setDrawColor(210, 210, 210);
+                doc.setFillColor(250, 250, 250);
+                doc.roundedRect(40, finalY, 250, 180, 6, 6, "FD");
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(30, 41, 59);
-    doc.text("RESUMEN DE TOTALES", 55, finalY + 22);
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(12);
+                doc.setTextColor(30, 41, 59);
+                doc.text("RESUMEN DE TOTALES", 55, finalY + 22);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
 
-    let y = finalY + 45;
+                let y = finalY + 45;
 
-    const addRow = (label, value, bold = false) => {
-        doc.setFont("helvetica", bold ? "bold" : "normal");
-        doc.setTextColor(60, 60, 60);
-        doc.text(label, 55, y);
-        doc.text(`L. ${formatearMoneda(value)}`, 275, y, { align: "right" });
-        y += 18;
-    };
+                const addRow = (label, value, bold = false) => {
+                    doc.setFont("helvetica", bold ? "bold" : "normal");
+                    doc.setTextColor(60, 60, 60);
+                    doc.text(label, 55, y);
+                    doc.text(`L. ${formatearMoneda(value)}`, 275, y, { align: "right" });
+                    y += 18;
+                };
 
-    addRow("Subtotal:", subtotalPDF);
-    addRow("Descuentos:", descuentosPDF);
-    addRow("Importe Exento:", exentoPDF);
-    addRow("Importe Exonerado:", exoneradoPDF);
-    addRow("Importe Gravado 15%:", gravado15PDF);
-    addRow("Impuesto 15%:", impuestoPDF);
-    addRow("Flete:", fletePDF);
+                addRow("Subtotal:", subtotalPDF);
+                addRow("Descuentos:", descuentosPDF);
+                addRow("Importe Exento:", exentoPDF);
+                addRow("Importe Exonerado:", exoneradoPDF);
+                addRow("Importe Gravado 15%:", gravado15PDF);
+                addRow("Impuesto 15%:", impuestoPDF);
+                addRow("Flete:", fletePDF);
 
-    doc.setDrawColor(180, 180, 180);
-    doc.line(55, y - 8, 275, y - 8);
+                doc.setDrawColor(180, 180, 180);
+                doc.line(55, y - 8, 275, y - 8);
 
-    addRow("TOTAL GENERAL:", totalPDF, true);
+                addRow("TOTAL GENERAL:", totalPDF, true);
 
-    doc.save("reporte_compras_unificado.pdf");
-    toast({ title: "PDF exportado", status: "success" });
-}
+                doc.save("reporte_compras_unificado.pdf");
+                toast({ title: "PDF exportado", status: "success" });
+            }
         } catch (e) {
             console.error(e);
             toast({
@@ -1999,33 +2001,33 @@ const exportarProveedores = async () => {
                         borderColor={border}
                         borderRadius="md"
                     >
-                     <Flex justify="space-between" align="center" mb={3} wrap="wrap" gap={2}>
-    <Heading size="md" color={accent}>
-        Proveedor
-    </Heading>
+                        <Flex justify="space-between" align="center" mb={3} wrap="wrap" gap={2}>
+                            <Heading size="md" color={accent}>
+                                Proveedor
+                            </Heading>
 
-    <HStack spacing={2}>
+                            <HStack spacing={2}>
 
-        <Button
-            size="sm"
-            variant="outline"
-            colorScheme="teal"
-            onClick={proveedoresModal.onOpen}
-        >
-            Ver / Exportar proveedores
-        </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    colorScheme="teal"
+                                    onClick={proveedoresModal.onOpen}
+                                >
+                                    Ver / Exportar proveedores
+                                </Button>
 
-        <Button
-            size="sm"
-            colorScheme="teal"
-            leftIcon={<FaPlus />}
-            onClick={() => abrirModalProveedor()}
-        >
-            Nuevo Proveedor
-        </Button>
+                                <Button
+                                    size="sm"
+                                    colorScheme="teal"
+                                    leftIcon={<FaPlus />}
+                                    onClick={() => abrirModalProveedor()}
+                                >
+                                    Nuevo Proveedor
+                                </Button>
 
-    </HStack>
-</Flex>
+                            </HStack>
+                        </Flex>
                         <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={3}>
                             <GridItem>
                                 <FormControl>
@@ -2085,7 +2087,7 @@ const exportarProveedores = async () => {
                                             Eliminar
                                         </Button>
                                     </HStack>
-                                 
+
                                 </FormControl>
                             </GridItem>
 
@@ -2198,140 +2200,140 @@ const exportarProveedores = async () => {
                     </Box>
                 </GridItem>
 
-{/* ===========================================
+                {/* ===========================================
       ÓRDENES RECIENTES
 ============================================ */}
-<GridItem>
-    <Box
-        p={4}
-        bg={cardBg}
-        border="1px solid"
-        borderColor={border}
-        borderRadius="md"
-    >
-        <Flex justify="space-between" align="center" mb={2} wrap="wrap" gap={3}>
-            <Heading size="md" color={accent}>
-                Órdenes recientes
-            </Heading>
+                <GridItem>
+                    <Box
+                        p={4}
+                        bg={cardBg}
+                        border="1px solid"
+                        borderColor={border}
+                        borderRadius="md"
+                    >
+                        <Flex justify="space-between" align="center" mb={2} wrap="wrap" gap={3}>
+                            <Heading size="md" color={accent}>
+                                Órdenes recientes
+                            </Heading>
 
-            <Text fontSize="sm" color={subtle}>
-                Selecciona una o varias para imprimir/exportar
-            </Text>
-        </Flex>
+                            <Text fontSize="sm" color={subtle}>
+                                Selecciona una o varias para imprimir/exportar
+                            </Text>
+                        </Flex>
 
-        <Divider mb={3} />
+                        <Divider mb={3} />
 
-        <HStack mb={3} spacing={3} wrap="wrap" align="flex-end">
-    <FormControl maxW="220px">
-        <FormLabel fontSize="sm">Fecha inicial</FormLabel>
-        <Input
-            size="sm"
-            type="date"
-            value={fechaInicioFiltroOrden}
-            onChange={(e) => setFechaInicioFiltroOrden(e.target.value)}
-        />
-    </FormControl>
+                        <HStack mb={3} spacing={3} wrap="wrap" align="flex-end">
+                            <FormControl maxW="220px">
+                                <FormLabel fontSize="sm">Fecha inicial</FormLabel>
+                                <Input
+                                    size="sm"
+                                    type="date"
+                                    value={fechaInicioFiltroOrden}
+                                    onChange={(e) => setFechaInicioFiltroOrden(e.target.value)}
+                                />
+                            </FormControl>
 
-    <FormControl maxW="220px">
-        <FormLabel fontSize="sm">Fecha final</FormLabel>
-        <Input
-            size="sm"
-            type="date"
-            value={fechaFinFiltroOrden}
-            onChange={(e) => setFechaFinFiltroOrden(e.target.value)}
-        />
-    </FormControl>
+                            <FormControl maxW="220px">
+                                <FormLabel fontSize="sm">Fecha final</FormLabel>
+                                <Input
+                                    size="sm"
+                                    type="date"
+                                    value={fechaFinFiltroOrden}
+                                    onChange={(e) => setFechaFinFiltroOrden(e.target.value)}
+                                />
+                            </FormControl>
 
-    <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-            setFechaInicioFiltroOrden("");
-            setFechaFinFiltroOrden("");
-        }}
-    >
-        Limpiar fechas
-    </Button>
-</HStack>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setFechaInicioFiltroOrden("");
+                                    setFechaFinFiltroOrden("");
+                                }}
+                            >
+                                Limpiar fechas
+                            </Button>
+                        </HStack>
 
-        <Checkbox
-            mb={3}
-            isChecked={
-                ordenesRecientesFiltradas.length > 0 &&
-                ordenesRecientesFiltradas.every((o) =>
-                    ordenesSeleccionadas.includes(o.id_orden_compra)
-                )
-            }
-            onChange={toggleSeleccionTodas}
-        >
-            Seleccionar todas las órdenes filtradas
-        </Checkbox>
-
-        <VStack align="stretch" spacing={2}>
-            {ordenesRecientesFiltradas.map((o) => (
-                <Flex
-                    key={o.id_orden_compra}
-                    p={2}
-                    bg="teal.50"
-                    border="1px solid"
-                    borderColor="teal.100"
-                    borderRadius="md"
-                    justify="space-between"
-                    align="center"
-                    wrap="wrap"
-                    gap={2}
-                >
-                    <HStack spacing={4} flex="1" minW="0">
                         <Checkbox
-                            isChecked={ordenesSeleccionadas.includes(o.id_orden_compra)}
-                            onChange={() => toggleSeleccionOrden(o.id_orden_compra)}
-                        />
-
-                        <Badge colorScheme="teal">OC-{o.id_orden_compra}</Badge>
-                        <Text fontSize="sm">{o.nombre_proveedor}</Text>
-                        <Badge>{o.nombre_estado}</Badge>
-                        <Text fontSize="sm">
-                            {o.fecha_orden ? o.fecha_orden.slice(0, 10) : ""}
-                        </Text>
-                    </HStack>
-
-                    <HStack>
-                        <Button
-                            size="xs"
-                            leftIcon={<FaFolderOpen />}
-                            colorScheme="teal"
-                            variant="ghost"
-                            onClick={() => {
-                                abrirOrden(o.id_orden_compra);
-                            }}
+                            mb={3}
+                            isChecked={
+                                ordenesRecientesFiltradas.length > 0 &&
+                                ordenesRecientesFiltradas.every((o) =>
+                                    ordenesSeleccionadas.includes(o.id_orden_compra)
+                                )
+                            }
+                            onChange={toggleSeleccionTodas}
                         >
-                            Abrir
-                        </Button>
+                            Seleccionar todas las órdenes filtradas
+                        </Checkbox>
 
-                        <Button
-                            size="xs"
-                            leftIcon={<FaTrash />}
-                            colorScheme="red"
-                            variant="ghost"
-                            onClick={() => {
-                                setOrdenAEliminar(o.id_orden_compra);
-                                setModalEliminar(true);
-                            }}
-                        >
-                            Borrar
-                        </Button>
-                    </HStack>
-                </Flex>
-            ))}
+                        <VStack align="stretch" spacing={2}>
+                            {ordenesRecientesFiltradas.map((o) => (
+                                <Flex
+                                    key={o.id_orden_compra}
+                                    p={2}
+                                    bg="teal.50"
+                                    border="1px solid"
+                                    borderColor="teal.100"
+                                    borderRadius="md"
+                                    justify="space-between"
+                                    align="center"
+                                    wrap="wrap"
+                                    gap={2}
+                                >
+                                    <HStack spacing={4} flex="1" minW="0">
+                                        <Checkbox
+                                            isChecked={ordenesSeleccionadas.includes(o.id_orden_compra)}
+                                            onChange={() => toggleSeleccionOrden(o.id_orden_compra)}
+                                        />
 
-            {!ordenesRecientesFiltradas.length && (
-                <Text fontSize="sm" color={subtle}>
-                    No hay órdenes para la fecha seleccionada.
-                </Text>
-            )}
-        </VStack>
-    </Box>
-</GridItem>
+                                        <Badge colorScheme="teal">OC-{o.id_orden_compra}</Badge>
+                                        <Text fontSize="sm">{o.nombre_proveedor}</Text>
+                                        <Badge>{o.nombre_estado}</Badge>
+                                        <Text fontSize="sm">
+                                            {o.fecha_orden ? o.fecha_orden.slice(0, 10) : ""}
+                                        </Text>
+                                    </HStack>
+
+                                    <HStack>
+                                        <Button
+                                            size="xs"
+                                            leftIcon={<FaFolderOpen />}
+                                            colorScheme="teal"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                abrirOrden(o.id_orden_compra);
+                                            }}
+                                        >
+                                            Abrir
+                                        </Button>
+
+                                        <Button
+                                            size="xs"
+                                            leftIcon={<FaTrash />}
+                                            colorScheme="red"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setOrdenAEliminar(o.id_orden_compra);
+                                                setModalEliminar(true);
+                                            }}
+                                        >
+                                            Borrar
+                                        </Button>
+                                    </HStack>
+                                </Flex>
+                            ))}
+
+                            {!ordenesRecientesFiltradas.length && (
+                                <Text fontSize="sm" color={subtle}>
+                                    No hay órdenes para la fecha seleccionada.
+                                </Text>
+                            )}
+                        </VStack>
+                    </Box>
+                </GridItem>
             </Grid>
 
             {/* =============================
@@ -2715,19 +2717,19 @@ const exportarProveedores = async () => {
                             <FormLabel>Nombre</FormLabel>
                             <Input
                                 placeholder="Ingrese nombre del proveedor (solo letras)"
-                        
+
                                 value={provForm.nombre}
                                 onChange={(e) => {
                                     const raw = e.target.value;
-                                    
-      // 🔴 Validar máximo 100 caracteres
-      if (raw.length > 100) {
-        setProvMsg((m) => ({
-          ...m,
-          nombre: "El nombre del proveedor no puede exceder los 100 caracteres.",
-        }));
-        return;
-      }
+
+                                    // 🔴 Validar máximo 100 caracteres
+                                    if (raw.length > 100) {
+                                        setProvMsg((m) => ({
+                                            ...m,
+                                            nombre: "El nombre del proveedor no puede exceder los 100 caracteres.",
+                                        }));
+                                        return;
+                                    }
 
                                     // 🔒 BLOQUEO REAL: si trae algo inválido, NO actualiza el estado
                                     if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]*$/.test(raw)) {
@@ -2905,45 +2907,45 @@ const exportarProveedores = async () => {
           DIRECCIÓN (normal / opcional)
       ======================= */}
                         <FormControl mb={3} isInvalid={!!provMsg.direccion}>
-  <FormLabel>Dirección</FormLabel>
+                            <FormLabel>Dirección</FormLabel>
 
-  <Textarea
-    placeholder="Ingrese dirección completa"
-    maxLength={200}
-    value={provForm.direccion}
-    onChange={(e) => {
-      const raw = e.target.value;
+                            <Textarea
+                                placeholder="Ingrese dirección completa"
+                                maxLength={200}
+                                value={provForm.direccion}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
 
-      // 🔒 Solo letras, números, espacios y , . # -
-      if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s.,#-]*$/.test(raw)) {
-        setProvMsg((m) => ({
-          ...m,
-          direccion: "No se permiten caracteres especiales no válidos.",
-        }));
-        return;
-      }
+                                    // 🔒 Solo letras, números, espacios y , . # -
+                                    if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s.,#-]*$/.test(raw)) {
+                                        setProvMsg((m) => ({
+                                            ...m,
+                                            direccion: "No se permiten caracteres especiales no válidos.",
+                                        }));
+                                        return;
+                                    }
 
-      setProvForm((p) => ({ ...p, direccion: raw }));
-      setProvMsg((m) => ({ ...m, direccion: "" }));
-    }}
+                                    setProvForm((p) => ({ ...p, direccion: raw }));
+                                    setProvMsg((m) => ({ ...m, direccion: "" }));
+                                }}
 
-    onBlur={() => {
-      const err = validarRequerido(provForm.direccion, "Dirección");
-      setProvMsg((m) => ({ ...m, direccion: err || "" }));
-    }}
-  />
+                                onBlur={() => {
+                                    const err = validarRequerido(provForm.direccion, "Dirección");
+                                    setProvMsg((m) => ({ ...m, direccion: err || "" }));
+                                }}
+                            />
 
-  {/* contador */}
-  <Text fontSize="xs" color="gray.500" mt={1}>
-    {provForm.direccion.length} / 200 caracteres
-  </Text>
+                            {/* contador */}
+                            <Text fontSize="xs" color="gray.500" mt={1}>
+                                {provForm.direccion.length} / 200 caracteres
+                            </Text>
 
-  {!!provMsg.direccion && (
-    <FormHelperText color="orange.400" mt={1}>
-      ⚠ {provMsg.direccion}
-    </FormHelperText>
-  )}
-</FormControl>
+                            {!!provMsg.direccion && (
+                                <FormHelperText color="orange.400" mt={1}>
+                                    ⚠ {provMsg.direccion}
+                                </FormHelperText>
+                            )}
+                        </FormControl>
                     </ModalBody>
 
                     <ModalFooter>
@@ -3255,175 +3257,200 @@ const exportarProveedores = async () => {
             </Modal>
 
 
-{/* MODAL PROVEEDORES REGISTRADOS */}
-<Modal
-    isOpen={proveedoresModal.isOpen}
-    onClose={proveedoresModal.onClose}
-    size="5xl"
-    isCentered
->
-    <ModalOverlay />
-    <ModalContent>
-        <ModalHeader>Proveedores registrados</ModalHeader>
-        <ModalCloseButton />
-
-        <ModalBody>
-            <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
-                <Text fontSize="sm" color={subtle}>
-                    Total de proveedores: {proveedores.length}
-                </Text>
-
-                <HStack spacing={3} wrap="wrap">
-                    <CSelect
-                        size="sm"
-                        maxW="160px"
-                        value={proveedorExportFormat}
-                        onChange={(e) => setProveedorExportFormat(e.target.value)}
-                    >
-                        <option value="excel">Excel (.xlsx)</option>
-                        <option value="pdf">PDF (.pdf)</option>
-                    </CSelect>
-
-                    <Button
-                        size="sm"
-                        colorScheme="teal"
-                        leftIcon={<FaFileExport />}
-                        onClick={exportarProveedores}
-                    >
-                        Exportar
-                    </Button>
-                </HStack>
-            </Flex>
-
-            <Checkbox
-                mb={3}
-                isChecked={
-                    proveedores.length > 0 &&
-                    proveedores.every((p) =>
-                        proveedoresSeleccionados.includes(p.id_proveedor)
-                    )
-                }
-                onChange={toggleSeleccionTodosProveedores}
+            {/* MODAL EXPORTAR PROVEEDORES */}
+            <Modal
+                isOpen={exportProveedorModal.isOpen}
+                onClose={exportProveedorModal.onClose}
+                isCentered
             >
-                Seleccionar todos los proveedores
-            </Checkbox>
+                <ModalOverlay />
+                <ModalContent>
+                    <ModalHeader>Exportar Proveedores</ModalHeader>
+                    <ModalCloseButton />
+                    <ModalBody>
+                        <FormControl mb={4}>
+                            <FormLabel>Formato</FormLabel>
+                            <CSelect
+                                value={proveedorExportFormat}
+                                onChange={(e) => setProveedorExportFormat(e.target.value)}
+                            >
+                                <option value="excel">Excel (.xlsx)</option>
+                                <option value="pdf">PDF (.pdf)</option>
+                            </CSelect>
+                        </FormControl>
 
-            <FormControl mb={4}>
-                <FormLabel fontSize="sm">Columnas a exportar</FormLabel>
+                        <FormControl>
+                            <FormLabel>Columnas a exportar</FormLabel>
 
-                <Checkbox
-                    isChecked={allProveedorChecked}
-                    isIndeterminate={isProveedorIndeterminate}
-                    onChange={(e) =>
-                        setSelectedProveedorColumns(
-                            e.target.checked
-                                ? PROVEEDOR_COLUMNS.map((c) => c.key)
-                                : []
-                        )
-                    }
-                    mb={2}
-                >
-                    Seleccionar todas
-                </Checkbox>
-
-                <Box
-                    maxH="130px"
-                    overflowY="auto"
-                    p={2}
-                    border="1px solid"
-                    borderColor={border}
-                    borderRadius="md"
-                >
-                    {PROVEEDOR_COLUMNS.map((c) => (
-                        <Checkbox
-                            key={c.key}
-                            isChecked={selectedProveedorColumns.includes(c.key)}
-                            onChange={(e) => {
-                                if (e.target.checked) {
-                                    setSelectedProveedorColumns([
-                                        ...selectedProveedorColumns,
-                                        c.key,
-                                    ]);
-                                } else {
+                            <Checkbox
+                                isChecked={allProveedorChecked}
+                                isIndeterminate={isProveedorIndeterminate}
+                                onChange={(e) =>
                                     setSelectedProveedorColumns(
-                                        selectedProveedorColumns.filter((x) => x !== c.key)
-                                    );
+                                        e.target.checked
+                                            ? PROVEEDOR_COLUMNS.map((c) => c.key)
+                                            : []
+                                    )
                                 }
-                            }}
-                            display="block"
-                            mb={1}
-                        >
-                            {c.label}
-                        </Checkbox>
-                    ))}
-                </Box>
-            </FormControl>
+                                mb={2}
+                            >
+                                Seleccionar todas
+                            </Checkbox>
 
-            <Box
-                maxH="400px"
-                overflowY="auto"
-                border="1px solid"
-                borderColor={border}
-                borderRadius="md"
-            >
-                <Table size="sm" variant="simple">
-                    <Thead bg="teal.100">
-                        <Tr>
-                            <Th>
-                                <Checkbox
-                                    isChecked={
-                                        proveedores.length > 0 &&
-                                        proveedores.every((p) =>
-                                            proveedoresSeleccionados.includes(p.id_proveedor)
-                                        )
-                                    }
-                                    onChange={toggleSeleccionTodosProveedores}
-                                />
-                            </Th>
-                            <Th>ID</Th>
-                            <Th>Nombre</Th>
-                            <Th>RTN / ID</Th>
-                            <Th>Teléfono</Th>
-                            <Th>Correo</Th>
-                            <Th>Dirección</Th>
-                            <Th>Estado</Th>
-                        </Tr>
-                    </Thead>
-                    <Tbody>
-                        {proveedores.map((p) => (
-                            <Tr key={p.id_proveedor}>
-                                <Td>
+                            <Box
+                                maxH="200px"
+                                overflowY="auto"
+                                p={2}
+                                border="1px solid #ddd"
+                                borderRadius="md"
+                            >
+                                {PROVEEDOR_COLUMNS.map((c) => (
                                     <Checkbox
-                                        isChecked={proveedoresSeleccionados.includes(
-                                            p.id_proveedor
-                                        )}
-                                        onChange={() =>
-                                            toggleSeleccionProveedor(p.id_proveedor)
-                                        }
-                                    />
-                                </Td>
-                                <Td>{p.id_proveedor}</Td>
-                                <Td>{p.nombre}</Td>
-                                <Td>{p.rtn}</Td>
-                                <Td>{p.telefono}</Td>
-                                <Td>{p.correo}</Td>
-                                <Td>{p.direccion}</Td>
-                                <Td>{p.nombre_estado || p.estado}</Td>
-                            </Tr>
-                        ))}
-                    </Tbody>
-                </Table>
-            </Box>
-        </ModalBody>
+                                        key={c.key}
+                                        isChecked={selectedProveedorColumns.includes(c.key)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedProveedorColumns([
+                                                    ...selectedProveedorColumns,
+                                                    c.key,
+                                                ]);
+                                            } else {
+                                                setSelectedProveedorColumns(
+                                                    selectedProveedorColumns.filter((x) => x !== c.key)
+                                                );
+                                            }
+                                        }}
+                                        display="block"
+                                        mb={1}
+                                    >
+                                        {c.label}
+                                    </Checkbox>
+                                ))}
+                            </Box>
+                        </FormControl>
+                    </ModalBody>
 
-        <ModalFooter>
-            <Button onClick={proveedoresModal.onClose}>Cerrar</Button>
-        </ModalFooter>
-    </ModalContent>
-</Modal>
+                    <ModalFooter>
+                        <Button
+                            colorScheme="teal"
+                            onClick={exportarProveedores}
+                        >
+                            Exportar
+                        </Button>
+                        <Button ml={3} onClick={exportProveedorModal.onClose}>
+                            Cancelar
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
 
-{/* MODAL ELIMINAR ORDEN */}
-<Modal isOpen={modalEliminar} onClose={() => setModalEliminar(false)} isCentered></Modal>
+
+            {/* MODAL PROVEEDORES REGISTRADOS */}
+            <Modal
+                isOpen={proveedoresModal.isOpen}
+                onClose={proveedoresModal.onClose}
+                size="5xl"
+                isCentered
+            >
+                <ModalOverlay />
+                <ModalContent>
+                    <ModalHeader>Proveedores registrados</ModalHeader>
+                    <ModalCloseButton />
+
+                    <ModalBody>
+                        <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
+                            <Text fontSize="sm" color={subtle}>
+                                Total de proveedores: {proveedores.length}
+                            </Text>
+
+                            <Button
+                                size="sm"
+                                colorScheme="teal"
+                                leftIcon={<FaFileExport />}
+                                onClick={exportProveedorModal.onOpen}
+                            >
+                                Exportar
+                            </Button>
+                        </Flex>
+
+                        <Checkbox
+                            mb={3}
+                            isChecked={
+                                proveedores.length > 0 &&
+                                proveedores.every((p) =>
+                                    proveedoresSeleccionados.includes(p.id_proveedor)
+                                )
+                            }
+                            onChange={toggleSeleccionTodosProveedores}
+                        >
+                            Seleccionar todos los proveedores
+                        </Checkbox>
+
+                        <Box
+                            maxH="400px"
+                            overflowY="auto"
+                            border="1px solid"
+                            borderColor={border}
+                            borderRadius="md"
+                        >
+                            <Table size="sm" variant="simple">
+                                <Thead bg="teal.100">
+                                    <Tr>
+                                        <Th>
+                                            <Checkbox
+                                                isChecked={
+                                                    proveedores.length > 0 &&
+                                                    proveedores.every((p) =>
+                                                        proveedoresSeleccionados.includes(p.id_proveedor)
+                                                    )
+                                                }
+                                                onChange={toggleSeleccionTodosProveedores}
+                                            />
+                                        </Th>
+                                        <Th>ID</Th>
+                                        <Th>Nombre</Th>
+                                        <Th>RTN / ID</Th>
+                                        <Th>Teléfono</Th>
+                                        <Th>Correo</Th>
+                                        <Th>Dirección</Th>
+                                        <Th>Estado</Th>
+                                    </Tr>
+                                </Thead>
+                                <Tbody>
+                                    {proveedores.map((p) => (
+                                        <Tr key={p.id_proveedor}>
+                                            <Td>
+                                                <Checkbox
+                                                    isChecked={proveedoresSeleccionados.includes(
+                                                        p.id_proveedor
+                                                    )}
+                                                    onChange={() =>
+                                                        toggleSeleccionProveedor(p.id_proveedor)
+                                                    }
+                                                />
+                                            </Td>
+                                            <Td>{p.id_proveedor}</Td>
+                                            <Td>{p.nombre}</Td>
+                                            <Td>{p.rtn}</Td>
+                                            <Td>{p.telefono}</Td>
+                                            <Td>{p.correo}</Td>
+                                            <Td>{p.direccion}</Td>
+                                            <Td>{p.nombre_estado || p.estado}</Td>
+                                        </Tr>
+                                    ))}
+                                </Tbody>
+                            </Table>
+                        </Box>
+                    </ModalBody>
+
+                    <ModalFooter>
+                        <Button onClick={proveedoresModal.onClose}>Cerrar</Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* MODAL ELIMINAR ORDEN */}
+            <Modal isOpen={modalEliminar} onClose={() => setModalEliminar(false)} isCentered></Modal>
 
             {/* MODAL ELIMINAR ORDEN */}
             <Modal isOpen={modalEliminar} onClose={() => setModalEliminar(false)} isCentered>

@@ -103,7 +103,7 @@ export default function PedidosDiarios() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [exportFormat, setExportFormat] = useState(null);
+  const [exportFormat, setExportFormat] = useState("PDF");
   const [selectedCols, setSelectedCols] = useState(ALL_COLUMNS);
 
   const toggleCol = (col) =>
@@ -284,31 +284,14 @@ export default function PedidosDiarios() {
           <Text fontSize="sm" color={emptyColor}>
             {data.length} registro(s)
           </Text>
-          <Menu>
-            <MenuButton
-              as={Button}
-              colorScheme="teal"
-              size="sm"
-              rightIcon={<ChevronDownIcon />}
-              isDisabled={fromDate && toDate && fromDate > toDate}
-            >
-              Exportar
-            </MenuButton>
-            <MenuList>
-              <MenuItem
-                icon={<FaFilePdf />}
-                onClick={() => { setExportFormat("PDF"); onOpen(); }}
-              >
-                Exportar PDF
-              </MenuItem>
-              <MenuItem
-                icon={<FaFileExcel />}
-                onClick={() => { setExportFormat("EXCEL"); onOpen(); }}
-              >
-                Exportar Excel
-              </MenuItem>
-            </MenuList>
-          </Menu>
+          <Button
+            colorScheme="teal"
+            size="sm"
+            isDisabled={fromDate && toDate && fromDate > toDate}
+            onClick={onOpen}
+          >
+            Exportar
+          </Button>
         </Flex>
       </Flex>
 
@@ -316,9 +299,29 @@ export default function PedidosDiarios() {
       <Modal isOpen={isOpen} onClose={onClose} size="sm">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Columnas a exportar ({exportFormat})</ModalHeader>
+          <ModalHeader>Exportar Pedidos Diarios</ModalHeader>
           <ModalBody>
-            <Stack spacing={2}>
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+              <Box as="select"
+                width="100%"
+                padding="8px"
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={border}
+                bg={bg}
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+              >
+                <option value="PDF">PDF</option>
+                <option value="EXCEL">Excel</option>
+              </Box>
+            </FormControl>
+
+            <Divider mb={4} />
+
+            <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+            <Stack spacing={2} maxHeight="200px" overflowY="auto">
               {ALL_COLUMNS.map((col) => (
                 <Checkbox
                   key={col}

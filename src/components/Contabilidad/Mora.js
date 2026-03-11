@@ -7,6 +7,7 @@ import {
   Box,
   Flex,
   FormControl,
+  FormLabel,
   Input,
   Select,
   Table,
@@ -35,6 +36,7 @@ import {
   Divider,
   HStack,
   Spinner,
+  Stack,
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import { FaSyncAlt, FaFilePdf, FaFileExcel } from "react-icons/fa";
@@ -71,7 +73,7 @@ const columnExtractors = {
 // ============================================================
 // Exportar PDF
 // ============================================================
-const exportToPDF = (data, columns) => {
+const exportToPDF = (data, columns, onCloseModal) => {
   const doc = new jsPDF();
   const m = 14;
   const w = doc.internal.pageSize.getWidth();
@@ -87,7 +89,7 @@ const exportToPDF = (data, columns) => {
     const imgW = 20;
     const imgH = (img.height * imgW) / img.width;
     doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
-  } catch {}
+  } catch { }
 
   doc.setDrawColor(0).setLineWidth(0.5).line(m, 35, w - m, 35);
 
@@ -106,27 +108,62 @@ const exportToPDF = (data, columns) => {
   });
 
   doc.save("reporte_moras.pdf");
+  if (onCloseModal) onCloseModal();
 };
 
 // ============================================================
 // Exportar Excel
 // ============================================================
-const exportToExcel = async (data, columns) => {
+const exportToExcel = async (data, columns, onCloseModal) => {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Moras");
+  const ws = wb.addWorksheet("Moras", { views: [{ state: "frozen", ySplit: 4 }] });
+  const dateStr = new Date().toLocaleDateString("es-ES");
 
-  ws.addRow([COMPANY_NAME]);
-  ws.addRow([REPORT_TITLE]);
-  ws.addRow(["Fecha: " + new Date().toLocaleDateString("es-ES")]);
+  ws.mergeCells("A1:E1");
+  Object.assign(ws.getCell("A1"), {
+    value: COMPANY_NAME,
+    font: { size: 14, bold: true, color: { argb: "2E7D32" } },
+    alignment: { horizontal: "center", vertical: "middle" },
+  });
+  ws.getRow(1).height = 24;
+
+  ws.mergeCells("A2:E2");
+  Object.assign(ws.getCell("A2"), {
+    value: REPORT_TITLE,
+    font: { size: 12, bold: true, color: { argb: "66BB6A" } },
+    alignment: { horizontal: "center", vertical: "middle" },
+  });
+  ws.getRow(2).height = 20;
+
+  ws.mergeCells("A3:E3");
+  Object.assign(ws.getCell("A3"), {
+    value: `Fecha: ${dateStr}`,
+    font: { size: 10 },
+    alignment: { horizontal: "left", vertical: "middle" },
+  });
+  ws.getRow(3).height = 18;
+
   ws.addRow([]);
-  ws.addRow(columns);
+  const hdr = ws.addRow(columns);
+  hdr.height = 20;
+  hdr.eachCell((c) => {
+    c.font = { bold: true, color: { argb: "005000" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "CCFFCC" } };
+    c.alignment = { horizontal: "center", vertical: "middle" };
+  });
 
   data.forEach((row) => {
     ws.addRow(columns.map((c) => columnExtractors[c](row)));
   });
 
+  ws.columns.forEach((col) => {
+    col.width = 20;
+    col.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
   const buf = await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf]), "reporte_moras.xlsx");
+  if (onCloseModal) onCloseModal();
 };
 
 // ============================================================
@@ -145,7 +182,15 @@ export default function Mora() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isColsOpen, onOpen: onColsOpen, onClose: onColsClose } = useDisclosure();
+  const [exportFormat, setExportFormat] = useState("pdf"); // Default value for select
+  const [colsToExport, setColsToExport] = useState([...allColumns]);
+
   const [editing, setEditing] = useState({
     id_mora: null,
     nombre_cliente: "",
@@ -214,6 +259,18 @@ export default function Mora() {
     setEditing((p) => ({ ...p, [name]: value }));
   };
 
+  /* ======================================
+     🔹 PAGINACIÓN
+     ====================================== */
+  const totalPages = Math.ceil(moras.length / itemsPerPage);
+  const paginatedMoras = moras.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
+
   // ============================================================
   // 🔹 Render principal
   // ============================================================
@@ -267,19 +324,13 @@ export default function Mora() {
               >
                 + Agregar Mora
               </Button>
-              <Menu>
-                <MenuButton as={Button} colorScheme="green" size="sm">
-                  Reporte
-                </MenuButton>
-                <MenuList>
-                  <MenuItem icon={<FaFilePdf />} onClick={() => exportToPDF(moras, allColumns)}>
-                    Exportar PDF
-                  </MenuItem>
-                  <MenuItem icon={<FaFileExcel />} onClick={() => exportToExcel(moras, allColumns)}>
-                    Exportar Excel
-                  </MenuItem>
-                </MenuList>
-              </Menu>
+              <Button
+                colorScheme="green"
+                size="sm"
+                onClick={onColsOpen}
+              >
+                Exportar
+              </Button>
               <IconButton
                 colorScheme="gray"
                 size="sm"
@@ -316,7 +367,7 @@ export default function Mora() {
                 </Tr>
               </Thead>
               <Tbody>
-                {moras.map((m) => (
+                {paginatedMoras.map((m) => (
                   <Tr
                     key={m.id_mora}
                     onClick={() => {
@@ -328,13 +379,14 @@ export default function Mora() {
                     <Td>
                       <Checkbox
                         isChecked={selectedIds.includes(m.id_mora)}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          e.stopPropagation();
                           setSelectedIds((sel) =>
                             e.target.checked
                               ? [...sel, m.id_mora]
                               : sel.filter((x) => x !== m.id_mora)
-                          )
-                        }
+                          );
+                        }}
                       />
                     </Td>
                     <Td>{m.id_mora}</Td>
@@ -348,6 +400,27 @@ export default function Mora() {
             </Table>
           </Box>
         )}
+
+        {/* Controles de Paginación */}
+        <Flex justify="space-between" align="center" mt={4}>
+          <Button
+            size="sm"
+            onClick={prevPage}
+            isDisabled={currentPage === 1}
+          >
+            Anterior
+          </Button>
+          <Box fontSize="sm">
+            Página {currentPage} de {totalPages || 1}
+          </Box>
+          <Button
+            size="sm"
+            onClick={nextPage}
+            isDisabled={currentPage === totalPages || totalPages === 0}
+          >
+            Siguiente
+          </Button>
+        </Flex>
 
         {/* Modal Agregar / Editar */}
         <Modal isOpen={isOpen} onClose={onClose}>
@@ -397,6 +470,66 @@ export default function Mora() {
                 Guardar
               </Button>
               <Button variant="ghost" ml={3} onClick={onClose}>
+                Cancelar
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Modal Selección de Columnas (Exportar) */}
+        <Modal isOpen={isColsOpen} onClose={onColsClose} size="sm">
+          <ModalOverlay />
+          <ModalContent bg={modalBg}>
+            <ModalHeader>Exportar Moras</ModalHeader>
+            <ModalBody>
+              <FormControl mb={4}>
+                <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+                <Select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="excel">Excel</option>
+                </Select>
+              </FormControl>
+
+              <Divider mb={4} />
+
+              <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+              <Stack spacing={2} maxHeight="200px" overflowY="auto">
+                {allColumns.map((col) => (
+                  <Checkbox
+                    key={col}
+                    isChecked={colsToExport.includes(col)}
+                    onChange={(e) =>
+                      setColsToExport((prev) =>
+                        e.target.checked
+                          ? [...prev, col]
+                          : prev.filter((x) => x !== col)
+                      )
+                    }
+                  >
+                    {col}
+                  </Checkbox>
+                ))}
+              </Stack>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                colorScheme="blue"
+                mr={3}
+                onClick={() => {
+                  if (exportFormat === "pdf") {
+                    exportToPDF(moras, colsToExport, onColsClose);
+                  } else {
+                    exportToExcel(moras, colsToExport, onColsClose);
+                  }
+                }}
+                disabled={colsToExport.length === 0}
+              >
+                Generar
+              </Button>
+              <Button variant="ghost" onClick={onColsClose}>
                 Cancelar
               </Button>
             </ModalFooter>

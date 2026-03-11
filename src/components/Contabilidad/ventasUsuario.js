@@ -4,16 +4,18 @@ import {
   Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Button, useColorModeValue,
   Flex, FormControl, FormLabel, Input, IconButton, Divider, Menu, MenuButton,
   MenuList, MenuItem, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody,
-  ModalFooter, Stack, Checkbox, useDisclosure, Text, SimpleGrid
+  ModalFooter, Stack, Checkbox, useDisclosure, Text, SimpleGrid, Spinner, useToast, Icon, Stat, StatLabel, StatNumber
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDownIcon, RepeatIcon } from "@chakra-ui/icons";
-import { FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { FaBoxOpen, FaUserTie, FaCoins, FaChartBar } from "react-icons/fa";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import logo from "../login/log.png";
+import api from "../../api/apiClient";
 
 const COMPANY_NAME = "Extractus";
 const REPORT_TITLE = "Reporte: Ventas por Usuario";
@@ -45,37 +47,72 @@ export default function VentasPorUsuario() {
   const navigate = useNavigate();
   const bg = useColorModeValue("white", "gray.800");
   const border = useColorModeValue("gray.200", "gray.600");
-  const muted = useColorModeValue("gray.600", "gray.300");
+  const muted = useColorModeValue("gray.500", "gray.400");
+  const thBg = useColorModeValue("gray.50", "gray.700");
+  const chartBg = useColorModeValue("white", "gray.700");
+  const chartGrid = useColorModeValue("#EDF2F7", "#2D3748");
 
-  // ===== Datos DEMO (adaptados a EXTRACTUS) =====
-  const [ventas] = useState([
-    {
-      id_venta: 1, usuario: "Osmany", fecha: "2025-07-30",
-      items: [{ producto: "MARACUYA", cantidad: 2, precio: 180 },
-      { producto: "LIMON", cantidad: 1, precio: 170 }]
-    },
-    {
-      id_venta: 2, usuario: "Fanny", fecha: "2025-08-01",
-      items: [{ producto: "NARANJA", cantidad: 1, precio: 175 }]
-    },
-    {
-      id_venta: 3, usuario: "Edi", fecha: "2025-08-01",
-      items: [{ producto: "MARACUYA", cantidad: 3, precio: 180 },
-      { producto: "MORA", cantidad: 1, precio: 185 }]
-    },
-    {
-      id_venta: 4, usuario: "Osmany", fecha: "2025-08-02",
-      items: [{ producto: "TAMARINDO", cantidad: 1, precio: 165 }]
-    },
-    {
-      id_venta: 5, usuario: "Fanny", fecha: "2025-08-03",
-      items: [{ producto: "MORA", cantidad: 2, precio: 185 }]
-    },
-    {
-      id_venta: 6, usuario: "Edi", fecha: "2025-08-05",
-      items: [{ producto: "LIMON", cantidad: 1, precio: 170 }]
-    },
-  ]);
+  const titleColor = useColorModeValue("teal.600", "teal.300");
+  const headingColor = useColorModeValue("gray.700", "gray.200");
+  const tooltipCursorColor = useColorModeValue("rgba(0,0,0,0.05)", "rgba(255,255,255,0.05)");
+  const tooltipBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(45,55,72,0.9)");
+  const rowHoverBg = useColorModeValue("gray.50", "gray.700");
+  const montoColor = useColorModeValue("green.600", "green.300");
+
+  const kpiBg1 = useColorModeValue("linear(to-br, blue.400, blue.600)", "linear(to-br, blue.600, blue.900)");
+  const kpiBg2 = useColorModeValue("linear(to-br, teal.400, teal.600)", "linear(to-br, teal.600, teal.900)");
+  const kpiBg3 = useColorModeValue("linear(to-br, purple.400, purple.600)", "linear(to-br, purple.600, purple.900)");
+
+  const toast = useToast();
+
+  const [loading, setLoading] = useState(false);
+  const [ventas, setVentas] = useState([]);
+
+  // Fetch API
+  React.useEffect(() => {
+    const fetchVentas = async () => {
+      setLoading(true);
+      try {
+        const listRes = await api.get("/ventas/ventasyreserva/pedidos");
+        const pedidosList = listRes.data || [];
+
+        const ventasConstruidas = [];
+        await Promise.all(
+          pedidosList.map(async (p) => {
+            try {
+              const detRes = await api.get(`/ventas/ventasyreserva/pedidos/${p.id_pedido}`);
+              const { pedido: cab, detalle } = detRes.data;
+
+              ventasConstruidas.push({
+                id_venta: cab.id_pedido,
+                usuario: cab.vendedor || cab.id_cliente || "Sin Cajero", // Fallback en caso de que vendedor sea null
+                fecha: cab.fecha_reserva?.substring(0, 10),
+                items: detalle.map(d => ({
+                  producto: String(d.nombre_producto || "").toUpperCase(),
+                  cantidad: Number(d.cantidad || 0),
+                  precio: Number(d.precio_unitario || 0)
+                }))
+              });
+            } catch (err) { }
+          })
+        );
+
+        setVentas(ventasConstruidas);
+      } catch (err) {
+        toast({
+          title: "Error cargando ventas",
+          description: "Hubo un problema obteniendo los datos reales de ventas.",
+          status: "error",
+          duration: 3000,
+          isClosable: true
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVentas();
+  }, [toast]);
 
   // ===== Filtros =====
   const [fromDate, setFromDate] = useState("");
@@ -84,7 +121,7 @@ export default function VentasPorUsuario() {
 
   // ===== Modal exportación =====
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [exportFormat, setExportFormat] = useState(null); // "PDF" | "EXCEL"
+  const [exportFormat, setExportFormat] = useState("PDF"); // "PDF" | "EXCEL"
   const [exportContext, setExportContext] = useState("RESUMEN"); // "RESUMEN" | "DETALLE"
   const [selectedSummaryCols, setSelectedSummaryCols] = useState(SUMMARY_COLUMNS);
   const [selectedDetailCols, setSelectedDetailCols] = useState(DETAIL_COLUMNS);
@@ -150,6 +187,11 @@ export default function VentasPorUsuario() {
 
     return Array.from(map.values()).sort((a, b) => b.montoTotal - a.montoTotal);
   }, [detalle]);
+
+  // ===== MÉTRICAS GLOBALES (KPIs) =====
+  const totalUsuarios = resumen.length;
+  const globalUnidades = resumen.reduce((acc, r) => acc + r.cantidad, 0);
+  const globalMonto = resumen.reduce((acc, r) => acc + r.montoTotal, 0);
 
   // ===== Exportar PDF/Excel (usa resumen/detalle actuales) =====
   const doExportPDF = () => {
@@ -259,10 +301,18 @@ export default function VentasPorUsuario() {
     onClose();
   };
 
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" minH="40vh">
+        <Spinner size="xl" color="teal.500" />
+      </Flex>
+    );
+  }
+
   return (
     <Box p={6} bg={bg} borderRadius="md" boxShadow="lg">
       {/* Título */}
-      <Heading size="md" mb={1} color={useColorModeValue("teal.600", "teal.300")}>
+      <Heading size="md" mb={1} color={titleColor}>
         {REPORT_TITLE}
       </Heading>
 
@@ -295,128 +345,178 @@ export default function VentasPorUsuario() {
           <IconButton aria-label="Limpiar fechas" icon={<RepeatIcon />} size="sm" onClick={clearFilters} mt={6} />
         </Flex>
 
-        <Menu>
-          <MenuButton
-            as={Button}
-            colorScheme="green"
-            size="sm"
-            rightIcon={<ChevronDownIcon />}
-            isDisabled={fromDate && toDate && fromDate > toDate}
-          >
-            Exportar
-          </MenuButton>
-          <MenuList>
-            <MenuItem icon={<FaFilePdf />} onClick={() => { setExportContext("RESUMEN"); setExportFormat("PDF"); onOpen(); }}>
-              Exportar PDF (Resumen)
-            </MenuItem>
-            <MenuItem icon={<FaFileExcel />} onClick={() => { setExportContext("RESUMEN"); setExportFormat("EXCEL"); onOpen(); }}>
-              Exportar Excel (Resumen)
-            </MenuItem>
-            <Divider my={1} />
-            <MenuItem icon={<FaFilePdf />} onClick={() => { setExportContext("DETALLE"); setExportFormat("PDF"); onOpen(); }}>
-              Exportar PDF (Detalle)
-            </MenuItem>
-            <MenuItem icon={<FaFileExcel />} onClick={() => { setExportContext("DETALLE"); setExportFormat("EXCEL"); onOpen(); }}>
-              Exportar Excel (Detalle)
-            </MenuItem>
-          </MenuList>
-        </Menu>
+        <Button
+          colorScheme="green"
+          size="sm"
+          isDisabled={fromDate && toDate && fromDate > toDate}
+          onClick={onOpen}
+        >
+          Exportar
+        </Button>
       </Flex>
 
-      {/* Descripción corta del producto */}
-      <Text fontSize="sm" color={muted} mb={4}>
+      {/* Descripción corta */}
+      <Text fontSize="sm" color={muted} mb={6}>
         EXTRACTUS Concentrados de fruta en trozos (1 Galón/8.33lbs). Mantener refrigerado 2–4°C. Sabores: MARACUYA, NARANJA, TAMARINDO, MORA, LIMON.
       </Text>
 
-      {/* ===== RESUMEN por usuario (neutro) ===== */}
-      <Heading size="sm" mb={3}>Resumen por usuario</Heading>
-      <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={4} mb={6}>
-        {resumen.map((row) => (
-          <Box
-            key={row.usuario}
-            p={4}
-            bg="transparent"
-            border="1px solid"
-            borderColor={border}
-            borderRadius="lg"
-            boxShadow="sm"
-          >
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={2}>
-              <Box borderWidth="1px" borderColor={border} borderRadius="md" p={3} textAlign="center">
-                <Text fontSize="xs" opacity={0.8}>Usuario</Text>
-                <Text fontSize="sm">{row.usuario}</Text>
-              </Box>
-              <Box borderWidth="1px" borderColor={border} borderRadius="md" p={3} textAlign="center">
-                <Text fontSize="xs" opacity={0.8}>Cantidad</Text>
-                <Text fontSize="sm">{row.cantidad}</Text>
-              </Box>
-              <Box borderWidth="1px" borderColor={border} borderRadius="md" p={3} textAlign="center">
-                <Text fontSize="xs" opacity={0.8}>Monto</Text>
-                <Text fontSize="sm">{formatoHNL.format(row.montoTotal)}</Text>
-              </Box>
-            </SimpleGrid>
-          </Box>
-        ))}
+      {/* KPIs Premium */}
+      <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={8}>
+        <Box p={6} borderRadius="xl" bgGradient={kpiBg1} color="white" boxShadow="xl" position="relative" overflow="hidden">
+          <Icon as={FaUserTie} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+          <Stat>
+            <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Vendedores Activos</StatLabel>
+            <StatNumber fontSize="4xl" fontWeight="extrabold">{totalUsuarios}</StatNumber>
+          </Stat>
+        </Box>
+        <Box p={6} borderRadius="xl" bgGradient={kpiBg2} color="white" boxShadow="xl" position="relative" overflow="hidden">
+          <Icon as={FaChartBar} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+          <Stat>
+            <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Unidades Totales</StatLabel>
+            <StatNumber fontSize="4xl" fontWeight="extrabold">{globalUnidades}</StatNumber>
+          </Stat>
+        </Box>
+        <Box p={6} borderRadius="xl" bgGradient={kpiBg3} color="white" boxShadow="xl" position="relative" overflow="hidden">
+          <Icon as={FaCoins} boxSize={20} position="absolute" right="-4" bottom="-4" opacity={0.2} />
+          <Stat>
+            <StatLabel fontSize="lg" fontWeight="semibold" opacity={0.9}>Monto Total</StatLabel>
+            <StatNumber fontSize="4xl" fontWeight="extrabold">{formatoHNL.format(globalMonto)}</StatNumber>
+          </Stat>
+        </Box>
       </SimpleGrid>
 
-      {/* ===== DETALLE de ventas ===== */}
-      <Heading size="sm" mb={2}>Detalle de ventas</Heading>
-      <Box borderRadius="md" p={0}>
-        <Table size="sm" variant="simple" borderX="1px solid" borderColor={border} borderCollapse="collapse">
-          <Thead>
-            <Tr>
-              {selectedDetailCols.map((col, i) => (
-                <Th key={col} textAlign="center"
-                  borderRight={i < selectedDetailCols.length - 1 ? "1px solid" : undefined}
-                  borderColor={border} borderBottom="1px solid">
-                  {col}
-                </Th>
-              ))}
-            </Tr>
-          </Thead>
-          <Tbody>
-            {detalle.map((row) => (
-              <Tr key={row.id}>
-                {selectedDetailCols.includes("Fecha") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {row.fecha}
-                  </Td>
-                )}
-                {selectedDetailCols.includes("Usuario") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {row.usuario}
-                  </Td>
-                )}
-                {selectedDetailCols.includes("Producto") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    <Text fontSize="sm">{row.producto}</Text>
-                  </Td>
-                )}
-                {selectedDetailCols.includes("Cantidad") && (
-                  <Td textAlign="center" borderRight="1px solid" borderColor={border} borderBottom="1px solid">
-                    {row.cantidad}
-                  </Td>
-                )}
-                {selectedDetailCols.includes("Monto") && (
-                  <Td textAlign="center" borderBottom="1px solid">
-                    {formatoHNL.format(row.importe)}
-                  </Td>
-                )}
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </Box>
+      {resumen.length === 0 ? (
+        <Flex direction="column" align="center" justify="center" py={16} bg={chartBg} borderRadius="xl" boxShadow="sm" borderWidth="1px" borderColor={border}>
+          <Icon as={FaBoxOpen} boxSize={16} color="gray.300" mb={4} />
+          <Heading size="md" color={muted} mb={2}>No hay ventas registradas</Heading>
+          <Text color="gray.400" textAlign="center" maxW="sm">
+            Ningún usuario ha registrado ventas de productos del catálogo en las fechas seleccionadas.
+          </Text>
+        </Flex>
+      ) : (
+        <>
+          {/* Gráfico de Barras (Resumen Visual) */}
+          <Box p={6} borderRadius="xl" bg={chartBg} boxShadow="md" mb={8} borderWidth="1px" borderColor={border}>
+            <Heading size="sm" mb={6} color={headingColor}>
+              Comparativa de Rendimiento (Monto por Usuario)
+            </Heading>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={resumen} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid stroke={chartGrid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="usuario" tick={{ fontSize: 12, fill: muted }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: muted }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  cursor={{ fill: tooltipCursorColor }}
+                  contentStyle={{
+                    background: tooltipBgColor,
+                    borderRadius: "8px",
+                    border: "none",
+                    boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                    padding: "8px 12px",
+                  }}
+                  itemStyle={{ fontWeight: "bold" }}
+                  formatter={(value) => formatoHNL.format(value)}
+                />
+                <Bar dataKey="montoTotal" fill="#3182CE" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+
+          {/* ===== DETALLE de ventas ===== */}
+          <Heading size="sm" mb={4}>Detalle de movimientos</Heading>
+          <Box borderRadius="xl" overflow="hidden" borderWidth="1px" borderColor={border} boxShadow="sm">
+            <Table size="md" variant="simple" borderCollapse="collapse">
+              <Thead bg={thBg}>
+                <Tr>
+                  {selectedDetailCols.map((col, i) => (
+                    <Th key={col} textAlign="center" color="gray.500" py={4}>
+                      {col}
+                    </Th>
+                  ))}
+                </Tr>
+              </Thead>
+              <Tbody>
+                {detalle.map((row) => (
+                  <Tr key={row.id} _hover={{ bg: rowHoverBg }} transition="background 0.2s">
+                    {selectedDetailCols.includes("Fecha") && (
+                      <Td textAlign="center" borderColor={border}>
+                        {row.fecha}
+                      </Td>
+                    )}
+                    {selectedDetailCols.includes("Usuario") && (
+                      <Td textAlign="center" borderColor={border} fontWeight="medium" color={muted}>
+                        {row.usuario}
+                      </Td>
+                    )}
+                    {selectedDetailCols.includes("Producto") && (
+                      <Td textAlign="center" borderColor={border}>
+                        <Text fontSize="sm" fontWeight="bold">{row.producto}</Text>
+                      </Td>
+                    )}
+                    {selectedDetailCols.includes("Cantidad") && (
+                      <Td textAlign="center" borderColor={border}>
+                        {row.cantidad}
+                      </Td>
+                    )}
+                    {selectedDetailCols.includes("Monto") && (
+                      <Td textAlign="center" borderColor={border} fontWeight="semibold" color={montoColor}>
+                        {formatoHNL.format(row.importe)}
+                      </Td>
+                    )}
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </>
+      )}
 
       {/* Modal Selección de columnas */}
       <Modal isOpen={isOpen} onClose={onClose} size="sm">
         <ModalOverlay />
-        <ModalContent>
+        <ModalContent border="1px solid" borderColor={border} bg={bg}>
           <ModalHeader>
-            Columnas a exportar ({exportFormat}) — {exportContext === "RESUMEN" ? "Resumen" : "Detalle"}
+            Exportar Ventas
           </ModalHeader>
           <ModalBody>
-            <Stack spacing={2}>
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Tipo de Reporte</FormLabel>
+              <Box as="select"
+                width="100%"
+                padding="8px"
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={border}
+                bg={bg}
+                value={exportContext}
+                onChange={(e) => setExportContext(e.target.value)}
+              >
+                <option value="RESUMEN">Resumen por Usuario</option>
+                <option value="DETALLE">Detalle de Ventas</option>
+              </Box>
+            </FormControl>
+
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+              <Box as="select"
+                width="100%"
+                padding="8px"
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor={border}
+                bg={bg}
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+              >
+                <option value="PDF">PDF</option>
+                <option value="EXCEL">Excel</option>
+              </Box>
+            </FormControl>
+
+            <Divider mb={4} />
+
+            <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+            <Stack spacing={2} maxHeight="200px" overflowY="auto">
               {(exportContext === "RESUMEN" ? SUMMARY_COLUMNS : DETAIL_COLUMNS).map((col) => (
                 <Checkbox
                   key={col}
@@ -433,7 +533,13 @@ export default function VentasPorUsuario() {
             </Stack>
           </ModalBody>
           <ModalFooter>
-            <Button colorScheme="green" mr={3} onClick={exportFormat === "PDF" ? doExportPDF : doExportExcel}>
+            <Button colorScheme="green" mr={3} onClick={exportFormat === "PDF" ? doExportPDF : doExportExcel}
+              isDisabled={
+                exportContext === "RESUMEN"
+                  ? selectedSummaryCols.length === 0
+                  : selectedDetailCols.length === 0
+              }
+            >
               Generar
             </Button>
             <Button variant="ghost" onClick={onClose}>Cancelar</Button>

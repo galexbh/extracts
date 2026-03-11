@@ -7,10 +7,11 @@ import {
   Box, Flex, Table, Thead, Tbody, Tr, Th, Td, Button, IconButton, Checkbox,
   Menu, MenuButton, MenuList, MenuItem, useDisclosure, Modal, ModalOverlay,
   ModalContent, ModalHeader, ModalBody, ModalFooter, FormControl, Input, Select,
-  useColorModeValue, useToast, Heading, Divider, HStack
+  useColorModeValue, useToast, Heading, Divider, HStack, Stack, FormLabel
 } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
-import { FaSyncAlt } from "react-icons/fa";
+import { FaSyncAlt, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { RepeatIcon } from "@chakra-ui/icons";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -23,6 +24,17 @@ import api from "../../api/apiClient"; // ✅ Cliente centralizado con UID
    ====================================== */
 const COMPANY_NAME = "Extractus";
 const REPORT_TITLE = "Reporte de Pagos";
+
+// Convierte 1->A, 2->B, ..., 27->AA (para merges dinámicos en Excel)
+const excelCol = (n) => {
+  let s = "";
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+};
 
 const allColumns = [
   "ID Pago",
@@ -48,6 +60,98 @@ const columnExtractors = {
   "Fecha de Pago": (p) => (p.fecha_pago ? p.fecha_pago.split("T")[0] : ""),
   Observaciones: (p) => p.observaciones || "",
   Estado: (p) => p.estado || "",
+};
+
+/* ======================================
+   🔹 FUNCIONES DE EXPORTACIÓN
+   ====================================== */
+const exportToPDF = (data, columns, onCloseModal) => {
+  const doc = new jsPDF();
+  const m = 14;
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  const dateStr = new Date().toLocaleDateString("es-ES");
+
+  doc.setFontSize(18).setTextColor(46, 125, 50).text(COMPANY_NAME, w / 2, 20, { align: "center" });
+  doc.setFontSize(14).setTextColor(102, 187, 106).text(REPORT_TITLE, w / 2, 30, { align: "center" });
+  doc.setFontSize(10).setTextColor(0).text(`Fecha: ${dateStr}`, m, 20);
+
+  try {
+    const img = doc.getImageProperties(logo);
+    const imgW = 20;
+    const imgH = (img.height * imgW) / img.width;
+    doc.addImage(logo, "PNG", w - imgW - m, 8, imgW, imgH);
+  } catch { }
+
+  doc.setDrawColor(0).setLineWidth(0.5).line(m, 35, w - m, 35);
+
+  autoTable(doc, {
+    startY: 40,
+    head: [columns],
+    body: data.map((row) => columns.map((c) => columnExtractors[c](row))),
+    theme: "grid",
+    headStyles: { fillColor: [200, 255, 200], textColor: [0, 80, 0] },
+    margin: { left: m, right: m },
+    styles: { fontSize: 8, cellPadding: 2, halign: "center" },
+    didDrawPage: () => {
+      const p = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFontSize(10).text(`Página ${p}`, w / 2, h - 10, { align: "center" });
+    },
+  });
+
+  doc.save("reporte_pagos.pdf");
+  if (onCloseModal) onCloseModal();
+};
+
+const exportToExcel = async (data, columns, onCloseModal) => {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Pagos", { views: [{ state: "frozen", ySplit: 4 }] });
+  const dateStr = new Date().toLocaleDateString("es-ES");
+  const lastCol = excelCol(columns.length);
+
+  ws.mergeCells(`A1:${lastCol}1`);
+  Object.assign(ws.getCell("A1"), {
+    value: COMPANY_NAME,
+    font: { size: 14, bold: true, color: { argb: "2E7D32" } },
+    alignment: { horizontal: "center", vertical: "middle" },
+  });
+  ws.getRow(1).height = 24;
+
+  ws.mergeCells(`A2:${lastCol}2`);
+  Object.assign(ws.getCell("A2"), {
+    value: REPORT_TITLE,
+    font: { size: 12, bold: true, color: { argb: "66BB6A" } },
+    alignment: { horizontal: "center", vertical: "middle" },
+  });
+  ws.getRow(2).height = 20;
+
+  ws.mergeCells(`A3:${lastCol}3`);
+  Object.assign(ws.getCell("A3"), {
+    value: `Fecha: ${dateStr}`,
+    font: { size: 10 },
+    alignment: { horizontal: "left", vertical: "middle" },
+  });
+  ws.getRow(3).height = 18;
+
+  ws.addRow([]);
+  const hdr = ws.addRow(columns);
+  hdr.height = 20;
+  hdr.eachCell((c) => {
+    c.font = { bold: true, color: { argb: "005000" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "CCFFCC" } };
+    c.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  data.forEach((row) => ws.addRow(columns.map((c) => columnExtractors[c](row))));
+
+  ws.columns.forEach((col) => {
+    col.width = 20;
+    col.alignment = { horizontal: "center", vertical: "middle" };
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf]), "reporte_pagos.xlsx");
+  if (onCloseModal) onCloseModal();
 };
 
 /* ======================================
@@ -79,7 +183,14 @@ export default function Pagos() {
   });
 
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isColsOpen, onOpen: onColsOpen, onClose: onColsClose } = useDisclosure();
+  const [exportFormat, setExportFormat] = useState("pdf"); // Default value for select
+  const [colsToExport, setColsToExport] = useState([...allColumns]);
   const [loading, setLoading] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   /* ======================================
      🔹 FUNCIONES API CON apiClient
@@ -159,6 +270,12 @@ export default function Pagos() {
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((f) => ({ ...f, [name]: value }));
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const clearFilters = () => {
+    setFilters(allColumns.reduce((acc, col) => ({ ...acc, [col]: "" }), {}));
+    setCurrentPage(1);
   };
 
   const handleCheckboxChange = (e, id) => {
@@ -181,6 +298,18 @@ export default function Pagos() {
       monto_pendiente: "",
       observaciones: "",
     });
+
+  /* ======================================
+     🔹 PAGINACIÓN
+     ====================================== */
+  const totalPages = Math.ceil(filteredPagos.length / itemsPerPage);
+  const paginatedPagos = filteredPagos.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
 
   /* ======================================
      🔹 RENDER
@@ -232,6 +361,13 @@ export default function Pagos() {
               />
             </FormControl>
           ))}
+          <IconButton
+            aria-label="Limpiar filtros"
+            icon={<RepeatIcon />}
+            size="sm"
+            onClick={clearFilters}
+            ml={2}
+          />
         </Flex>
 
         {/* Botones */}
@@ -268,6 +404,13 @@ export default function Pagos() {
               >
                 + Agregar Pago
               </Button>
+              <Button
+                colorScheme="green"
+                size="sm"
+                onClick={onColsOpen}
+              >
+                Exportar
+              </Button>
               <IconButton
                 colorScheme="gray"
                 size="sm"
@@ -303,12 +446,22 @@ export default function Pagos() {
               </Tr>
             </Thead>
             <Tbody>
-              {filteredPagos.map((p) => (
-                <Tr key={p.id_pago}>
+              {paginatedPagos.map((p) => (
+                <Tr
+                  key={p.id_pago}
+                  onClick={() => {
+                    setSelectedPago(p);
+                    onOpen();
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   <Td>
                     <Checkbox
                       isChecked={selectedIds.includes(p.id_pago)}
-                      onChange={(e) => handleCheckboxChange(e, p.id_pago)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleCheckboxChange(e, p.id_pago);
+                      }}
                     />
                   </Td>
                   {allColumns.map((col) => (
@@ -319,6 +472,27 @@ export default function Pagos() {
             </Tbody>
           </Table>
         </Box>
+
+        {/* Controles de Paginación */}
+        <Flex justify="space-between" align="center" mt={4}>
+          <Button
+            size="sm"
+            onClick={prevPage}
+            isDisabled={currentPage === 1}
+          >
+            Anterior
+          </Button>
+          <Box fontSize="sm">
+            Página {currentPage} de {totalPages || 1}
+          </Box>
+          <Button
+            size="sm"
+            onClick={nextPage}
+            isDisabled={currentPage === totalPages || totalPages === 0}
+          >
+            Siguiente
+          </Button>
+        </Flex>
       </Box>
 
       {/* Modal Agregar / Editar */}
@@ -377,6 +551,66 @@ export default function Pagos() {
               Guardar
             </Button>
             <Button variant="ghost" ml={3} onClick={onClose}>
+              Cancelar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Modal Selección de Columnas (Exportar) */}
+      <Modal isOpen={isColsOpen} onClose={onColsClose} size="sm">
+        <ModalOverlay />
+        <ModalContent bg={modalBg}>
+          <ModalHeader>Exportar Pagos</ModalHeader>
+          <ModalBody>
+            <FormControl mb={4}>
+              <FormLabel fontWeight="bold">Formato de Exportación</FormLabel>
+              <Select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+              >
+                <option value="pdf">PDF</option>
+                <option value="excel">Excel</option>
+              </Select>
+            </FormControl>
+
+            <Divider mb={4} />
+
+            <FormLabel fontWeight="bold">Columnas a Exportar</FormLabel>
+            <Stack spacing={2} maxHeight="200px" overflowY="auto">
+              {allColumns.map((col) => (
+                <Checkbox
+                  key={col}
+                  isChecked={colsToExport.includes(col)}
+                  onChange={(e) =>
+                    setColsToExport((prev) =>
+                      e.target.checked
+                        ? [...prev, col]
+                        : prev.filter((x) => x !== col)
+                    )
+                  }
+                >
+                  {col}
+                </Checkbox>
+              ))}
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              colorScheme="blue"
+              mr={3}
+              onClick={() => {
+                if (exportFormat === "pdf") {
+                  exportToPDF(pagos, colsToExport, onColsClose);
+                } else {
+                  exportToExcel(pagos, colsToExport, onColsClose);
+                }
+              }}
+              disabled={colsToExport.length === 0}
+            >
+              Generar
+            </Button>
+            <Button variant="ghost" onClick={onColsClose}>
               Cancelar
             </Button>
           </ModalFooter>
