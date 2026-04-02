@@ -91,6 +91,21 @@ const normalizarPedidos = (lista) => {
   return [...mapa.values()];
 };
 
+const formatFecha = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso; // Fallback al original si no es fecha válida
+    return d.toLocaleDateString("es-HN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  } catch (e) {
+    return iso;
+  }
+};
+
 const colorEstado = (estado) => {
   const e = (estado || "").toLowerCase();
   if (e.includes("finaliz")) return "green";
@@ -144,6 +159,7 @@ export default function Produccion() {
   const [insumosUsados, setInsumosUsados] = useState([]);
   const [comentariosInsumos, setComentariosInsumos] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [accionLoading, setAccionLoading] = useState(null);
 
   const toast = useToast();
@@ -169,19 +185,24 @@ export default function Produccion() {
 
   // ── Stats ────────────────────────────────────────────────
   const total = pedidos.length;
-  const enProceso = pedidos.filter((p) =>
-    (p.estado_produccion || "").toLowerCase().includes("inici") ||
-    (p.estado_produccion || "").toLowerCase().includes("proces")
-  ).length;
+  const enProceso = pedidos.filter((p) => {
+    const e = (p.estado_produccion || "").toLowerCase();
+    // 🔒 INC-021: Deben ser iniciados pero NO "sin iniciar"
+    return (e.includes("inici") || e.includes("proces")) && !e.includes("sin");
+  }).length;
   const finalizados = pedidos.filter((p) =>
     (p.estado_produccion || "").toLowerCase().includes("finaliz")
   ).length;
 
   // ── Cargar pedidos ────────────────────────────────────────
-  const cargarPedidos = useCallback(async () => {
+  const cargarPedidos = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsRefreshing(true);
     try {
       const res = await api.get("/produccion/pedidos-pendientes");
       setPedidos(normalizarPedidos(res.data || []));
+      if (!isSilent && !loading) {
+        toast({ title: "Datos actualizados", status: "success", duration: 2000, isClosable: true });
+      }
     } catch (err) {
       toast({
         title: "Error cargando pedidos",
@@ -191,8 +212,9 @@ export default function Produccion() {
       });
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  }, [toast]);
+  }, [toast, loading]);
 
   useEffect(() => { cargarPedidos(); }, [cargarPedidos]);
 
@@ -545,7 +567,9 @@ export default function Produccion() {
               colorScheme="teal"
               variant="outline"
               borderRadius="md"
-              onClick={cargarPedidos}
+              onClick={() => cargarPedidos(false)}
+              isLoading={isRefreshing}
+              loadingText="Actualizando..."
             >
               Actualizar
             </Button>
@@ -709,10 +733,10 @@ export default function Produccion() {
                       <Text fontWeight="500" fontSize="sm">{p.nombre_cliente}</Text>
                     </Td>
                     <Td>
-                      <Text fontSize="xs" color={subtleText}>{p.fecha_reserva}</Text>
+                      <Text fontSize="xs" color={subtleText}>{formatFecha(p.fecha_reserva)}</Text>
                     </Td>
                     <Td>
-                      <Text fontSize="xs" color={subtleText}>{p.fecha_entrega}</Text>
+                      <Text fontSize="xs" color={subtleText}>{formatFecha(p.fecha_entrega)}</Text>
                     </Td>
                     <Td>
                       <Badge

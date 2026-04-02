@@ -52,6 +52,7 @@ import {
   FaUserFriends,
   FaCheckCircle,
   FaUserSlash,
+  FaBan,
 } from "react-icons/fa";
 import { DownloadIcon } from "@chakra-ui/icons";
 
@@ -107,10 +108,12 @@ export default function Clientes() {
   const statTotalBg = useColorModeValue("#e8f7f0", "rgba(0,158,115,0.12)");
   const statActivosBg = useColorModeValue("#e9f9ee", "rgba(56,161,105,0.12)");
   const statInactivosBg = useColorModeValue("#ffe9e9", "rgba(245,101,101,0.12)");
+  const statSuspendidosBg = useColorModeValue("#fff3e0", "rgba(237,137,54,0.12)");
 
   const subtitleColor = useColorModeValue("gray.600", "gray.300");
   const activosNumberColor = useColorModeValue("green.600", "green.300");
   const inactivosNumberColor = useColorModeValue("red.500", "red.300");
+  const suspendidosNumberColor = useColorModeValue("orange.500", "orange.300");
 
   const toast = useToast();
   const navigate = useNavigate();
@@ -199,7 +202,7 @@ export default function Clientes() {
   // ============================================================
   // 📊 Mini dashboard (totales)
   // ============================================================
-  const { totalClientes, clientesActivos, clientesInactivos } = useMemo(() => {
+  const { totalClientes, clientesActivos, clientesInactivos, clientesSuspendidos } = useMemo(() => {
     const total = data.length;
 
     const activos = data.filter((r) => {
@@ -209,12 +212,20 @@ export default function Clientes() {
       return estado === "activo";
     }).length;
 
-    const inactivos = total - activos;
+    const suspendidos = data.filter((r) => {
+      const estado = (r.estado_cliente || r.nombre_estado || "")
+        .toString()
+        .toLowerCase();
+      return estado === "suspendido";
+    }).length;
+
+    const inactivos = total - activos - suspendidos;
 
     return {
       totalClientes: total,
       clientesActivos: activos,
       clientesInactivos: inactivos,
+      clientesSuspendidos: suspendidos,
     };
   }, [data]);
 
@@ -227,6 +238,8 @@ export default function Clientes() {
       if (req) return req;
       if (String(v).trim().length < 3)
         return "El nombre debe tener al menos 3 caracteres.";
+      if (String(v).trim().length > 150)
+        return "El nombre no puede exceder 150 caracteres.";
       if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(String(v)))
         return "El nombre solo debe contener letras y espacios.";
       return null;
@@ -259,7 +272,8 @@ export default function Clientes() {
       required: true,
       placeholderText: "Ej. Juan Perez",
       validate: validators.nombre_cliente,
-      sanitize: (v) => String(v).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, ""),
+      maxLength: 150,
+      sanitize: (v) => String(v).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, "").slice(0, 150),
     },
     {
       name: "rtn",
@@ -638,7 +652,7 @@ export default function Clientes() {
         <CardBody pt={0}>
           {/* MINI DASHBOARD */}
           <Box py={3}>
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
               <Box
                 as={Stat}
                 p={4}
@@ -700,6 +714,28 @@ export default function Clientes() {
                     </StatHelpText>
                   </Box>
                   <Icon as={FaUserSlash} boxSize={8} color="red.400" />
+                </Flex>
+              </Box>
+
+              <Box
+                as={Stat}
+                p={4}
+                borderRadius="lg"
+                borderWidth="1px"
+                borderColor={borderColor}
+                bg={statSuspendidosBg}
+              >
+                <Flex justify="space-between" align="center">
+                  <Box>
+                    <StatLabel>Clientes suspendidos</StatLabel>
+                    <StatNumber color={suspendidosNumberColor}>
+                      {clientesSuspendidos}
+                    </StatNumber>
+                    <StatHelpText fontSize="xs">
+                      Temporalmente inhabilitados
+                    </StatHelpText>
+                  </Box>
+                  <Icon as={FaBan} boxSize={8} color="orange.400" />
                 </Flex>
               </Box>
             </SimpleGrid>

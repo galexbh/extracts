@@ -169,19 +169,20 @@ export default function Productos() {
     if (errorReq) return errorReq;
     const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
     if (!regex.test(valor)) return `El campo ${campo} solo debe contener letras y espacios (sin números ni símbolos).`;
+    if (String(valor).trim().length > 100) return `El campo ${campo} no puede exceder los 100 caracteres.`;
     return null;
   };
 
   const sanitizeTexto = (valor) => {
     if (!valor) return "";
-    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
+    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "").slice(0, 100);
   };
 
   // ============================================================
   // 🔹 Campos del formulario CRUD
   // ============================================================
   const fields = [
-    { name: "nombre_producto", label: "Nombre del Producto", type: "text", required: true, placeholderText: "Ej. Jugo de Naranja", validate: (v) => validarSoloLetras(v, "Nombre del Producto"), sanitize: sanitizeTexto },
+    { name: "nombre_producto", label: "Nombre del Producto", type: "text", required: true, maxLength: 100, placeholderText: "Ej. Jugo de Naranja", validate: (v) => validarSoloLetras(v, "Nombre del Producto"), sanitize: sanitizeTexto },
     { name: "descripcion", label: "Descripción", type: "textarea", placeholderText: "Opcional: detalles del producto" },
     { name: "unidad_medida", label: "Unidad de Medida", type: "select", required: true, options: [{ value: "Litro", label: "Litro" }, { value: "Galón", label: "Galón" }], validate: (v) => { if (!v) return "Debe seleccionar una unidad de medida."; return null; } },
     { name: "precio_unitario", label: "Precio Unitario (Lps)", type: "number", step: "0.01", min: "0.01", required: true, placeholderText: "Mayor a 0", validate: (v) => { if (!v || Number(v) <= 0) return "El precio debe ser mayor a 0."; return null; } },

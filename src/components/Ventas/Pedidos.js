@@ -219,8 +219,13 @@ export default function Pedidos() {
       },
     ]);
 
-  const eliminarProducto = (i) =>
-    setProductosPedido((prev) => prev.filter((_, idx) => idx !== i));
+  const eliminarProducto = (i) => {
+    const prod = buscarProducto(productosPedido[i]?.id_producto);
+    const nombre = prod ? prod.nombre_producto : `Línea ${i + 1}`;
+    if (window.confirm(`¿Desea eliminar "${nombre}" del pedido?`)) {
+      setProductosPedido((prev) => prev.filter((_, idx) => idx !== i));
+    }
+  };
 
   const actualizarProducto = (i, campo, valor) => {
     const nuevos = [...productosPedido];
@@ -442,13 +447,54 @@ export default function Pedidos() {
     try {
       const res = await api.get(`/ventas/ventasyreserva/pedidos/${pedido.id_pedido}`);
       const wb = new ExcelJS.Workbook();
+      wb.creator = "Extractus ERP";
+      wb.created = new Date();
       const ws = wb.addWorksheet(`Pedido_${pedido.id_pedido}`);
-      ws.addRow(["Producto", "Unidad", "Cantidad", "Precio Unitario", "Subtotal"]);
-      ws.getRow(1).font = { bold: true };
-      res.data.detalle.forEach(d => ws.addRow([d.nombre_producto, d.unidad_medida, d.cantidad, d.precio_unitario, d.subtotal]));
-      ws.columns.forEach(col => { col.width = 20; });
+
+      // Título profesional
+      ws.mergeCells("A1:E1");
+      const titleCell = ws.getCell("A1");
+      titleCell.value = `Detalle de Pedido #${pedido.id_pedido} — Extractus`;
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF008080" } };
+      titleCell.alignment = { horizontal: "center" };
+
+      ws.mergeCells("A2:E2");
+      const infoCell = ws.getCell("A2");
+      infoCell.value = `Cliente: ${pedido.nombre_cliente || "—"}  |  Generado: ${new Date().toLocaleString()}`;
+      infoCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
+      infoCell.alignment = { horizontal: "center" };
+
+      // Encabezados con formato
+      const headers = ["Producto", "Unidad", "Cantidad", "Precio Unitario", "Subtotal"];
+      headers.forEach((h, i) => {
+        const cell = ws.getCell(4, i + 1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF008080" } };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+      });
+
+      // Datos
+      res.data.detalle.forEach((d, idx) => {
+        const row = 5 + idx;
+        ws.getCell(row, 1).value = d.nombre_producto;
+        ws.getCell(row, 2).value = d.unidad_medida;
+        ws.getCell(row, 3).value = Number(d.cantidad);
+        ws.getCell(row, 4).value = Number(d.precio_unitario);
+        ws.getCell(row, 5).value = Number(d.subtotal);
+        if (idx % 2 === 1) {
+          for (let i = 1; i <= 5; i++) {
+            ws.getCell(row, i).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0F2F1" } };
+          }
+        }
+      });
+
+      // Auto-width
+      [20, 14, 12, 16, 16].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
       const buffer = await wb.xlsx.writeBuffer();
       saveAs(new Blob([buffer]), `Pedido_${pedido.id_pedido}.xlsx`);
+      toast({ title: "Excel generado correctamente", status: "success", duration: 2500 });
     } catch (err) {
       toast({ title: "Error exportando Excel", description: err.message, status: "error" });
     }
@@ -773,6 +819,7 @@ export default function Pedidos() {
               <Input
                 type="date"
                 value={fechaReserva}
+                min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setFechaReserva(e.target.value)}
                 bg={inputBg}
                 size="sm"
@@ -912,10 +959,12 @@ export default function Pedidos() {
                           <Input
                             type="number"
                             min="1"
+                            max="9999"
                             value={p.cantidad}
-                            onChange={(e) =>
-                              actualizarProducto(i, "cantidad", e.target.value)
-                            }
+                            onChange={(e) => {
+                              const val = Math.min(Math.max(1, Number(e.target.value)), 9999);
+                              actualizarProducto(i, "cantidad", val);
+                            }}
                             bg={inputBg}
                             size="sm"
                             w="80px"

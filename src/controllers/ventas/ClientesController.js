@@ -16,6 +16,8 @@ function validar(data) {
     errores.push("El nombre del cliente es obligatorio.");
   else if (String(nombre_cliente).trim().length < 3)
     errores.push("El nombre debe tener al menos 3 caracteres.");
+  else if (String(nombre_cliente).trim().length > 150)
+    errores.push("El nombre no puede exceder 150 caracteres.");
   else if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(String(nombre_cliente).trim()))
     errores.push("El nombre solo debe contener letras y espacios.");
 
@@ -54,6 +56,8 @@ function validar(data) {
     errores.push("La dirección es obligatoria.");
   else if (String(data.direccion).trim().length < 5)
     errores.push("La dirección debe tener al menos 5 caracteres.");
+  else if (String(data.direccion).trim().length > 250)
+    errores.push("La dirección no puede exceder 250 caracteres.");
 
   return errores;
 }
@@ -73,7 +77,7 @@ exports.getClientes = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => { });
     console.error("❌ Error al listar clientes:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al obtener la lista de clientes." });
   } finally {
     client.release();
   }
@@ -102,7 +106,7 @@ exports.getClienteById = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => { });
     console.error("❌ Error al obtener cliente:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al obtener el cliente solicitado." });
   } finally {
     client.release();
   }
@@ -127,6 +131,16 @@ exports.insertCliente = async (req, res) => {
     return res.status(400).json({ error: errores.join(" | ") });
 
   try {
+    // 🔒 Validar unicidad de RTN antes de insertar
+    if (rtn) {
+      const existeRTN = await pool.query(
+        `SELECT id_cliente FROM ventasyreserva.clientes WHERE rtn = $1`,
+        [String(rtn).trim()]
+      );
+      if (existeRTN.rowCount > 0)
+        return res.status(409).json({ error: "Ya existe un cliente registrado con ese RTN / ID." });
+    }
+
     await pool.query(
       `CALL ventasyreserva.sp_insertar_clientes($1, $2, $3, $4, $5, $6, $7)`,
       [
@@ -154,7 +168,10 @@ exports.insertCliente = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error al insertar cliente:", error);
-    res.status(500).json({ error: error.message });
+    const msg = error.message?.includes("value too long")
+      ? "El valor ingresado excede el límite de caracteres permitido."
+      : "Error interno del servidor. Contacte al administrador.";
+    res.status(500).json({ error: msg });
   }
 };
 
@@ -178,6 +195,16 @@ exports.updateCliente = async (req, res) => {
     return res.status(400).json({ error: errores.join(" | ") });
 
   try {
+    // 🔒 Validar unicidad de RTN (excluyendo el cliente actual)
+    if (rtn) {
+      const existeRTN = await pool.query(
+        `SELECT id_cliente FROM ventasyreserva.clientes WHERE rtn = $1 AND id_cliente != $2`,
+        [String(rtn).trim(), id_cliente]
+      );
+      if (existeRTN.rowCount > 0)
+        return res.status(409).json({ error: "Ya existe otro cliente registrado con ese RTN / ID." });
+    }
+
     await pool.query(
       `CALL ventasyreserva.sp_actualizar_clientes($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
@@ -206,7 +233,10 @@ exports.updateCliente = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error al actualizar cliente:", error);
-    res.status(500).json({ error: error.message });
+    const msg = error.message?.includes("value too long")
+      ? "El valor ingresado excede el límite de caracteres permitido."
+      : "Error interno del servidor. Contacte al administrador.";
+    res.status(500).json({ error: msg });
   }
 };
 
@@ -235,6 +265,9 @@ exports.deleteCliente = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error al eliminar cliente:", error);
-    res.status(500).json({ error: error.message });
+    const msg = error.message?.includes("violates foreign key")
+      ? "No se puede eliminar el cliente porque tiene registros asociados (pedidos, facturas, etc.)."
+      : "Error al eliminar el cliente. Contacte al administrador.";
+    res.status(500).json({ error: msg });
   }
 };

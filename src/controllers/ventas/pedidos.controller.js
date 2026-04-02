@@ -210,6 +210,20 @@ exports.insertPedido = async (req, res) => {
       throw new Error("Debe incluir al menos un producto en el pedido.");
     }
 
+    // 🔒 Validar que fecha_reserva no sea en el pasado
+    const hoy = new Date().toISOString().split('T')[0];
+    if (fecha_reserva < hoy) {
+      throw new Error("La fecha de reserva no puede ser anterior a la fecha actual.");
+    }
+
+    // 🔒 Validar cantidad por producto (1-9999)
+    for (const p of productos) {
+      const cant = Number(p.cantidad);
+      if (!Number.isFinite(cant) || cant <= 0 || cant > 9999) {
+        throw new Error(`La cantidad debe ser entre 1 y 9999 para cada producto. Valor recibido: ${p.cantidad}`);
+      }
+    }
+
     await client.query("BEGIN");
 
     // Insertar encabezado con creado_por
@@ -271,7 +285,12 @@ exports.insertPedido = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [POST pedido] error:", error);
-    res.status(500).json({ error: error.message });
+    const msg = error.message?.includes("value too long")
+      ? "El valor ingresado excede el límite permitido."
+      : error.message?.startsWith("Debe incluir") || error.message?.startsWith("Datos incompletos") || error.message?.startsWith("La fecha") || error.message?.startsWith("La cantidad") || error.message?.startsWith("Producto ID")
+        ? error.message
+        : "Error interno al crear el pedido. Contacte al administrador.";
+    res.status(400).json({ error: msg });
 
   } finally {
     client.release();
@@ -365,7 +384,12 @@ exports.updatePedido = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [PUT pedido] error:", error);
-    res.status(500).json({ error: error.message });
+    const msg = error.message?.includes("value too long")
+      ? "El valor ingresado excede el límite permitido."
+      : error.message?.startsWith("Producto ID")
+        ? error.message
+        : "Error interno al actualizar el pedido. Contacte al administrador.";
+    res.status(400).json({ error: msg });
 
   } finally {
     client.release();
@@ -411,7 +435,7 @@ exports.deletePedido = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [DELETE pedido] error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al eliminar el pedido. Contacte al administrador." });
 
   } finally {
     client.release();
