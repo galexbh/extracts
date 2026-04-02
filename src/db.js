@@ -7,7 +7,9 @@ const pool = new Pool({
   database: process.env.PGDATABASE,
   user: process.env.PGUSER,
   password: process.env.PGPASSWORD,
-  ssl: false,
+  // 🔒 SSL condicional: activar con PGSSL=true en variables de entorno
+  // Si BD y server están en la misma red, SSL no es necesario
+  ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
 
   // ── Estabilidad de conexión ──────────────────────────────
   // Mantener las conexiones TCP vivas (evita "Connection terminated unexpectedly")

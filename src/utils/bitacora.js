@@ -1,8 +1,37 @@
 // ============================================================
 // 📂 src/utils/bitacora.js
-// ✅ Función centralizada para registrar eventos en la bitácora
+// 🔒 Función centralizada para registrar eventos en la bitácora
+//    con sanitización de datos sensibles
 // ============================================================
 const { pool } = require("../db");
+
+/**
+ * 🔒 Campos sensibles que NUNCA deben aparecer en logs de auditoría.
+ */
+const SENSITIVE_FIELDS = ["password", "mfa_secret", "token", "secret", "hashedPassword", "finalPassword"];
+
+/**
+ * Sanitiza un objeto eliminando campos sensibles antes de guardarlo en bitácora.
+ * @param {object} data - Objeto a sanitizar
+ * @returns {object} Objeto limpio sin campos sensibles
+ */
+const sanitizeForLog = (data) => {
+  if (!data || typeof data !== "object") return data;
+  const clean = { ...data };
+  for (const field of SENSITIVE_FIELDS) {
+    if (field in clean) {
+      clean[field] = "***REDACTED***";
+    }
+  }
+  // Sanitizar objetos anidados (antes/después)
+  if (clean.antes && typeof clean.antes === "object") {
+    clean.antes = sanitizeForLog(clean.antes);
+  }
+  if (clean.despues && typeof clean.despues === "object") {
+    clean.despues = sanitizeForLog(clean.despues);
+  }
+  return clean;
+};
 
 /**
  * Registra una acción en la bitácora del sistema.
@@ -16,10 +45,20 @@ const { pool } = require("../db");
  */
 const registrarBitacora = async ({ id_usuario, id_objeto, tabla, accion, descripcion, detalle }) => {
   try {
-    // Serializar detalle si es objeto
-    const detalleJSON = detalle
-      ? (typeof detalle === "string" ? detalle : JSON.stringify(detalle))
-      : null;
+    // 🔒 Sanitizar detalle para excluir campos sensibles
+    let detalleJSON = null;
+    if (detalle) {
+      if (typeof detalle === "string") {
+        try {
+          const parsed = JSON.parse(detalle);
+          detalleJSON = JSON.stringify(sanitizeForLog(parsed));
+        } catch {
+          detalleJSON = detalle; // Si no es JSON válido, guardar como está
+        }
+      } else {
+        detalleJSON = JSON.stringify(sanitizeForLog(detalle));
+      }
+    }
 
     await pool.query(
       `INSERT INTO seguridad.tbl_ms_bitacora
@@ -33,10 +72,12 @@ const registrarBitacora = async ({ id_usuario, id_objeto, tabla, accion, descrip
 };
 
 /**
- * Extrae el email/username del header de la petición.
+ * Extrae el email/username del request.
+ * 🔒 Prioridad: req.user.email (del JWT verificado) > header
  */
 const extractUsername = (req) => {
   return (
+    (req.user && req.user.email) ||
     req.headers["x-user-email"] ||
     req.headers["X-User-Email"] ||
     req.headers["x-User-Email"] ||
@@ -56,4 +97,4 @@ const findUserId = async (username) => {
   return result.rows.length > 0 ? result.rows[0].id_usuario : null;
 };
 
-module.exports = { registrarBitacora, extractUsername, findUserId };
+module.exports = { registrarBitacora, extractUsername, findUserId, sanitizeForLog };

@@ -1,12 +1,13 @@
 // ============================================================
 // 📁 src/routes/Seguridad.routes.js
+// 🔒 Versión con protección RBAC completa en todas las rutas
 // ============================================================
 
 const express = require("express");
 const router = express.Router();
-const { pool } = require("../db"); // ✅ necesario para el endpoint de accesos
-const verifyRoleAccess = require("../middleware/verifyRoleAccess"); // 🔐 Middleware módulo
-const verifyPermission = require("../middleware/verifyObjectPermission"); // 🔐 Middleware CRUD granular
+const { pool } = require("../db");
+const verifyRoleAccess = require("../middleware/verifyRoleAccess");
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 // ============================================================
 // 🧩 IMPORTAR CONTROLADORES
@@ -19,11 +20,17 @@ const correosCtrl = require("../controllers/seguridad/CorreosController");
 const direccionesCtrl = require("../controllers/seguridad/DireccionesController");
 const telefonosCtrl = require("../controllers/seguridad/TelefonosController");
 const objetosCtrl = require("../controllers/seguridad/Objectos.controller");
+const changePasswordCtrl = require("../controllers/seguridad/changePassword.controller");
+
+// ============================================================
+// 🔐 CAMBIAR CONTRASEÑA (requiere autenticación, no RBAC)
+// ============================================================
+router.post("/change-password", changePasswordCtrl.changePassword);
 
 // ============================================================
 // 👥 USUARIOS
 // ============================================================
-router.get("/usuarios", usuariosCtrl.getUsuarios);
+router.get("/usuarios", verifyPermission("Usuarios", "read"), usuariosCtrl.getUsuarios);
 
 // 🔐 Verificar estado del usuario para el login (va ANTES de :id)
 router.get("/usuarios/estado-login", async (req, res) => {
@@ -55,7 +62,6 @@ router.get("/usuarios/estado-login", async (req, res) => {
 });
 
 // 🔑 Obtener rol del usuario por email (para login multi-usuario)
-// Va ANTES de /usuarios/:id para que no colisione con esa ruta dinámica
 router.get("/usuarios/rol", async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ error: "Email requerido" });
@@ -80,7 +86,7 @@ router.get("/usuarios/rol", async (req, res) => {
   }
 });
 
-router.get("/usuarios/:id", usuariosCtrl.getUsuarioById);
+router.get("/usuarios/:id", verifyPermission("Usuarios", "read"), usuariosCtrl.getUsuarioById);
 router.post("/usuarios", verifyPermission("Usuarios", "create"), usuariosCtrl.insertUsuario);
 router.put("/usuarios/:id_usuario", verifyPermission("Usuarios", "update"), usuariosCtrl.updateUsuario);
 router.delete("/usuarios/:id", verifyPermission("Usuarios", "delete"), usuariosCtrl.deleteUsuario);
@@ -88,8 +94,8 @@ router.delete("/usuarios/:id", verifyPermission("Usuarios", "delete"), usuariosC
 // ============================================================
 // 🧩 ROLES
 // ============================================================
-router.get("/roles", rolesCtrl.getRoles);
-router.get("/roles/:id", rolesCtrl.getRolById);
+router.get("/roles", verifyPermission("Roles", "read"), rolesCtrl.getRoles);
+router.get("/roles/:id", verifyPermission("Roles", "read"), rolesCtrl.getRolById);
 router.post("/roles", verifyPermission("Roles", "create"), rolesCtrl.insertRol);
 router.put("/roles/:id_rol", verifyPermission("Roles", "update"), rolesCtrl.updateRol);
 router.delete("/roles/:id", verifyPermission("Roles", "delete"), rolesCtrl.deleteRol);
@@ -97,63 +103,64 @@ router.delete("/roles/:id", verifyPermission("Roles", "delete"), rolesCtrl.delet
 // ============================================================
 // 🔐 PERMISOS
 // ============================================================
-router.get("/permisos", permisosCtrl.getPermisos);
-router.get("/permisos/:id", permisosCtrl.getPermisoById);
+router.get("/permisos", verifyPermission("Permisos", "read"), permisosCtrl.getPermisos);
+router.get("/permisos/:id", verifyPermission("Permisos", "read"), permisosCtrl.getPermisoById);
 router.post("/permisos", verifyPermission("Permisos", "create"), permisosCtrl.insertPermiso);
 router.put("/permisos/:id_permiso", verifyPermission("Permisos", "update"), permisosCtrl.updatePermiso);
 router.delete("/permisos/:id", verifyPermission("Permisos", "delete"), permisosCtrl.deletePermiso);
 
 // ============================================================
-// 🧍 PERSONAS
+// 🧍 PERSONAS (🔒 Ahora protegido con RBAC)
 // ============================================================
-router.get("/personas", personasCtrl.getPersonas);
-router.get("/personas/:id", personasCtrl.getPersonaById);
-router.post("/personas", personasCtrl.insertPersona);
-router.put("/personas/:id_persona", personasCtrl.updatePersona);
-router.delete("/personas/:id", personasCtrl.deletePersona);
+router.get("/personas", verifyPermission("Personas", "read"), personasCtrl.getPersonas);
+router.get("/personas/:id", verifyPermission("Personas", "read"), personasCtrl.getPersonaById);
+router.post("/personas", verifyPermission("Personas", "create"), personasCtrl.insertPersona);
+router.put("/personas/:id_persona", verifyPermission("Personas", "update"), personasCtrl.updatePersona);
+router.delete("/personas/:id", verifyPermission("Personas", "delete"), personasCtrl.deletePersona);
 
 // ============================================================
-// 📧 CORREOS
+// 📧 CORREOS (🔒 Ahora protegido con RBAC)
 // ============================================================
-router.get("/correos", correosCtrl.getCorreos);
-router.get("/correos/:id", correosCtrl.getCorreoById);
-router.post("/correos", correosCtrl.insertCorreo);
-router.put("/correos/:id_correo", correosCtrl.updateCorreo);
-router.delete("/correos/:id", correosCtrl.deleteCorreo);
+router.get("/correos", verifyPermission("Correos", "read"), correosCtrl.getCorreos);
+router.get("/correos/:id", verifyPermission("Correos", "read"), correosCtrl.getCorreoById);
+router.post("/correos", verifyPermission("Correos", "create"), correosCtrl.insertCorreo);
+router.put("/correos/:id_correo", verifyPermission("Correos", "update"), correosCtrl.updateCorreo);
+router.delete("/correos/:id", verifyPermission("Correos", "delete"), correosCtrl.deleteCorreo);
 
 // ============================================================
-// 🏠 DIRECCIONES
+// 🏠 DIRECCIONES (🔒 Ahora protegido con RBAC)
 // ============================================================
-router.get("/direcciones", direccionesCtrl.getDirecciones);
-router.get("/direcciones/:id", direccionesCtrl.getDireccionById);
-router.post("/direcciones", direccionesCtrl.insertDireccion);
-router.put("/direcciones/:id_direccion", direccionesCtrl.updateDireccion);
-router.delete("/direcciones/:id", direccionesCtrl.deleteDireccion);
+router.get("/direcciones", verifyPermission("Direcciones", "read"), direccionesCtrl.getDirecciones);
+router.get("/direcciones/:id", verifyPermission("Direcciones", "read"), direccionesCtrl.getDireccionById);
+router.post("/direcciones", verifyPermission("Direcciones", "create"), direccionesCtrl.insertDireccion);
+router.put("/direcciones/:id_direccion", verifyPermission("Direcciones", "update"), direccionesCtrl.updateDireccion);
+router.delete("/direcciones/:id", verifyPermission("Direcciones", "delete"), direccionesCtrl.deleteDireccion);
 
 // ============================================================
-// ☎️ TELÉFONOS
+// ☎️ TELÉFONOS (🔒 Ahora protegido con RBAC)
 // ============================================================
-router.get("/telefonos", telefonosCtrl.getTelefonos);
-router.get("/telefonos/:id", telefonosCtrl.getTelefonoById);
-router.post("/telefonos", telefonosCtrl.insertTelefono);
-router.put("/telefonos/:id_telefono", telefonosCtrl.updateTelefono);
-router.delete("/telefonos/:id", telefonosCtrl.deleteTelefono);
+router.get("/telefonos", verifyPermission("Telefonos", "read"), telefonosCtrl.getTelefonos);
+router.get("/telefonos/:id", verifyPermission("Telefonos", "read"), telefonosCtrl.getTelefonoById);
+router.post("/telefonos", verifyPermission("Telefonos", "create"), telefonosCtrl.insertTelefono);
+router.put("/telefonos/:id_telefono", verifyPermission("Telefonos", "update"), telefonosCtrl.updateTelefono);
+router.delete("/telefonos/:id", verifyPermission("Telefonos", "delete"), telefonosCtrl.deleteTelefono);
 
 // ============================================================
 // 🧱 OBJETOS
 // ============================================================
-router.get("/objetos", objetosCtrl.getObjetos);
-router.get("/objetos/:id", objetosCtrl.getObjetoById);
+router.get("/objetos", verifyPermission("Objetos", "read"), objetosCtrl.getObjetos);
+router.get("/objetos/:id", verifyPermission("Objetos", "read"), objetosCtrl.getObjetoById);
 router.post("/objetos", verifyPermission("Objetos", "create"), objetosCtrl.insertObjeto);
 router.put("/objetos/:id_objeto", verifyPermission("Objetos", "update"), objetosCtrl.updateObjeto);
 router.delete("/objetos/:id", verifyPermission("Objetos", "delete"), objetosCtrl.deleteObjeto);
 
 // ============================================================
-// 🔹 NUEVO ENDPOINT → Obtener accesos del usuario logueado
+// 🔹 Obtener accesos del usuario logueado
 // ============================================================
 router.get("/accesos", async (req, res) => {
   try {
-    const email = req.headers["x-user-email"];
+    // 🔒 Usar email verificado del JWT
+    const email = (req.user && req.user.email) || req.headers["x-user-email"];
     if (!email)
       return res.status(400).json({ error: "MISSING_EMAIL" });
 

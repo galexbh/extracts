@@ -9,51 +9,31 @@ import { ViewIcon, ViewOffIcon, CheckCircleIcon, WarningIcon } from "@chakra-ui/
 import { useNavigate } from "react-router-dom";
 
 /** =====================================
- * Configura aquí tu backend (o simulación)
+ * Configuracion del backend
  * ===================================== */
-const API_URL = "/api/auth/change-password"; // ⚠️ Cambia esto a tu endpoint real
-const useBackend = false; // ⬅️ ponlo en true cuando tengas backend
-const FAKE_DELAY_MS = 900;
+const API_URL = "/api/seguridad/change-password";
 
-// Ejemplo de obtención de token/usuario (ajústalo a tu auth real)
-const getAuthContext = () => ({
-  userId: 1,                        // id del usuario logueado
-  token: localStorage.getItem("token") || "", // bearer token si usas JWT
-});
+// Obtener token de autenticacion
+const getAuthToken = () => {
+  return sessionStorage.getItem("idToken") || localStorage.getItem("idToken") || "";
+};
 
-// Llama al backend o simula una respuesta OK
+// Llamada al backend real
 async function changePassword({ currentPassword, newPassword }) {
-  const { userId, token } = getAuthContext();
+  const token = getAuthToken();
 
-  if (!useBackend) {
-    // Simulación: “verifica” que la actual no sea "wrong"
-    await new Promise((r) => setTimeout(r, FAKE_DELAY_MS));
-    if (currentPassword === "wrong") {
-      const err = new Error("Contraseña actual incorrecta");
-      err.status = 401;
-      throw err;
-    }
-    return { ok: true };
-  }
-
-  // Llamada real
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({
-      userId,                // o envía en el token, según tu API
-      currentPassword,
-      newPassword,
-    }),
-    credentials: "include", // si usas cookies/sesión
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 
   if (!res.ok) {
     const data = await safeJson(res);
-    const msg = data?.message || `Error ${res.status}`;
+    const msg = data?.error || data?.message || `Error ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
     throw err;

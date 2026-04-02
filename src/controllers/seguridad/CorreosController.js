@@ -1,12 +1,14 @@
 // ============================================================
 // 📁 src/controllers/Seguridad/CorreosController.js
+// 🔒 Convertido a CommonJS + validación + bitácora
 // ============================================================
-import { pool } from "../../db.js";
+const { pool } = require("../../db");
+const { registrarBitacora, extractUsername, findUserId } = require("../../utils/bitacora");
 
 /* ============================================================
    📋 LISTAR TODOS LOS CORREOS
    ============================================================ */
-export const getCorreos = async (req, res) => {
+exports.getCorreos = async (req, res) => {
   try {
     const result = await pool.query(`SELECT * FROM seguridad.fn_correos_get_all()`);
     res.json(result.rows);
@@ -19,7 +21,7 @@ export const getCorreos = async (req, res) => {
 /* ============================================================
    📋 OBTENER CORREO POR ID
    ============================================================ */
-export const getCorreoById = async (req, res) => {
+exports.getCorreoById = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(`SELECT * FROM seguridad.fn_correos_get_by_id($1)`, [id]);
@@ -33,59 +35,108 @@ export const getCorreoById = async (req, res) => {
 };
 
 /* ============================================================
-   ➕ INSERTAR CORREO
+   ➕ INSERTAR CORREO (con validación + bitácora)
    ============================================================ */
-export const insertCorreo = async (req, res) => {
+exports.insertCorreo = async (req, res) => {
   try {
     const { id_persona, correo } = req.body;
+    const username = extractUsername(req);
 
     if (!id_persona || !correo)
       return res.status(400).json({ error: "Debe indicar la persona y el correo electrónico." });
 
-    await pool.query(`CALL seguridad.sp_correos_insert($1, $2)`, [id_persona, correo]);
+    // 🛡️ Validar formato de email
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(correo.trim())) {
+      return res.status(400).json({ error: "El formato del correo electrónico no es válido." });
+    }
+
+    await pool.query(`CALL seguridad.sp_correos_insert($1, $2)`, [id_persona, correo.trim()]);
+
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_correos",
+      accion: "INSERT",
+      descripcion: `Correo "${correo}" creado para persona ID ${id_persona} por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_persona, correo }),
+    });
 
     res.json({ message: "✅ Correo insertado correctamente." });
   } catch (error) {
     console.error("❌ Error al insertar correo:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al insertar correo." });
   }
 };
 
 /* ============================================================
-   ✏️ ACTUALIZAR CORREO
+   ✏️ ACTUALIZAR CORREO (con validación + bitácora)
    ============================================================ */
-export const updateCorreo = async (req, res) => {
+exports.updateCorreo = async (req, res) => {
   try {
     const { id_correo } = req.params;
     const { id_persona, correo } = req.body;
+    const username = extractUsername(req);
+
+    // 🛡️ Validar formato de email
+    if (correo) {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(correo.trim())) {
+        return res.status(400).json({ error: "El formato del correo electrónico no es válido." });
+      }
+    }
 
     await pool.query(`CALL seguridad.sp_correos_update($1, $2, $3)`, [
       id_correo,
       id_persona,
-      correo,
+      correo ? correo.trim() : correo,
     ]);
+
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_correos",
+      accion: "UPDATE",
+      descripcion: `Correo ID ${id_correo} actualizado por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_correo, id_persona, correo }),
+    });
 
     res.json({ message: "✏️ Correo actualizado correctamente." });
   } catch (error) {
     console.error("❌ Error al actualizar correo:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al actualizar correo." });
   }
 };
 
 /* ============================================================
-   🗑️ ELIMINAR CORREO
+   🗑️ ELIMINAR CORREO (con bitácora)
    ============================================================ */
-export const deleteCorreo = async (req, res) => {
+exports.deleteCorreo = async (req, res) => {
   try {
     const { id } = req.params;
+    const username = extractUsername(req);
+
     await pool.query(`CALL seguridad.sp_correos_delete($1)`, [id]);
+
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_correos",
+      accion: "DELETE",
+      descripcion: `Correo ID ${id} eliminado por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_correo: id }),
+    });
+
     res.json({ message: "🗑️ Correo eliminado correctamente." });
   } catch (error) {
     console.error("❌ Error al eliminar correo:", error);
 
     if (error.code === "23503") {
       return res.status(409).json({
-        error: "⚠️ No se puede eliminar el correo porque está referenciado por otras tablas.",
+        error: "No se puede eliminar el correo porque está referenciado por otras tablas.",
       });
     }
 

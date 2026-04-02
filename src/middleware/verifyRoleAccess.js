@@ -1,13 +1,17 @@
 // ============================================================
 // 📁 src/middleware/verifyRoleAccess.js
 // 🔐 Middleware que valida acceso por rol y módulo solicitado
+//
+// 🔒 SEGURIDAD: Usa req.user.email (del token JWT verificado)
+//    como fuente primaria. Fallback al header x-user-email.
 // ============================================================
 
 const { pool } = require("../db");
 
 module.exports = async function verifyRoleAccess(req, res, next) {
   try {
-    const email = req.headers["x-user-email"];
+    // 🔒 Prioridad: email verificado del JWT > header
+    const email = (req.user && req.user.email) || req.headers["x-user-email"];
     const requestedModule = req.headers["requested-module"];
 
     console.log("🔍 Verificando acceso:", { email, requestedModule });

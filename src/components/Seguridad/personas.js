@@ -31,6 +31,10 @@ import {
   ModalFooter,
   ModalCloseButton,
   useDisclosure,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText
 } from "@chakra-ui/react";
 
 import {
@@ -45,6 +49,7 @@ import { DownloadIcon } from "@chakra-ui/icons";
 
 import { useNavigate } from "react-router-dom";
 import api from "../../api/apiClient";
+import CrudTabla from "./CrudTabla";
 
 // 📦 Exportación
 import jsPDF from "jspdf";
@@ -690,9 +695,204 @@ export default function Personas() {
     );
   }
 
+  // ✅ Stats Dashboard
+  const statsData = {
+    total: empleados.length,
+    masculinos: empleados.filter(e => (e.genero || "").toLowerCase() === "masculino").length,
+    femeninos: empleados.filter(e => (e.genero || "").toLowerCase() === "femenino").length
+  };
+
+  // ✅ CRUD Logic para CrudTabla
+  const soloLetrasConExtras = /^[A-Za-záéíóúÁÉÍÓÚñÑ\s\-'.]{3,100}$/;
+  const dniRegex = /^(\d{13}|\d{4}-\d{4}-\d{5})$/;
+  const telefonoRegex = /^[23789]\d{3}-?\d{4}$/;
+  const correoRegex = /^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/;
+  const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
+  
+  const validateText = (v) => (!v || !v.trim()) ? "Obligatorio" : (!soloLetrasConExtras.test(v.trim())) ? "Solo letras, 3 a 100 caracteres" : null;
+
+  const fields = [
+    {
+      name: "nombre",
+      label: "Nombre",
+      type: "text",
+      validate: validateText,
+    },
+    {
+      name: "apellido",
+      label: "Apellido",
+      type: "text",
+      validate: validateText,
+    },
+    {
+      name: "identificacion",
+      label: "Identificación",
+      type: "text",
+      placeholderText: "Ej: 0000-0000-00000 o 13 dígitos",
+      validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!dniRegex.test(v.trim())) ? "Formato inválido" : null,
+    },
+    {
+      name: "fecha_nacimiento",
+      label: "Fecha de Nacimiento",
+      type: "date",
+      validate: (v) => {
+         if (!v) return "Requerida";
+         const fecha = new Date(v);
+         const hoy = new Date();
+         if(fecha > hoy) return "Fecha futura no permitida";
+         let edad = hoy.getFullYear() - fecha.getFullYear();
+         const mesDif = hoy.getMonth() - fecha.getMonth();
+         if (mesDif < 0 || (mesDif === 0 && hoy.getDate() < fecha.getDate())) edad--;
+         if (edad < 18) return "Debe ser mayor de 18 años";
+         return null;
+      }
+    },
+    {
+      name: "genero",
+      label: "Género",
+      type: "select",
+      options: [
+        { label: "Masculino", value: "Masculino" },
+        { label: "Femenino", value: "Femenino" }
+      ],
+      validate: (v) => (!v) ? "Seleccione género" : null,
+    },
+    {
+      name: "tipo_persona",
+      label: "Tipo de Empleado",
+      type: "select",
+      options: tipos.map(t => ({ label: t.nombre_tipo || t.tipo_persona, value: t.id_tipo_persona })),
+      validate: (v) => (!v) ? "Seleccione un tipo" : null,
+    },
+    {
+      name: "telefono",
+      label: "Teléfono",
+      type: "tel",
+      placeholderText: "Ocho dígitos ej. 99998888",
+      validate: (v) => (!v || String(v).trim() === "") ? "Obligatorio" : (!telefonoRegex.test(String(v).trim())) ? "Inválido (8 dígitos)" : null,
+    },
+    {
+      name: "correo",
+      label: "Correo Electrónico",
+      type: "email",
+      validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!correoRegex.test(v.trim())) ? "Correo incorrecto" : null,
+    },
+    {
+      name: "direccion",
+      label: "Dirección Exacta",
+      type: "textarea",
+      validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!textoSeguro.test(v.trim())) ? "Caracteres no válidos" : null,
+    },
+    {
+      name: "ciudad",
+      label: "Ciudad",
+      type: "text",
+      validate: validateText,
+    },
+    {
+      name: "departamento",
+      label: "Departamento",
+      type: "text",
+      validate: validateText,
+    },
+    {
+      name: "pais",
+      label: "País",
+      type: "text",
+      validate: validateText,
+    }
+  ];
+
+  const columnsTable = [
+    "ID",
+    "Nombre Completo",
+    "Identidad",
+    "Género",
+    "Tipo",
+    "Teléfono",
+    "Correo",
+    "Ciudad"
+  ];
+
+  const extractors = {
+    "ID": (r) => r.id_persona,
+    "Nombre Completo": (r) => `${r.nombre || ""} ${r.apellido || ""}`.trim(),
+    "Identidad": (r) => r.identificacion,
+    "Género": (r) => r.genero || "",
+    "Tipo": (r) => r.nombre_tipo_persona || r.tipo_persona || "",
+    "Teléfono": (r) => r.telefono?.numero || r.telefono || "—",
+    "Correo": (r) => r.correo?.correo || r.correo || "—",
+    "Ciudad": (r) => r.direccion?.ciudad || r.ciudad || "—",
+  };
+
+  const handleInsert = async (nuevo) => {
+      const res = await api.post("/seguridad/personas", {
+        nombre: nuevo.nombre,
+        apellido: nuevo.apellido,
+        identificacion: nuevo.identificacion,
+        fecha_nacimiento: nuevo.fecha_nacimiento,
+        genero: nuevo.genero,
+        tipo_persona: Number(nuevo.tipo_persona),
+      });
+
+      const id = res.data.id_persona;
+      await api.post("/seguridad/telefonos", { id_persona: id, numero: nuevo.telefono, id_tipo_telefono: 1 });
+      await api.post("/seguridad/correos", { id_persona: id, correo: nuevo.correo });
+      await api.post("/seguridad/direcciones", {
+        id_persona: id, direccion: nuevo.direccion, ciudad: nuevo.ciudad,
+        departamento: nuevo.departamento, pais: nuevo.pais,
+      });
+      return true;
+  };
+
+  const handleUpdate = async (editado) => {
+      await api.put(`/seguridad/personas/${editado.id_persona}`, {
+        nombre: editado.nombre, apellido: editado.apellido,
+        identificacion: editado.identificacion, fecha_nacimiento: editado.fecha_nacimiento,
+        genero: editado.genero, tipo_persona: Number(editado.tipo_persona),
+      });
+
+      // Empleado viejo
+      const empViejo = empleados.find(x => x.id_persona === editado.id_persona);
+
+      const idTelefonoEdit = empViejo?.telefonoOrig?.id_telefono || empViejo?.telefono?.id_telefono;
+      if (idTelefonoEdit) await api.put(`/seguridad/telefonos/${idTelefonoEdit}`, { id_persona: editado.id_persona, numero: editado.telefono, id_tipo_telefono: 1 });
+      else if (editado.telefono) await api.post(`/seguridad/telefonos`, { id_persona: editado.id_persona, numero: editado.telefono, id_tipo_telefono: 1 });
+
+      const idCorreoEdit = empViejo?.correoOrig?.id_correo || empViejo?.correo?.id_correo;
+      if (idCorreoEdit) await api.put(`/seguridad/correos/${idCorreoEdit}`, { id_persona: editado.id_persona, correo: editado.correo });
+      else if (editado.correo) await api.post(`/seguridad/correos`, { id_persona: editado.id_persona, correo: editado.correo });
+
+      const idDireccionEdit = empViejo?.direccionOrig?.id_direccion || empViejo?.direccion?.id_direccion;
+      if (idDireccionEdit) await api.put(`/seguridad/direcciones/${idDireccionEdit}`, {
+          id_persona: editado.id_persona, direccion: editado.direccion, ciudad: editado.ciudad, departamento: editado.departamento, pais: editado.pais,
+        });
+      else if (editado.direccion) await api.post(`/seguridad/direcciones`, {
+          id_persona: editado.id_persona, direccion: editado.direccion, ciudad: editado.ciudad, departamento: editado.departamento, pais: editado.pais,
+        });
+      return true;
+  };
+
   // ============================================================
   // ✅ UI FINAL
   // ============================================================
+  
+  // Transformar lista final para modal flat
+  const mappedData = empleados.map(emp => ({
+    ...emp,
+    fecha_nacimiento: emp.fecha_nacimiento?.split("T")[0] || "",
+    telefonoOrig: emp.telefono,
+    correoOrig: emp.correo,
+    direccionOrig: emp.direccion,
+    telefono: emp.telefono?.numero || "",
+    correo: emp.correo?.correo || "",
+    direccion: emp.direccion?.direccion || "",
+    ciudad: emp.direccion?.ciudad || "",
+    departamento: emp.direccion?.departamento || "",
+    pais: emp.direccion?.pais || "",
+    tipo_persona: emp.id_tipo_persona || emp.tipo_persona || ""
+  }));
+
   return (
     <Box p={5}>
 
@@ -732,246 +932,55 @@ export default function Personas() {
 
       <Divider mb={5} borderColor={borderClr} />
 
-      <Flex gap={5} alignItems="flex-start">
-
-        {/* ======================================================
-            ✅ FORMULARIO IZQUIERDO
-        ====================================================== */}
-        <Box
-          width="320px"
-          bg={cardBg}
-          shadow="md"
-          rounded="md"
-          p={4}
-          maxHeight="75vh"
-          overflowY="auto"
-          border={`1px solid ${borderClr}`}
-          fontSize="14px"
-        >
-          <Heading size="md" mb={3} color={accent}>
-            {modoEdicion ? "Editar empleado" : "Nuevo empleado"}
-          </Heading>
-
-          <Grid templateColumns="1fr" gap={3}>
-            {[
-              ["Nombre", "nombre", "text", "Ingrese el nombre del empleado"],
-              ["Apellido", "apellido", "text", "Ingrese el apellido del empleado"],
-              ["Identificación", "identificacion", "text", "Formato: 0000-0000-00000 o 13 dígitos"],
-              ["Fecha nacimiento", "fecha_nacimiento", "date", "Mayor de 18 años"],
-              ["Teléfono", "telefono", "tel", "Formato: 99999999 (8 dígitos)"],
-              ["Correo", "correo", "email", "Ejemplo: correo@dominio.com"],
-              ["Dirección", "direccion", "text", "Ingrese dirección completa"],
-              ["Ciudad", "ciudad", "text", "Ingrese la ciudad"],
-              ["Departamento", "departamento", "text", "Ingrese el departamento"],
-              ["País", "pais", "text", "Ingrese el país"],
-            ].map(([label, name, type, placeholderText]) => (
-              <FormControl key={name}>
-                <FormLabel fontSize="13px" color={inputText}>
-                  {label}
-                </FormLabel>
-                <Input
-                  type={type || "text"}
-                  name={name}
-                  size="sm"
-                  value={form[name]}
-                  onChange={change}
-                  placeholder={placeholderText}
-                  bg={inputBg}
-                  borderColor={inputBorder}
-                  color={inputText}
-                  _focus={{
-                    borderColor: "#0D9488",
-                    boxShadow: "0 0 0 1px #0D9488",
-                  }}
-                />
-              </FormControl>
-            ))}
-
-            <FormControl>
-              <FormLabel fontSize="13px" color={inputText}>
-                Género
-              </FormLabel>
-              <Select
-                name="genero"
-                size="sm"
-                value={form.genero}
-                onChange={change}
-                bg={inputBg}
-                borderColor={inputBorder}
-                color={inputText}
-                _focus={{
-                  borderColor: "#0D9488",
-                  boxShadow: "0 0 0 1px #0D9488",
-                }}
-              >
-                <option value="">Seleccione</option>
-                <option value="Femenino">Femenino</option>
-                <option value="Masculino">Masculino</option>
-              </Select>
-            </FormControl>
-
-            <FormControl>
-              <FormLabel fontSize="13px" color={inputText}>
-                Tipo empleado
-              </FormLabel>
-              <Select
-                name="tipo_persona"
-                size="sm"
-                value={form.tipo_persona}
-                onChange={change}
-                bg={inputBg}
-                borderColor={inputBorder}
-                color={inputText}
-                _focus={{
-                  borderColor: "#0D9488",
-                  boxShadow: "0 0 0 1px #0D9488",
-                }}
-              >
-                <option value="">Seleccione</option>
-                {tipos.map((t) => (
-                  <option value={t.id_tipo_persona} key={t.id_tipo_persona}>
-                    {t.nombre_tipo}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Flex mt={4} gap={3}>
-            <Button
-              leftIcon={<FaSave />}
-              bg={colorBtn}
-              color="white"
-              width="full"
-              size="sm"
-              _hover={{ bg: colorBtnHover }}
-              onClick={modoEdicion ? actualizar : guardarNuevo}
-            >
-              {modoEdicion ? "Actualizar" : "Guardar"}
-            </Button>
-
-            <Button
-              leftIcon={<FaBroom />}
-              colorScheme="gray"
-              width="full"
-              size="sm"
-              onClick={limpiar}
-            >
-              Limpiar
-            </Button>
-          </Flex>
+      {/* ✅ DASHBOARD */}
+      <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
+        <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
+          <Stat>
+            <StatLabel fontSize="lg" color={accent}>Empleados Registrados</StatLabel>
+            <StatNumber fontSize="3xl">{statsData.total}</StatNumber>
+            <StatHelpText>Personal configurado</StatHelpText>
+          </Stat>
         </Box>
 
-        {/* ======================================================
-            ✅ TABLA DERECHA
-        ====================================================== */}
-        <Box
-          flex="1"
-          bg={cardBg}
-          shadow="md"
-          rounded="md"
-          p={4}
-          maxHeight="75vh"
-          overflowY="auto"
-          border={`1px solid ${borderClr}`}
-          fontSize="14px"
-        >
-          <Box
-            display="inline-block"
-            bg={colorBtn}
-            color="white"
-            px={4}
-            py={2}
-            mb={4}
-            rounded="full"
-            fontSize="sm"
-            fontWeight="bold"
-            shadow="md"
-          >
-            {empleados.length} empleados
-          </Box>
-
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-              color: inputText,
-            }}
-          >
-            <thead
-              style={{
-                background: tableHeadBg,
-                color: tableHeadText,
-              }}
-            >
-              <tr>
-                {[
-                  "ID",
-                  "Nombre",
-                  "Identificación",
-                  "Género",
-                  "Tipo",
-                  "Teléfono",
-                  "Correo",
-                  "Ciudad",
-                  "Acciones",
-                ].map((h) => (
-                  <th key={h} style={{ padding: "8px", textAlign: "center" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {empleados.map((emp, i) => (
-                <tr
-                  key={emp.id_persona}
-                  style={{
-                    background: i % 2 === 0 ? rowBgEven : rowBgOdd,
-                    textAlign: "center",
-                  }}
-                >
-                  <td>{emp.id_persona}</td>
-                  <td>{emp.nombre} {emp.apellido}</td>
-                  <td>{emp.identificacion}</td>
-                  <td>{emp.genero}</td>
-                  <td>{emp.nombre_tipo_persona}</td>
-                  <td>{emp.telefono?.numero || ""}</td>
-                  <td>{emp.correo?.correo || ""}</td>
-                  <td>{emp.direccion?.ciudad || ""}</td>
-
-                  <td>
-                    <Button
-                      size="xs"
-                      bg={colorBtn}
-                      color="white"
-                      _hover={{ bg: colorBtnHover }}
-                      mr={2}
-                      p={1}
-                      onClick={() => editar(emp)}
-                    >
-                      <FaEdit size={12} />
-                    </Button>
-
-                    <Button
-                      size="xs"
-                      bg={dangerBtn}
-                      color="white"
-                      _hover={{ bg: dangerBtnHover }}
-                      p={1}
-                      onClick={() => eliminar(emp.id_persona)}
-                    >
-                      <FaTrash size={12} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
+          <Stat>
+            <StatLabel fontSize="lg" color="blue.400">Masculinos</StatLabel>
+            <StatNumber fontSize="3xl" color="blue.400">{statsData.masculinos}</StatNumber>
+            <StatHelpText>Total de hombres</StatHelpText>
+          </Stat>
         </Box>
-      </Flex>
+
+        <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
+          <Stat>
+            <StatLabel fontSize="lg" color="pink.400">Femeninos</StatLabel>
+            <StatNumber fontSize="3xl" color="pink.400">{statsData.femeninos}</StatNumber>
+            <StatHelpText>Total de mujeres</StatHelpText>
+          </Stat>
+        </Box>
+      </SimpleGrid>
+
+      {/* ✅ TABLA CRUD */}
+      <Box
+        bg={cardBg}
+        p={3}
+        rounded="md"
+        border={`1px solid ${borderClr}`}
+        shadow="sm"
+      >
+        <CrudTabla
+          title="Empleados"
+          columns={columnsTable}
+          extractors={extractors}
+          fields={fields}
+          idKey="id_persona"
+          initialData={mappedData}
+          onInsert={handleInsert}
+          onUpdate={handleUpdate}
+          onDelete={eliminar}
+          onReload={() => cargar()}
+          apiUrl="/seguridad/personas"
+        />
+      </Box>
 
       {/* 📤 Modal de Exportación */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">

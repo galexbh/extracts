@@ -1,23 +1,28 @@
 // ============================================================
 // 📁 src/controllers/Seguridad/DireccionesController.js
+// 🔒 Versión con validación de inputs y bitácora
 // ============================================================
 
 const { pool } = require("../../db");
+const { registrarBitacora, extractUsername, findUserId } = require("../../utils/bitacora");
 
 // ============================================================
 // 🔹 LISTAR TODAS LAS DIRECCIONES
 // ============================================================
 exports.getDirecciones = async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    await pool.query(`CALL seguridad.sp_direcciones_listar('cur_direcciones')`);
-    const result = await pool.query(`FETCH ALL FROM cur_direcciones`);
-    await pool.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query(`CALL seguridad.sp_direcciones_listar('cur_direcciones')`);
+    const result = await client.query(`FETCH ALL FROM cur_direcciones`);
+    await client.query("COMMIT");
     res.json(result.rows);
   } catch (error) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
     console.error("❌ Error al listar direcciones:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al listar direcciones." });
+  } finally {
+    client.release();
   }
 };
 
@@ -26,11 +31,12 @@ exports.getDirecciones = async (req, res) => {
 // ============================================================
 exports.getDireccionById = async (req, res) => {
   const { id } = req.params;
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    await pool.query(`CALL seguridad.sp_direcciones_obtener_por_id('cur_direccion', $1)`, [id]);
-    const result = await pool.query(`FETCH ALL FROM cur_direccion`);
-    await pool.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query(`CALL seguridad.sp_direcciones_obtener_por_id('cur_direccion', $1)`, [id]);
+    const result = await client.query(`FETCH ALL FROM cur_direccion`);
+    await client.query("COMMIT");
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Dirección no encontrada" });
@@ -38,37 +44,59 @@ exports.getDireccionById = async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (error) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
     console.error("❌ Error al obtener dirección:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al obtener dirección." });
+  } finally {
+    client.release();
   }
 };
 
 // ============================================================
-// 🔹 INSERTAR DIRECCIÓN
+// 🔹 INSERTAR DIRECCIÓN (con validación + bitácora)
 // ============================================================
 exports.insertDireccion = async (req, res) => {
   try {
     const { id_persona, direccion, ciudad, departamento, pais } = req.body;
+    const username = extractUsername(req);
+
+    // 🛡️ Validaciones backend
+    if (!id_persona) {
+      return res.status(400).json({ error: "Debe indicar la persona." });
+    }
+    if (!direccion || !direccion.trim()) {
+      return res.status(400).json({ error: "La dirección es obligatoria." });
+    }
 
     await pool.query(
       `CALL seguridad.sp_direcciones_insertar($1, $2, $3, $4, $5, NULL)`,
-      [id_persona, direccion, ciudad, departamento, pais]
+      [id_persona, direccion.trim(), ciudad, departamento, pais]
     );
+
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_direcciones",
+      accion: "INSERT",
+      descripcion: `Dirección creada para persona ID ${id_persona} por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_persona, direccion, ciudad, departamento, pais }),
+    });
 
     res.json({ message: "✅ Dirección insertada correctamente" });
   } catch (error) {
     console.error("❌ Error al insertar dirección:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al insertar dirección." });
   }
 };
 
 // ============================================================
-// 🔹 ACTUALIZAR DIRECCIÓN
+// 🔹 ACTUALIZAR DIRECCIÓN (con bitácora)
 // ============================================================
 exports.updateDireccion = async (req, res) => {
   const { id_direccion } = req.params;
   const { id_persona, direccion, ciudad, departamento, pais } = req.body;
+  const username = extractUsername(req);
 
   try {
     await pool.query(
@@ -76,31 +104,53 @@ exports.updateDireccion = async (req, res) => {
       [id_direccion, id_persona, direccion, ciudad, departamento, pais]
     );
 
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_direcciones",
+      accion: "UPDATE",
+      descripcion: `Dirección ID ${id_direccion} actualizada por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_direccion, id_persona, direccion, ciudad, departamento, pais }),
+    });
+
     res.json({ message: "✅ Dirección actualizada correctamente" });
   } catch (error) {
     console.error("❌ Error al actualizar dirección:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al actualizar dirección." });
   }
 };
 
 // ============================================================
-// 🔹 ELIMINAR DIRECCIÓN
+// 🔹 ELIMINAR DIRECCIÓN (con bitácora)
 // ============================================================
 exports.deleteDireccion = async (req, res) => {
   const { id } = req.params;
+  const username = extractUsername(req);
+
   try {
     await pool.query(`CALL seguridad.sp_direcciones_eliminar($1)`, [id]);
+
+    // 📋 Bitácora
+    const id_usuario = username ? await findUserId(username) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_direcciones",
+      accion: "DELETE",
+      descripcion: `Dirección ID ${id} eliminada por ${username || "desconocido"}`,
+      detalle: JSON.stringify({ id_direccion: id }),
+    });
+
     res.json({ message: "🗑️ Dirección eliminada correctamente" });
   } catch (error) {
     console.error("❌ Error al eliminar dirección:", error);
 
     if (error.code === "23503") {
-      // Mensaje personalizado si está referenciada
       return res.status(400).json({
-        error: `⚠️ No se puede eliminar la dirección con ID ${req.params.id} porque está referenciada por otras tablas.`,
+        error: "No se puede eliminar la dirección porque está referenciada por otras tablas.",
       });
     }
 
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al eliminar dirección." });
   }
 };

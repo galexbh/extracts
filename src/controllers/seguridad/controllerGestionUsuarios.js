@@ -50,10 +50,9 @@ const getUsuarios = async (_req, res) => {
         u.id_usuario,
         u.nombre_usuario,
         u.username,
-        u.password,
         u.id_rol,
         COALESCE(r.nombre_rol, '—') AS nombre_rol,
-        COALESCE(r.accesos, '') AS accesos,          -- ✅ incluye accesos del rol
+        COALESCE(r.accesos, '') AS accesos,
         u.id_estado_usuario,
         COALESCE(e.nombre_estado, 'Desconocido') AS nombre_estado_usuario,
         TO_CHAR(
@@ -110,7 +109,9 @@ const getUsuarioById = async (req, res) => {
     const result = await pool.query(
       `
       SELECT 
-        u.*, 
+        u.id_usuario, u.nombre_usuario, u.username, u.id_rol,
+        u.id_estado_usuario, u.fecha_creacion, u.ultimo_login,
+        u.uid_firebase, u.mfa_enabled,
         r.nombre_rol,
         r.accesos,
         e.nombre_estado AS nombre_estado_usuario
@@ -174,18 +175,18 @@ const insertUsuario = async (req, res) => {
       [nombre_usuario, username, hashedPassword, id_rol, id_estado_usuario, userRecord.uid]
     );
 
-    res.json({ message: "✅ Usuario creado en Firebase y PostgreSQL" });
-
-    // 📋 Bitácora
-    const creadorEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
-    const id_creador = creadorEmail ? await findUserId(creadorEmail) : null;
+    // 📋 Bitácora (antes de responder, para garantizar registro)
+    const creadorEmail = (req.user && req.user.email) || req.headers["x-user-email"] || "desconocido";
+    const id_creador = creadorEmail !== "desconocido" ? await findUserId(creadorEmail) : null;
     await registrarBitacora({
       id_usuario: id_creador,
       tabla: "seguridad.tbl_usuarios",
       accion: "INSERT",
-      descripcion: `Usuario "${username}" creado por ${creadorEmail || "desconocido"}`,
+      descripcion: `Usuario "${username}" creado por ${creadorEmail}`,
       detalle: JSON.stringify({ nombre_usuario, username, id_rol, id_estado_usuario }),
     });
+
+    res.json({ message: "✅ Usuario creado en Firebase y PostgreSQL" });
   } catch (err) {
     console.error("[API] ❌ Error creando usuario:", err);
     res.status(500).json({ error: traducirError(err) });
@@ -233,7 +234,14 @@ const updateUsuario = async (req, res) => {
       if (newEmail && newEmail !== emailActual) fbUpdate.email = newEmail;
       fbUpdate.displayName = username || newEmail;
 
-      const isHash = password && (password.startsWith("$2") || password.length > 50);
+      // 🔒 Detección segura de hash bcrypt
+      let isHash = false;
+      if (password) {
+        try {
+          bcrypt.getRounds(password); // lanza excepción si no es hash válido
+          isHash = true;
+        } catch { isHash = false; }
+      }
       if (password && !isHash) fbUpdate.password = password;
 
       if (Object.keys(fbUpdate).length > 0) {
@@ -242,11 +250,19 @@ const updateUsuario = async (req, res) => {
       }
     }
 
-    // 🔹 Hashear contraseña si se envió una nueva (no hashear si ya es un hash bcrypt)
+    // 🔹 Hashear contraseña si se envió una nueva
+    // 🔒 Detección segura: usa bcrypt.getRounds() en lugar de heurísticas débiles
     let finalPassword = null;
-    if (password && !password.startsWith("$2") && password.length <= 50) {
-      finalPassword = await bcrypt.hash(password, 10);
-      console.log("[API] 🔐 Contraseña hasheada para actualización");
+    if (password) {
+      let yaEsHash = false;
+      try {
+        bcrypt.getRounds(password);
+        yaEsHash = true;
+      } catch { yaEsHash = false; }
+      if (!yaEsHash) {
+        finalPassword = await bcrypt.hash(password, 10);
+        console.log("[API] 🔐 Contraseña hasheada para actualización");
+      }
     }
 
     await pool.query(
@@ -269,13 +285,13 @@ const updateUsuario = async (req, res) => {
     });
 
     // 📋 Bitácora
-    const modEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
-    const id_mod = modEmail ? await findUserId(modEmail) : null;
+    const modEmail = (req.user && req.user.email) || req.headers["x-user-email"] || "desconocido";
+    const id_mod = modEmail !== "desconocido" ? await findUserId(modEmail) : null;
     await registrarBitacora({
       id_usuario: id_mod,
       tabla: "seguridad.tbl_usuarios",
       accion: "UPDATE",
-      descripcion: `Usuario ID ${id_usuario} actualizado por ${modEmail || "desconocido"}`,
+      descripcion: `Usuario ID ${id_usuario} actualizado por ${modEmail}`,
       detalle: JSON.stringify({
         antes: { username: emailActual },
         despues: { username: newEmail, id_rol, id_estado_usuario },
@@ -322,13 +338,13 @@ const deleteUsuario = async (req, res) => {
     await pool.query(`CALL seguridad.sp_usuarios_delete($1);`, [parseInt(id)]);
 
     // 📋 Bitácora
-    const delEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
-    const id_del = delEmail ? await findUserId(delEmail) : null;
+    const delEmail = (req.user && req.user.email) || req.headers["x-user-email"] || "desconocido";
+    const id_del = delEmail !== "desconocido" ? await findUserId(delEmail) : null;
     await registrarBitacora({
       id_usuario: id_del,
       tabla: "seguridad.tbl_usuarios",
       accion: "DELETE",
-      descripcion: `Usuario ID ${id} eliminado por ${delEmail || "desconocido"}`,
+      descripcion: `Usuario ID ${id} eliminado por ${delEmail}`,
       detalle: JSON.stringify({ id_usuario: id, uid_firebase: result.rows[0]?.uid_firebase }),
     });
 
