@@ -209,9 +209,9 @@ export default function Pagos() {
         position="relative"
       >
         <Flex mb={4}>
-          <Button size="sm" onClick={() => navigate(-1)}>
-            ←
-          </Button>
+          <Button size="sm" onClick={() => navigate("/app/contabilidad")}>
+  ← Atrás
+</Button>
         </Flex>
 
         {/* Filtros */}
