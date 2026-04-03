@@ -1,0 +1,70 @@
+﻿node : node:internal/modu
+les/cjs/loader:1368
+En línea: 1 Carácter: 1
++ node src/server.js 
+2>&1 | Out-File 
+-FilePath 
+server_error.txt -Encodi 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo       
+       : NotSpecified:   
+  (node:internal/modul   
+ es/cjs/loader:1368:S    
+tring) [], RemoteExc    
+eption
+    + FullyQualifiedErro 
+   rId : NativeCommandE  
+  rror
+ 
+  throw err;
+  ^
+
+Error: Cannot find 
+module 'helmet'
+Require stack:
+- C:\Users\User\Music\pp6
+7\extracts\src\server.js
+    at Function._resolveF
+ilename (node:internal/mo
+dules/cjs/loader:1365:15)
+    at 
+defaultResolveImpl (node:
+internal/modules/cjs/load
+er:1021:19)
+    at 
+resolveForCJSWithHooks (n
+ode:internal/modules/cjs/
+loader:1026:22)
+    at Function._load (no
+de:internal/modules/cjs/l
+oader:1175:37)
+    at 
+TracingChannel.traceSync 
+(node:diagnostics_channel
+:322:14)
+    at wrapModuleLoad (no
+de:internal/modules/cjs/l
+oader:235:24)
+    at Module.require (no
+de:internal/modules/cjs/l
+oader:1445:12)
+    at require (node:inte
+rnal/modules/helpers:135:
+16)
+    at 
+Object.<anonymous> (C:\Us
+ers\User\Music\pp67\extra
+cts\src\server.js:6:16)
+    at Module._compile (n
+ode:internal/modules/cjs/
+loader:1688:14) {
+  code: 
+'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\Us
+ers\\User\\Music\\pp67\\e
+xtracts\\src\\server.js' 
+]
+}
+
+Node.js v22.18.0

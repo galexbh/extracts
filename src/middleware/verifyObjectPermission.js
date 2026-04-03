@@ -2,6 +2,10 @@
 // 📁 src/middleware/verifyObjectPermission.js
 // 🔐 Middleware que verifica permisos CRUD por Rol + Objeto
 //    usando tbl_permisos (can_create, can_read, can_update, can_delete)
+//
+// 🔒 SEGURIDAD:
+//    - Usa req.user.email (del token JWT verificado) como fuente primaria
+//    - DENY BY DEFAULT: si el objeto no está registrado, se deniega
 // ============================================================
 
 const { pool } = require("../db");
@@ -12,12 +16,6 @@ const { pool } = require("../db");
  * @param {string} nombreObjeto - Nombre del objeto en tbl_objetos (ej: "Objetos", "Permisos")
  * @param {string} accion - Permiso a verificar: "create" | "read" | "update" | "delete"
  * @returns {Function} Middleware de Express
- *
- * Uso en rutas:
- *   const verifyPermission = require("../middleware/verifyObjectPermission");
- *   router.post("/objetos", verifyPermission("Objetos", "create"), ctrl.insertObjeto);
- *   router.put("/objetos/:id", verifyPermission("Objetos", "update"), ctrl.updateObjeto);
- *   router.delete("/objetos/:id", verifyPermission("Objetos", "delete"), ctrl.deleteObjeto);
  */
 function verifyPermission(nombreObjeto, accion) {
     // Mapeo de acciones a columnas de tbl_permisos
@@ -36,17 +34,18 @@ function verifyPermission(nombreObjeto, accion) {
     return async (req, res, next) => {
         try {
             // -------------------------------------------------------
-            // 1️⃣ Obtener email del usuario
+            // 1️⃣ Obtener email del usuario (FUENTE VERIFICADA)
+            // 🔒 Prioridad: req.user.email (del JWT verificado) > header
             // -------------------------------------------------------
             const email =
+                (req.user && req.user.email) ||
                 req.headers["x-user-email"] ||
-                req.headers["X-User-Email"] ||
-                req.headers["x-User-Email"];
+                req.headers["X-User-Email"];
 
             if (!email) {
                 return res.status(401).json({
                     error: "MISSING_USER_EMAIL",
-                    message: "Se requiere el header x-user-email para verificar permisos.",
+                    message: "No se pudo identificar al usuario. Se requiere autenticación.",
                 });
             }
 
@@ -84,6 +83,7 @@ function verifyPermission(nombreObjeto, accion) {
 
             // -------------------------------------------------------
             // 4️⃣ Si el rol tiene acceso "Todos" → permitir todo
+            //    🔒 Se registra en log para auditoría
             // -------------------------------------------------------
             let accesos = [];
             if (Array.isArray(user.accesos)) {
@@ -98,12 +98,13 @@ function verifyPermission(nombreObjeto, accion) {
             }
 
             if (accesos.includes("todos")) {
-                console.log(`✅ [RBAC] Acceso total: ${user.username} → ${nombreObjeto}.${accion}`);
+                console.log(`✅ [RBAC] Acceso total (bypass): ${user.username} → ${nombreObjeto}.${accion}`);
                 return next();
             }
 
             // -------------------------------------------------------
             // 5️⃣ Buscar el objeto en tbl_objetos
+            // 🔒 DENY BY DEFAULT: si el objeto no existe, denegar acceso
             // -------------------------------------------------------
             const objetoResult = await pool.query(
                 "SELECT id_objeto FROM seguridad.tbl_objetos WHERE LOWER(nombre_objeto) = LOWER($1) LIMIT 1;",
@@ -111,9 +112,12 @@ function verifyPermission(nombreObjeto, accion) {
             );
 
             if (objetoResult.rows.length === 0) {
-                // Si el objeto no está registrado, permitir (no bloquear por falta de config)
-                console.warn(`⚠️ [RBAC] Objeto "${nombreObjeto}" no registrado en tbl_objetos — acceso permitido por defecto`);
-                return next();
+                // 🔒 SEGURIDAD: Deny by default — objeto no registrado
+                console.warn(`🚫 [RBAC] DENY BY DEFAULT: Objeto "${nombreObjeto}" no registrado en tbl_objetos — acceso DENEGADO`);
+                return res.status(403).json({
+                    error: "OBJECT_NOT_CONFIGURED",
+                    message: `El objeto "${nombreObjeto}" no está configurado en el sistema de permisos. Contacte al administrador.`,
+                });
             }
 
             const id_objeto = objetoResult.rows[0].id_objeto;

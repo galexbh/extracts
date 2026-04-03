@@ -16,7 +16,7 @@ const pagosController = require("../controllers/contabilidad/pagos.controller");
 // ============================================================
 // 💳 RUTAS CRUD CRÉDITOS
 // ============================================================
-router.get("/creditos", creditosController.listarCreditos);
+router.get("/creditos", verifyPermission("Creditos", "read"), creditosController.listarCreditos);
 router.post("/creditos", verifyPermission("Creditos", "create"), creditosController.insertarCredito);
 router.put("/creditos/:id_credito", verifyPermission("Creditos", "update"), creditosController.actualizarCredito);
 router.delete("/creditos/:id_credito", verifyPermission("Creditos", "delete"), creditosController.eliminarCredito);
@@ -24,7 +24,7 @@ router.delete("/creditos/:id_credito", verifyPermission("Creditos", "delete"), c
 // ============================================================
 // 🕒 RUTAS CRUD MORAS
 // ============================================================
-router.get("/moras", moraController.listarMoras);
+router.get("/moras", verifyPermission("Moras", "read"), moraController.listarMoras);
 router.post("/moras", verifyPermission("Moras", "create"), moraController.insertarMora);
 router.put("/moras/:id_mora", verifyPermission("Moras", "update"), moraController.actualizarMora);
 router.delete("/moras/:id_mora", verifyPermission("Moras", "delete"), moraController.eliminarMora);
@@ -32,7 +32,7 @@ router.delete("/moras/:id_mora", verifyPermission("Moras", "delete"), moraContro
 // ============================================================
 // 💰 RUTAS CRUD PAGOS
 // ============================================================
-router.get("/pagos", pagosController.listarPagos);
+router.get("/pagos", verifyPermission("Pagos", "read"), pagosController.listarPagos);
 router.post("/pagos", verifyPermission("Pagos", "create"), pagosController.insertarPago);
 router.put("/pagos/:id_pago", verifyPermission("Pagos", "update"), pagosController.actualizarPago);
 router.delete("/pagos/:id_pago", verifyPermission("Pagos", "delete"), pagosController.eliminarPago);

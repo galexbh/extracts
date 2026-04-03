@@ -25,8 +25,15 @@ import {
   TabPanel,
   useColorModeValue,
   useToast,
+  SimpleGrid,
+  Stat, StatLabel, StatNumber, StatHelpText, StatArrow, Icon, Spinner
 } from "@chakra-ui/react";
-import { FaChartLine, FaShoppingCart, FaClipboardList } from "react-icons/fa";
+import { FaChartLine, FaShoppingCart, FaClipboardList, FaArrowRight, FaClock } from "react-icons/fa";
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  LineChart, Line, PieChart, Pie, Cell, Legend
+} from "recharts";
 import api from "../../api/apiClient";
 
 const fmtHNL = new Intl.NumberFormat("es-HN", {
@@ -59,6 +66,9 @@ export default function ReportesContabilidad() {
   const [productos, setProductos] = useState([]);
   const [ventasVendedor, setVentasVendedor] = useState([]);
   const [pedidosDia, setPedidosDia] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const COLORS = ["#3182CE", "#38A169", "#D69E2E", "#E53E3E", "#805AD5", "#319795"];
 
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
@@ -86,13 +96,7 @@ export default function ReportesContabilidad() {
         params: { desde: filtros.desde, hasta: filtros.hasta },
       });
       setVentasVendedor(res.data || []);
-    } catch (err) {
-      toast({
-        title: "Error cargando ventas por vendedor",
-        description: err.response?.data?.error || err.message,
-        status: "error",
-      });
-    }
+    } catch (err) { }
   };
 
   const cargarPedidosDiarios = async () => {
@@ -101,22 +105,29 @@ export default function ReportesContabilidad() {
         params: { desde: filtros.desde, hasta: filtros.hasta },
       });
       setPedidosDia(res.data || []);
-    } catch (err) {
-      toast({
-        title: "Error cargando pedidos diarios",
-        description: err.response?.data?.error || err.message,
-        status: "error",
-      });
-    }
+    } catch (err) { }
+  };
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    await Promise.all([
+      cargarProductosMasVendidos(),
+      cargarVentasVendedor(),
+      cargarPedidosDiarios(),
+    ]);
+    setLoading(false);
   };
 
   // por defecto, al entrar, cargamos todo del día
   useEffect(() => {
-    cargarProductosMasVendidos();
-    cargarVentasVendedor();
-    cargarPedidosDiarios();
+    cargarDatos();
     // eslint-disable-next-line
   }, []);
+
+  // KPIs Calculados
+  const ingresosTotales = ventasVendedor.reduce((acc, curr) => acc + (Number(curr.total_vendido) || 0), 0);
+  const totalPedidos = pedidosDia.reduce((acc, curr) => acc + (Number(curr.cantidad_pedidos) || 0), 0);
+  const totalUnidadesVendidas = productos.reduce((acc, curr) => acc + (Number(curr.total_cantidad) || 0), 0);
 
   return (
     <Box p={4}>
@@ -165,158 +176,156 @@ export default function ReportesContabilidad() {
                   });
                   return;
                 }
-                cargarProductosMasVendidos();
-                cargarVentasVendedor();
-                cargarPedidosDiarios();
+                cargarDatos();
               }}
             >
-              Actualizar todos
+              Actualizar Dashboard
             </Button>
           </Flex>
 
-          {/* Tabs de reportes */}
-          <Tabs colorScheme="teal" isFitted>
-            <TabList mb={4}>
-              <Tab>
-                <HStack spacing={2}>
-                  <FaShoppingCart />
-                  <Text>Productos más vendidos</Text>
-                </HStack>
-              </Tab>
-              <Tab>
-                <HStack spacing={2}>
-                  <FaChartLine />
-                  <Text>Ventas por vendedor</Text>
-                </HStack>
-              </Tab>
-              <Tab>
-                <HStack spacing={2}>
-                  <FaClipboardList />
-                  <Text>Pedidos diarios</Text>
-                </HStack>
-              </Tab>
-            </TabList>
+          {loading ? (
+            <Flex justify="center" align="center" minH="30vh">
+              <Spinner size="xl" color="teal.500" thickness="4px" />
+            </Flex>
+          ) : (
+            <Box mt={6}>
+              {/* KPIs Principales (Corporate Level) */}
+              <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={8}>
+                <Card bgGradient="linear(to-br, teal.400, teal.600)" color="white" boxShadow="xl" borderRadius="xl">
+                  <CardBody>
+                    <Stat>
+                      <StatLabel fontSize="sm" fontWeight="semibold" opacity={0.9}>Ingresos Generados</StatLabel>
+                      <StatNumber fontSize="3xl" fontWeight="extrabold">{fmtHNL.format(ingresosTotales)}</StatNumber>
+                      <StatHelpText opacity={0.8}>En el periodo seleccionado</StatHelpText>
+                    </Stat>
+                  </CardBody>
+                </Card>
 
-            <TabPanels>
-              {/* ---------- TAB 1: PRODUCTOS ---------- */}
-              <TabPanel>
-                <VStack align="stretch" spacing={3}>
-                  <Text fontSize="sm" color={subtleText}>
-                    Top de productos más vendidos por cantidad en el rango seleccionado.
-                  </Text>
-                  <Box overflowX="auto">
-                    <Table size="sm">
-                      <Thead bg={headerBg}>
-                        <Tr>
-                          <Th>ID</Th>
-                          <Th>Producto</Th>
-                          <Th isNumeric>Cantidad vendida</Th>
-                          <Th isNumeric>Total vendido</Th>
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                        {productos.map((p) => (
-                          <Tr key={p.id_producto}>
-                            <Td>{p.id_producto}</Td>
-                            <Td>{p.nombre_producto}</Td>
-                            <Td isNumeric>{p.total_cantidad}</Td>
-                            <Td isNumeric>{fmtHNL.format(p.total_vendido || 0)}</Td>
-                          </Tr>
-                        ))}
-                        {productos.length === 0 && (
-                          <Tr>
-                            <Td colSpan={4}>
-                              <Text textAlign="center" color={subtleText} py={3}>
-                                Sin datos para el rango seleccionado.
-                              </Text>
-                            </Td>
-                          </Tr>
-                        )}
-                      </Tbody>
-                    </Table>
-                  </Box>
-                </VStack>
-              </TabPanel>
+                <Card bgGradient="linear(to-br, blue.400, blue.600)" color="white" boxShadow="xl" borderRadius="xl">
+                  <CardBody>
+                    <Stat>
+                      <StatLabel fontSize="sm" fontWeight="semibold" opacity={0.9}>Volumen de Pedidos</StatLabel>
+                      <StatNumber fontSize="3xl" fontWeight="extrabold">{totalPedidos}</StatNumber>
+                      <StatHelpText opacity={0.8}>Transacciones registradas</StatHelpText>
+                    </Stat>
+                  </CardBody>
+                </Card>
 
-              {/* ---------- TAB 2: VENTAS POR VENDEDOR ---------- */}
-              <TabPanel>
-                <VStack align="stretch" spacing={3}>
-                  <Text fontSize="sm" color={subtleText}>
-                    Facturas emitidas y montos vendidos por vendedor y fecha.
-                  </Text>
-                  <Box overflowX="auto">
-                    <Table size="sm">
-                      <Thead bg={headerBg}>
-                        <Tr>
-                          <Th>Vendedor</Th>
-                          <Th>Fecha</Th>
-                          <Th isNumeric># Facturas</Th>
-                          <Th isNumeric>Total vendido</Th>
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                        {ventasVendedor.map((v, idx) => (
-                          <Tr key={idx}>
-                            <Td>{v.vendedor}</Td>
-                            <Td>{v.fecha}</Td>
-                            <Td isNumeric>{v.cantidad_facturas}</Td>
-                            <Td isNumeric>{fmtHNL.format(v.total_vendido || 0)}</Td>
-                          </Tr>
-                        ))}
-                        {ventasVendedor.length === 0 && (
-                          <Tr>
-                            <Td colSpan={4}>
-                              <Text textAlign="center" color={subtleText} py={3}>
-                                Sin datos para el rango seleccionado.
-                              </Text>
-                            </Td>
-                          </Tr>
-                        )}
-                      </Tbody>
-                    </Table>
-                  </Box>
-                </VStack>
-              </TabPanel>
+                <Card bgGradient="linear(to-br, purple.400, purple.600)" color="white" boxShadow="xl" borderRadius="xl">
+                  <CardBody>
+                    <Stat>
+                      <StatLabel fontSize="sm" fontWeight="semibold" opacity={0.9}>Unidades Movilizadas</StatLabel>
+                      <StatNumber fontSize="3xl" fontWeight="extrabold">{totalUnidadesVendidas}</StatNumber>
+                      <StatHelpText opacity={0.8}>Productos despachados</StatHelpText>
+                    </Stat>
+                  </CardBody>
+                </Card>
+              </SimpleGrid>
 
-              {/* ---------- TAB 3: PEDIDOS DIARIOS ---------- */}
-              <TabPanel>
-                <VStack align="stretch" spacing={3}>
-                  <Text fontSize="sm" color={subtleText}>
-                    Cantidad de pedidos y total diario en el rango seleccionado.
-                  </Text>
-                  <Box overflowX="auto">
-                    <Table size="sm">
-                      <Thead bg={headerBg}>
-                        <Tr>
-                          <Th>Fecha</Th>
-                          <Th isNumeric># Pedidos</Th>
-                          <Th isNumeric>Total pedidos</Th>
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                        {pedidosDia.map((p, idx) => (
-                          <Tr key={idx}>
-                            <Td>{p.fecha}</Td>
-                            <Td isNumeric>{p.cantidad_pedidos}</Td>
-                            <Td isNumeric>{fmtHNL.format(p.total_pedidos || 0)}</Td>
-                          </Tr>
-                        ))}
-                        {pedidosDia.length === 0 && (
-                          <Tr>
-                            <Td colSpan={3}>
-                              <Text textAlign="center" color={subtleText} py={3}>
-                                Sin datos para el rango seleccionado.
-                              </Text>
-                            </Td>
-                          </Tr>
-                        )}
-                      </Tbody>
-                    </Table>
-                  </Box>
-                </VStack>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+              {/* Contenedores de Gráficos Duales */}
+              <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} mb={8}>
+
+                {/* GRAFICO 1: VENTAS POR VENDEDOR */}
+                <Card variant="outline" borderColor={border} borderRadius="xl" boxShadow="sm">
+                  <CardBody>
+                    <Flex justify="space-between" align="center" mb={4}>
+                      <HStack>
+                        <Icon as={FaChartLine} color="blue.500" boxSize={5} />
+                        <Heading size="sm">Rendimiento por Vendedor</Heading>
+                      </HStack>
+                      <Button as={RouterLink} to="/app/contabilidad/reportes/ventas-usuarios" rightIcon={<FaArrowRight />} size="xs" colorScheme="blue" variant="ghost">Ver Detalles</Button>
+                    </Flex>
+                    <Box h="300px">
+                      {ventasVendedor.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={ventasVendedor} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="vendedor" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} width={80} />
+                            <Tooltip formatter={(value) => fmtHNL.format(value)} />
+                            <Bar dataKey="total_vendido" fill="#3182CE" radius={[4, 4, 0, 0]} name="Ventas (HNL)" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <Flex h="100%" align="center" justify="center"><Text color={subtleText}>Sin datos</Text></Flex>
+                      )}
+                    </Box>
+                  </CardBody>
+                </Card>
+
+                {/* GRAFICO 2: PRODUCTOS MAS VENDIDOS (PIE) */}
+                <Card variant="outline" borderColor={border} borderRadius="xl" boxShadow="sm">
+                  <CardBody>
+                    <Flex justify="space-between" align="center" mb={4}>
+                      <HStack>
+                        <Icon as={FaShoppingCart} color="green.500" boxSize={5} />
+                        <Heading size="sm">Distribución de Productos</Heading>
+                      </HStack>
+                      <Button as={RouterLink} to="/app/contabilidad/reportes/productos-vendidos" rightIcon={<FaArrowRight />} size="xs" colorScheme="green" variant="ghost">Ver Detalles</Button>
+                    </Flex>
+                    <Box h="300px">
+                      {productos.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={productos}
+                              dataKey="total_cantidad"
+                              nameKey="nombre_producto"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={90}
+                              label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                              labelLine={false}
+                            >
+                              {productos.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value) => `${value} unidades`} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <Flex h="100%" align="center" justify="center"><Text color={subtleText}>Sin datos</Text></Flex>
+                      )}
+                    </Box>
+                  </CardBody>
+                </Card>
+
+              </SimpleGrid>
+
+              {/* CONTENEDOR ANCHO INFERIOR */}
+              <SimpleGrid columns={1} spacing={8}>
+                {/* GRAFICO 3: FLUJO DE PEDIDOS DIARIOS */}
+                <Card variant="outline" borderColor={border} borderRadius="xl" boxShadow="sm">
+                  <CardBody>
+                    <Flex justify="space-between" align="center" mb={4}>
+                      <HStack>
+                        <Icon as={FaClock} color="purple.500" boxSize={5} />
+                        <Heading size="sm">Flujo de Transacciones Diarias (HNL)</Heading>
+                      </HStack>
+                      <Button as={RouterLink} to="/app/contabilidad/reportes/pedidos-diarios" rightIcon={<FaArrowRight />} size="xs" colorScheme="purple" variant="ghost">Ver Detalles</Button>
+                    </Flex>
+                    <Box h="300px">
+                      {pedidosDia.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={pedidosDia} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="fecha" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} width={80} />
+                            <Tooltip formatter={(value) => fmtHNL.format(value)} />
+                            <Line type="monotone" dataKey="total_pedidos" stroke="#805AD5" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Ingreso Diario" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <Flex h="100%" align="center" justify="center"><Text color={subtleText}>Sin datos</Text></Flex>
+                      )}
+                    </Box>
+                  </CardBody>
+                </Card>
+              </SimpleGrid>
+
+            </Box>
+          )}
         </CardBody>
       </Card>
     </Box>

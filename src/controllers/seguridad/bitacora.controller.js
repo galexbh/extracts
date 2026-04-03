@@ -99,7 +99,7 @@ const listarBitacora = async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error al listar bitácora:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al listar bitácora." });
   }
 };
 

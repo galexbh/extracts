@@ -5,6 +5,7 @@
 // ============================================================
 const express = require("express");
 const router = express.Router();
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 const {
   productosMasVendidos,
@@ -13,12 +14,24 @@ const {
 } = require("../controllers/contabilidad/ReportesContabilidadController");
 
 // Productos más vendidos
-router.get("/productos-mas-vendidos", productosMasVendidos);
+router.get(
+  "/productos-mas-vendidos",
+  verifyPermission("Contabilidad", "read"),
+  productosMasVendidos
+);
 
 // Ventas por vendedor
-router.get("/ventas-vendedor", ventasPorVendedor);
+router.get(
+  "/ventas-vendedor",
+  verifyPermission("Contabilidad", "read"),
+  ventasPorVendedor
+);
 
 // Pedidos diarios
-router.get("/pedidos-diarios", pedidosDiarios);
+router.get(
+  "/pedidos-diarios",
+  verifyPermission("Contabilidad", "read"),
+  pedidosDiarios
+);
 
 module.exports = router;

@@ -19,9 +19,7 @@ if (!admin.apps.length) {
       // Reemplazar \\n por \n reales para evitar error "Invalid JWT Signature"
       const formattedKey = rawKey ? rawKey.replace(/\\n/g, "\n") : "";
 
-      console.log(`[DEBUG] Longitud de clave: ${formattedKey.length}`);
-      console.log(`[DEBUG] Inicio clave: ${formattedKey.substring(0, 30)}...`);
-      console.log(`[DEBUG] Fin clave: ...${formattedKey.substring(formattedKey.length - 30)}`);
+      // 🔒 Debug de clave removido por seguridad
 
       credential = admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID || "extractus-auth",

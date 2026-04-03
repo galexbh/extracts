@@ -47,6 +47,12 @@ import Mora from './components/Contabilidad/Mora';
 import Pagos from './components/Contabilidad/Pagos';
 import ReportesContabilidad from "./components/Contabilidad/ReportesContabilidad";
 
+// Reportes detallados
+import ProductoVendido from "./components/Contabilidad/productovendido";
+import PedidosDiarios from "./components/Contabilidad/pedidosdiarios";
+import VentasUsuario from "./components/Contabilidad/ventasUsuario";
+import ReporteMoras from "./components/Contabilidad/ReporteMoras";
+
 // ===============================
 // 🏭 PRODUCCIÓN
 // ===============================
@@ -156,16 +162,22 @@ function App() {
               <Route path="contabilidad/creditos" element={<Creditos />} />
               <Route path="contabilidad/mora" element={<Mora />} />
               <Route path="contabilidad/pagos" element={<Pagos />} />
-             
-<Route path="ventas/pagos-factura" element={<PagosFactura />} />
-<Route path="contabilidad/reportes-contabilidad" element={<ReportesContabilidad />} />
+
+              <Route path="ventas/pagos-factura" element={<PagosFactura />} />
+              <Route path="contabilidad/reportes-contabilidad" element={<ReportesContabilidad />} />
+
+              {/* Sub-Rutas de Reportes Detallados */}
+              <Route path="contabilidad/reportes/productos-vendidos" element={<ProductoVendido />} />
+              <Route path="contabilidad/reportes/pedidos-diarios" element={<PedidosDiarios />} />
+              <Route path="contabilidad/reportes/ventas-usuarios" element={<VentasUsuario />} />
+              <Route path="contabilidad/reportes/clientes-en-mora" element={<ReporteMoras />} />
 
 
 
               {/* ===================== PRODUCCIÓN ===================== */}
               <Route path="produccion" element={<Menuproduccion />} />
               <Route path="produccion/productos" element={<Productos />} />
-              
+
               <Route path="produccion/produccion" element={<Produccion />} />
               <Route path="produccion/insumos" element={<Insumos />} />
 

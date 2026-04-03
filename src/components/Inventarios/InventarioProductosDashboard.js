@@ -68,6 +68,7 @@ import {
   FaArrowLeft,
   FaFileExport,
 } from "react-icons/fa";
+import { DownloadIcon } from "@chakra-ui/icons";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -297,7 +298,7 @@ export default function InventarioDashboardProductos() {
     const play = () => {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
     };
 
@@ -405,10 +406,9 @@ export default function InventarioDashboardProductos() {
       doc.text(`Fecha: ${formatearFecha(fechaGeneracion)}`, 40, 88);
       doc.text(`Hora: ${formatearHora(fechaGeneracion)}`, 40, 103);
       doc.text(
-        `Rango aplicado: ${
-          fechaInicio || fechaFin
-            ? `${fechaInicio || "—"} a ${fechaFin || "—"}`
-            : "Sin filtro de fechas"
+        `Rango aplicado: ${fechaInicio || fechaFin
+          ? `${fechaInicio || "—"} a ${fechaFin || "—"}`
+          : "Sin filtro de fechas"
         }`,
         40,
         118
@@ -588,11 +588,10 @@ export default function InventarioDashboardProductos() {
       ws.getCell("A3").value = `Hora de generación: ${formatearHora(
         fechaGeneracion
       )}`;
-      ws.getCell("A4").value = `Rango de fechas aplicado: ${
-        fechaInicio || fechaFin
-          ? `${fechaInicio || "—"} a ${fechaFin || "—"}`
-          : "Sin filtro de fechas"
-      }`;
+      ws.getCell("A4").value = `Rango de fechas aplicado: ${fechaInicio || fechaFin
+        ? `${fechaInicio || "—"} a ${fechaFin || "—"}`
+        : "Sin filtro de fechas"
+        }`;
       ws.getCell("A5").value = `Total de productos: ${inventario.length}`;
 
       ws.addRow([]);
@@ -884,59 +883,59 @@ export default function InventarioDashboardProductos() {
           )}
         </CardBody>
       </Card>
-{/* TABLA */}
+      {/* TABLA */}
       <Card bg={tableCardBg} border="1px solid" borderColor={borderColor}>
         <CardHeader>
-  <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
-    <Heading size="sm" color={accent}>
-      Detalle de Inventario
-    </Heading>
+          <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+            <Heading size="sm" color={accent}>
+              Detalle de Inventario
+            </Heading>
 
-    <HStack spacing={2} wrap="wrap">
-     <Input
-  type="date"
-  size="xs"
-  w="110px"
-  bg={inputBg}
-  color={strongText}
-  borderColor={borderColor}
-  value={fechaInicio}
-  onChange={(e) => setFechaInicio(e.target.value)}
-/>
+            <HStack spacing={2} wrap="wrap">
+              <Input
+                type="date"
+                size="xs"
+                w="110px"
+                bg={inputBg}
+                color={strongText}
+                borderColor={borderColor}
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+              />
 
-<Input
-  type="date"
-  size="xs"
-  w="110px"
-  bg={inputBg}
-  color={strongText}
-  borderColor={borderColor}
-  value={fechaFin}
-  onChange={(e) => setFechaFin(e.target.value)}
-/>
-      <Button size="sm" leftIcon={<FaBroom />} onClick={limpiarFiltros}>
-        Limpiar
-      </Button>
-      <Button
-        size="sm"
-        colorScheme="teal"
-        variant="outline"
-        leftIcon={<FaSync />}
-        onClick={() => cargarInventario()}
-      >
-        Refrescar
-      </Button>
-      <Button
-        size="sm"
-        colorScheme="teal"
-        leftIcon={<FaFilePdf />}
-        onClick={exportModal.onOpen}
-      >
-        Exportar
-      </Button>
-    </HStack>
-  </Flex>
-</CardHeader>
+              <Input
+                type="date"
+                size="xs"
+                w="110px"
+                bg={inputBg}
+                color={strongText}
+                borderColor={borderColor}
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+              />
+              <Button size="sm" leftIcon={<FaBroom />} onClick={limpiarFiltros}>
+                Limpiar
+              </Button>
+              <Button
+                size="sm"
+                colorScheme="teal"
+                variant="outline"
+                leftIcon={<FaSync />}
+                onClick={() => cargarInventario()}
+              >
+                Refrescar
+              </Button>
+              <Button
+                size="sm"
+                colorScheme="teal"
+                leftIcon={<FaFileExport />}
+                onClick={exportModal.onOpen}
+              >
+                Exportar
+              </Button>
+            </HStack>
+          </Flex>
+        </CardHeader>
 
         <Divider />
 
@@ -947,23 +946,23 @@ export default function InventarioDashboardProductos() {
             </Flex>
           ) : (
             <Table size="sm">
-             <Thead bg={headBg}>
-  <Tr>
-    {columnasDisponibles
-      .filter((c) => selectedFields.includes(c.id))
-      .map((col) => (
-        <Th key={col.id} color={accent}>
-          {col.label}
-        </Th>
-      ))}
-  </Tr>
-</Thead>
+              <Thead bg={headBg}>
+                <Tr>
+                  {columnasDisponibles
+                    .filter((c) => selectedFields.includes(c.id))
+                    .map((col) => (
+                      <Th key={col.id} color={accent}>
+                        {col.label}
+                      </Th>
+                    ))}
+                </Tr>
+              </Thead>
 
               <Tbody color={strongText}>
                 {inventario.map((i) => (
-                  <Tr key={i.id_insumo}>
-                    {selectedFields.includes("nombre_insumo") && (
-                      <Td>{i.nombre_insumo}</Td>
+                  <Tr key={i.id_producto || i.id_insumo}>
+                    {selectedFields.includes("nombre_producto") && (
+                      <Td>{i.nombre_producto}</Td>
                     )}
 
                     {selectedFields.includes("stock_minimo") && (
@@ -1041,50 +1040,66 @@ export default function InventarioDashboardProductos() {
         </ModalContent>
       </Modal>
 
-      {/* MODAL EXPORTAR */}
-      <Modal
-        isOpen={exportModal.isOpen}
-        onClose={exportModal.onClose}
-        isCentered
-      >
+      <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
-        <ModalContent bg={pageBgCard}>
-          <ModalHeader color={strongText}>Exportar inventario</ModalHeader>
+        <ModalContent>
+          <ModalHeader bg={useColorModeValue("teal.50", "gray.700")} borderTopRadius="md">
+            <HStack spacing={2}>
+              <DownloadIcon color="teal.500" />
+              <Text>Exportar Inventario de Productos</Text>
+            </HStack>
+          </ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
+          <ModalBody py={5}>
+            <Text fontSize="sm" color="gray.500" mb={4}>
+              Selecciona el formato y los filtros para generar tu reporte.
+            </Text>
+
             <FormControl mb={4}>
-              <FormLabel color={strongText}>Formato</FormLabel>
-              <CSelect
-                bg={inputBg}
-                color={strongText}
-                borderColor={borderColor}
-                value={exportFormat}
-                onChange={(e) => setExportFormat(e.target.value)}
-              >
-                <option value="pdf">PDF (.pdf)</option>
-                <option value="excel">Excel (.xlsx)</option>
+              <FormLabel fontWeight="bold">Formato</FormLabel>
+              <CSelect value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={inputBg}>
+                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">📊 Excel (.xlsx)</option>
               </CSelect>
             </FormControl>
 
-            <FormControl>
-              <FormLabel color={strongText}>Columnas a exportar</FormLabel>
-              <CheckboxGroup
-                value={selectedFields}
-                onChange={(vals) => setSelectedFields(vals)}
+            <Divider my={4} />
+
+            <Flex justify="space-between" align="center" mb={3}>
+              <HStack spacing={2}>
+                <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
+                <Badge colorScheme="teal" fontSize="xs" borderRadius="full" px={2}>
+                  {selectedFields.length} / {columnasDisponibles.length}
+                </Badge>
+              </HStack>
+              <Checkbox
+                isChecked={selectedFields.length === columnasDisponibles.length}
+                isIndeterminate={selectedFields.length > 0 && selectedFields.length < columnasDisponibles.length}
+                onChange={() => setSelectedFields(selectedFields.length === columnasDisponibles.length ? [] : columnasDisponibles.map(c => c.id))}
+                colorScheme="teal"
+                size="sm"
               >
-                <Stack spacing={2}>
-                  {columnasDisponibles.map((col) => (
-                    <Checkbox key={col.id} value={col.id} color={strongText}>
-                      {col.label}
-                    </Checkbox>
-                  ))}
-                </Stack>
-              </CheckboxGroup>
-            </FormControl>
+                <Text fontSize="xs">Seleccionar todos</Text>
+              </Checkbox>
+            </Flex>
+
+            <SimpleGrid columns={2} spacing={2}>
+              {columnasDisponibles.map((col) => (
+                <Checkbox
+                  key={col.id}
+                  isChecked={selectedFields.includes(col.id)}
+                  onChange={() => setSelectedFields(prev => prev.includes(col.id) ? prev.filter(k => k !== col.id) : [...prev, col.id])}
+                  colorScheme="teal"
+                  size="sm"
+                >
+                  {col.label}
+                </Checkbox>
+              ))}
+            </SimpleGrid>
           </ModalBody>
 
           <ModalFooter>
-            <Button colorScheme="teal" onClick={exportarReporte}>
+            <Button colorScheme="teal" leftIcon={<DownloadIcon />} onClick={exportarReporte} isDisabled={selectedFields.length === 0}>
               Exportar
             </Button>
             <Button ml={3} onClick={exportModal.onClose}>

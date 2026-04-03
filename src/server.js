@@ -3,33 +3,70 @@
 // ==========================
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const { pool } = require("./db"); // conexión PostgreSQL
+const firebaseUidInjector = require("./middleware/firebaseUidInjector");
 
 const app = express();
 
 /* ============================================================
-   🔹 CORS (ahora acepta x-user-email)
+   🔹 HELMET — Headers de seguridad HTTP
+   ============================================================ */
+app.use(helmet({
+  contentSecurityPolicy: false, // desactivar CSP para no romper el frontend React
+  crossOriginEmbedderPolicy: false,
+}));
+
+/* ============================================================
+   🔹 CORS (acepta x-user-email + Authorization)
    ============================================================ */
 const corsOptions = {
-  origin: ["https://extractus-app.sjtwku.easypanel.host", "http://localhost:3000", "http://localhost:3001"], // dirección del frontend React
+  origin: ["https://extractus-app.sjtwku.easypanel.host", "http://localhost:3000", "http://localhost:3001"],
   methods: "GET,POST,PUT,DELETE",
-  allowedHeaders: ["Content-Type", "x-user-email"], // 👈 IMPORTANTE
+  allowedHeaders: ["Content-Type", "x-user-email", "Authorization"], // 👈 Authorization agregado
 };
 app.use(cors(corsOptions));
 
 app.use(express.json());
 
 /* ============================================================
-   🔹 Healthcheck
+   🔹 Rate Limiting
+   ============================================================ */
+// Limitar endpoints MFA (protección contra fuerza bruta de códigos TOTP)
+const mfaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 15, // máximo 15 intentos por ventana
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "RATE_LIMIT", message: "Demasiados intentos. Intenta de nuevo en 15 minutos." },
+});
+
+// Limitar API general
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300, // 300 peticiones por 15 min por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "RATE_LIMIT", message: "Demasiadas peticiones. Intenta de nuevo más tarde." },
+});
+
+/* ============================================================
+   🔹 Healthcheck (público)
    ============================================================ */
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 /* ============================================================
-   🔹 Consultar estado del MFA
+   🔹 ENDPOINTS MFA — Pre-autenticación (flujo de login)
+   Estos endpoints NO requieren token JWT porque se usan
+   DURANTE el proceso de login, antes de completar la autenticación.
+   Se protegen con rate limiting.
    ============================================================ */
-app.get("/api/mfa/status", async (req, res) => {
+
+/* --- Consultar estado del MFA --- */
+app.get("/api/mfa/status", mfaLimiter, async (req, res) => {
   const { uid, email } = req.query;
   if (!uid && !email)
     return res.status(400).json({ error: "uid o email requerido" });
@@ -56,31 +93,30 @@ app.get("/api/mfa/status", async (req, res) => {
   }
 });
 
-/* ============================================================
-   🔹 Generar o reutilizar QR (2FA)
-   ============================================================ */
-app.get("/api/mfa/generate", async (req, res) => {
+/* --- Generar o reutilizar QR (2FA) --- */
+app.get("/api/mfa/generate", mfaLimiter, async (req, res) => {
   try {
     const { uid, email } = req.query;
     if (!uid && !email)
       return res.status(400).json({ error: "uid o email requeridos" });
 
+    // 🔒 Buscar por UID primero, luego por email
     const existing = await pool.query(
-      `
-      SELECT mfa_secret, mfa_enabled
-      FROM seguridad.tbl_usuarios
-      WHERE uid_firebase = $1 OR username = $2 OR LOWER(username) = LOWER($2)
-      `,
-      [uid, email]
+      `SELECT mfa_secret, mfa_enabled
+       FROM seguridad.tbl_usuarios
+       WHERE uid_firebase = $1 OR LOWER(username) = LOWER($2)
+       LIMIT 1`,
+      [uid || '', email || '']
     );
 
     let secret;
+
     if (existing.rows.length && existing.rows[0].mfa_secret && existing.rows[0].mfa_enabled) {
       // ♻️ Reutilizar secreto existente (usuario ya verificó anteriormente)
       secret = existing.rows[0].mfa_secret;
       console.log(`♻️ Reutilizando secreto guardado para ${email}`);
     } else {
-      // 🔐 Crear nuevo secreto TEMPORAL (no se guarda hasta verificar el código)
+      // 🔐 Crear nuevo secreto y guardarlo como PENDIENTE en BD
       const newSecret = speakeasy.generateSecret({
         length: 32,
         name: `Extractus (${email})`,
@@ -89,7 +125,15 @@ app.get("/api/mfa/generate", async (req, res) => {
 
       secret = newSecret.base32;
 
-      console.log(`🆕 Secreto temporal generado para ${email} (pendiente de verificación)`);
+      // Guardar el secreto pendiente en BD (mfa_enabled sigue en false)
+      await pool.query(
+        `UPDATE seguridad.tbl_usuarios
+         SET mfa_secret = $1, mfa_enabled = false
+         WHERE uid_firebase = $2 OR LOWER(username) = LOWER($3)`,
+        [secret, uid || '', email || '']
+      );
+
+      console.log(`🆕 Secreto temporal guardado en BD para ${email} (pendiente de verificación)`);
     }
 
     const otpauthUrl = speakeasy.otpauthURL({
@@ -101,30 +145,30 @@ app.get("/api/mfa/generate", async (req, res) => {
 
     const qrDataUrl = await qrcode.toDataURL(otpauthUrl);
 
-    res.json({ uid, qr: qrDataUrl, secret });
+    // 🔒 SEGURIDAD: NUNCA enviar el secreto al frontend.
+    // El secreto se guarda en BD y se usa desde allí en /verify.
+    res.json({ uid, qr: qrDataUrl });
   } catch (err) {
     console.error("❌ Error generando QR:", err);
     res.status(500).json({ error: "No se pudo generar el QR" });
   }
 });
 
-/* ============================================================
-   🔹 Verificar código TOTP (2FA)
-   ============================================================ */
-app.post("/api/mfa/verify", async (req, res) => {
+/* --- Verificar código TOTP (2FA) --- */
+app.post("/api/mfa/verify", mfaLimiter, async (req, res) => {
   try {
-    const { uid, token, email, secret: providedSecret } = req.body;
+    const { uid, token, email } = req.body;
 
     if ((!uid && !email) || !token)
       return res.status(400).json({ error: "Faltan datos para verificar." });
 
+    // 🔒 Buscar por UID primero, luego por email
     const result = await pool.query(
-      `
-      SELECT username, mfa_secret, mfa_enabled
-      FROM seguridad.tbl_usuarios
-      WHERE uid_firebase = $1 OR username = $2 OR LOWER(username) = LOWER($2)
-      `,
-      [uid, email]
+      `SELECT username, mfa_secret, mfa_enabled
+       FROM seguridad.tbl_usuarios
+       WHERE uid_firebase = $1 OR LOWER(username) = LOWER($2)
+       LIMIT 1`,
+      [uid || '', email || '']
     );
 
     if (!result.rows.length) {
@@ -134,27 +178,18 @@ app.post("/api/mfa/verify", async (req, res) => {
 
     const { username, mfa_secret, mfa_enabled } = result.rows[0];
 
-    // 🔹 Determinar qué secreto usar
-    let secretToVerify;
-    let isFirstEnrollment = false;
-
-    if (mfa_secret && mfa_enabled) {
-      // Usuario ya tiene MFA activo, usar secreto de BD
-      secretToVerify = mfa_secret;
-      console.log(`🔐 Verificando código para usuario con MFA activo: ${username}`);
-    } else if (providedSecret) {
-      // Primera inscripción: usar secreto temporal del frontend
-      secretToVerify = providedSecret;
-      isFirstEnrollment = true;
-      console.log(`🆕 Primera inscripción MFA para: ${username}`);
-    } else {
-      console.log(`⚠️ Usuario sin secreto guardado ni proporcionado → ${username}`);
-      return res.status(400).json({ error: "No se encontró secreto MFA." });
+    // 🔒 SEGURIDAD: Solo usar el secreto almacenado en la BD.
+    // NUNCA aceptar un secreto proporcionado por el frontend.
+    if (!mfa_secret) {
+      console.log(`⚠️ Usuario sin secreto MFA guardado → ${username}`);
+      return res.status(400).json({ error: "No se encontró secreto MFA. Genere un nuevo QR." });
     }
+
+    let isFirstEnrollment = !mfa_enabled;
 
     // 🔹 Verificar el código TOTP
     const verified = speakeasy.totp.verify({
-      secret: secretToVerify,
+      secret: mfa_secret,
       encoding: "base32",
       token,
       window: 1,
@@ -165,17 +200,15 @@ app.post("/api/mfa/verify", async (req, res) => {
       return res.json({ success: false, message: "Código inválido o expirado." });
     }
 
-    // 🔹 Si es primera inscripción, AHORA guardamos el secreto en la BD
+    // 🔹 Si es primera inscripción, activar MFA
     if (isFirstEnrollment) {
       await pool.query(
-        `
-        UPDATE seguridad.tbl_usuarios
-        SET mfa_secret = $1, mfa_enabled = true
-        WHERE uid_firebase = $2 OR username = $3 OR LOWER(username) = LOWER($3)
-        `,
-        [secretToVerify, uid, email]
+        `UPDATE seguridad.tbl_usuarios
+         SET mfa_enabled = true
+         WHERE uid_firebase = $1 OR LOWER(username) = LOWER($2)`,
+        [uid || '', email || '']
       );
-      console.log(`✅ MFA activado y guardado para: ${username}`);
+      console.log(`✅ MFA activado para: ${username}`);
     } else {
       console.log(`✅ Código verificado correctamente → Usuario: ${username}`);
     }
@@ -187,23 +220,58 @@ app.post("/api/mfa/verify", async (req, res) => {
   }
 });
 
-/* ============================================================
-   🔹 Restablecer MFA (al cambiar contraseña)
-   ============================================================ */
-app.post("/api/mfa/reset", async (req, res) => {
+/* --- Restablecer MFA (requiere autenticación JWT + admin o self-reset) --- */
+app.post("/api/mfa/reset", firebaseUidInjector, async (req, res) => {
   try {
     const { email } = req.body;
+    const requestingUser = req.user; // 🔒 Del JWT verificado
+
+    if (!requestingUser || !requestingUser.email) {
+      return res.status(401).json({ error: "Autenticación requerida para esta acción." });
+    }
 
     if (!email)
       return res.status(400).json({ error: "Email requerido" });
 
+    // 🔒 SEGURIDAD: Solo permitir reset si:
+    // 1) El usuario resetea su propio MFA, O
+    // 2) El usuario tiene rol con acceso "Todos" (admin)
+    const isSelfReset = requestingUser.email && requestingUser.email.toLowerCase() === email.toLowerCase();
+
+    if (!isSelfReset) {
+      // Verificar si el solicitante es admin
+      const adminCheck = await pool.query(
+        `SELECT r.accesos
+         FROM seguridad.tbl_usuarios u
+         JOIN seguridad.tbl_roles r ON r.id_rol = u.id_rol
+         WHERE LOWER(u.username) = LOWER($1)
+         LIMIT 1`,
+        [requestingUser.email]
+      );
+
+      let isAdmin = false;
+      if (adminCheck.rows.length) {
+        const accesos = adminCheck.rows[0].accesos;
+        const accArr = Array.isArray(accesos) 
+          ? accesos.map(s => s.trim().toLowerCase())
+          : String(accesos || '').toLowerCase().split(',').map(s => s.trim());
+        isAdmin = accArr.includes('todos');
+      }
+
+      if (!isAdmin) {
+        console.warn(`🚧 [MFA] Reset denegado: ${requestingUser.email} intentó resetear MFA de ${email}`);
+        return res.status(403).json({ 
+          error: "ACCESS_DENIED",
+          message: "Solo un administrador puede resetear el MFA de otro usuario." 
+        });
+      }
+    }
+
     const result = await pool.query(
-      `
-      UPDATE seguridad.tbl_usuarios
-      SET mfa_secret = NULL, mfa_enabled = false
-      WHERE username = $1 OR LOWER(username) = LOWER($1)
-      RETURNING username
-      `,
+      `UPDATE seguridad.tbl_usuarios
+       SET mfa_secret = NULL, mfa_enabled = false
+       WHERE LOWER(username) = LOWER($1)
+       RETURNING username`,
       [email]
     );
 
@@ -212,13 +280,20 @@ app.post("/api/mfa/reset", async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    console.log(`🔄 MFA reseteado para usuario: ${result.rows[0].username}`);
+    console.log(`🔄 MFA reseteado para ${result.rows[0].username} por ${requestingUser.email}`);
     res.json({ success: true, message: "MFA reseteado correctamente" });
   } catch (err) {
     console.error("❌ Error reseteando MFA:", err);
     res.status(500).json({ error: "Error reseteando MFA" });
   }
 });
+
+
+/* ============================================================
+   🔹 MIDDLEWARE GLOBAL para todas las rutas /api/* (excepto MFA pre-login)
+   Requiere token JWT válido de Firebase
+   ============================================================ */
+app.use("/api", apiLimiter, firebaseUidInjector);
 
 
 /* ============================================================
