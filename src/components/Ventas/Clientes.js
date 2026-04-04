@@ -121,6 +121,9 @@ export default function Clientes() {
   const [data, setData] = useState([]);
   const [tiposCliente, setTiposCliente] = useState([]);
   const [estadosCliente, setEstadosCliente] = useState([]);
+  const estadosClienteVisibles = estadosCliente.filter(
+  (e) => (e.nombre_estado || "").toLowerCase() !== "suspendido"
+);
   const [loading, setLoading] = useState(true);
 
   // Modal de exportación
@@ -321,16 +324,16 @@ export default function Clientes() {
       validate: validators.correo_electronico,
     },
     {
-      name: "id_estado_cliente",
-      label: "Estado del Cliente",
-      type: "select",
-      options: estadosCliente.map((e) => ({
-        label: e.nombre_estado,
-        value: e.id_estado_cliente,
-      })),
-      required: true,
-      validate: (v) => validarRequerido(v, "Estado"),
-    },
+  name: "id_estado_cliente",
+  label: "Estado del Cliente",
+  type: "select",
+  options: estadosClienteVisibles.map((e) => ({
+    label: e.nombre_estado,
+    value: e.id_estado_cliente,
+  })),
+  required: true,
+  validate: (v) => validarRequerido(v, "Estado"),
+},
   ];
 
 
@@ -828,9 +831,11 @@ export default function Clientes() {
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por estado</FormLabel>
               <Select placeholder="Todos los estados" value={expEstado} onChange={e => setExpEstado(e.target.value)} size="sm" bg={inputBg}>
-                {estadosCliente.map(e => (
-                  <option key={e.id_estado_cliente} value={e.nombre_estado}>{e.nombre_estado}</option>
-                ))}
+                {estadosClienteVisibles.map(e => (
+  <option key={e.id_estado_cliente} value={e.nombre_estado}>
+    {e.nombre_estado}
+  </option>
+))}
               </Select>
             </FormControl>
 

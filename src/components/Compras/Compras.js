@@ -297,7 +297,7 @@ export default function Compras() {
         nombre_estado: "",
     });
     const [detalles, setDetalles] = useState([]);
-    const [flete, setFlete] = useState(0);
+    const [flete, setFlete] = useState("");
 
     // Órdenes recientes + total
     const [ordenesRecientes, setOrdenesRecientes] = useState([]);
@@ -369,8 +369,16 @@ export default function Compras() {
         tasa_impuesto: 15,
         descuento: 0,
     });
-    const [editandoDetalleId, setEditandoDetalleId] = useState(null);
-
+   const [editandoDetalleId, setEditandoDetalleId] = useState(null);
+const [detalleMsg, setDetalleMsg] = useState({
+    cantidad: "",
+    precio_unitario: "",
+    descuento: "",
+    flete: "",
+});
+const [precioTouched, setPrecioTouched] = useState(false);
+const [descuentoTouched, setDescuentoTouched] = useState(false);
+const [fleteTouched, setFleteTouched] = useState(false);
     // Export
     const exportModal = useDisclosure();
     const exportProveedorModal = useDisclosure();
@@ -416,6 +424,7 @@ export default function Compras() {
         ALL_COLUMNS.map((c) => c.key)
     );
     const allChecked = selectedColumns.length === ALL_COLUMNS.length;
+    const limiteColumnasPDF = exportFormat === "pdf" && selectedColumns.length > 10;
     const isIndeterminate =
         selectedColumns.length > 0 && selectedColumns.length < ALL_COLUMNS.length;
 
@@ -547,7 +556,7 @@ export default function Compras() {
 
         setDetalles([]);
         setEditandoDetalleId(null);
-        setFlete(0);
+        setFlete("");
         setDetalleForm({
             id_detalle_oc: null,
             id_insumo: "",
@@ -578,7 +587,7 @@ export default function Compras() {
 
             const O = oc.data;
 
-            setFlete(Number(O.flete || 0));
+            setFlete(O.flete ?? "");
 
             setOrden({
                 id_orden_compra: O.id_orden_compra,
@@ -654,10 +663,10 @@ export default function Compras() {
         // 1) Nombre
 
         // 🔹 Validar máximo 100 caracteres
-        if (provForm.nombre && provForm.nombre.length > 100) {
+        if (provForm.nombre && provForm.nombre.length > 50) {
             return toast({
                 title: "Nombre demasiado largo",
-                description: "El nombre del proveedor no puede exceder los 100 caracteres.",
+                description: "El nombre del proveedor no puede exceder los 50 caracteres.",
                 status: "warning",
             });
         }
@@ -733,8 +742,9 @@ export default function Compras() {
             toast({ title: "Proveedor guardado", status: "success" });
             await cargarTodo();
 
-            if (idNew) setIdProveedorSel(String(idNew));
-            setModalProv(false);
+            setIdProveedorSel("");
+nuevaOrden(false);
+setModalProv(false);
         } catch (e) {
             console.error(e);
             toast({
@@ -852,7 +862,27 @@ export default function Compras() {
             return;
         }
 
+if (detalleMsg.flete) {
+    return;
+}
 
+const fleteNum = Number(flete || 0);
+
+if (isNaN(fleteNum) || fleteNum < 0) {
+    setDetalleMsg((m) => ({
+        ...m,
+        flete: "No se permiten valores negativos.",
+    }));
+    return;
+}
+
+if (fleteNum > 10000) {
+    setDetalleMsg((m) => ({
+        ...m,
+        flete: "El flete no puede ser mayor a 10,000 Lps.",
+    }));
+    return;
+}
 
 
 
@@ -955,18 +985,30 @@ export default function Compras() {
     // =======================
     // Detalles - agregar / editar / eliminar
     // =======================
-    const limpiarDetalleForm = () =>
-        setDetalleForm({
-            id_detalle_oc: null,
-            id_insumo: "",
-            cantidad: "",
-            precio_unitario: "",
-            subtotal: 0,
-            unidad_medida: "",
-            categoria_impuesto: "Gravado 15%",
-            tasa_impuesto: 15,
-            descuento: 0,
-        });
+   const limpiarDetalleForm = () => {
+    setDetalleForm({
+        id_detalle_oc: null,
+        id_insumo: "",
+        cantidad: "",
+        precio_unitario: "",
+        subtotal: 0,
+        unidad_medida: "",
+        categoria_impuesto: "Gravado 15%",
+        tasa_impuesto: 15,
+        descuento: 0,
+    });
+
+   setDetalleMsg({
+    cantidad: "",
+    precio_unitario: "",
+    descuento: "",
+    flete: "",
+});
+
+setPrecioTouched(false);
+setDescuentoTouched(false);
+setFleteTouched(false);
+};
 
     const agregarDetalle = () => {
         if (
@@ -997,7 +1039,31 @@ export default function Compras() {
         const precio = toNum(detalleForm.precio_unitario);
         const descuento = toNum(detalleForm.descuento);
 
-        const subtotalCalc = cantidad * precio - descuento;
+        if (descuento < 0) {
+    setDetalleMsg((m) => ({
+        ...m,
+        descuento: "No se permiten descuentos negativos.",
+    }));
+    return;
+}
+
+if (descuento > 10000) {
+    setDetalleMsg((m) => ({
+        ...m,
+        descuento: "El descuento no puede ser mayor a 10,000.",
+    }));
+    return;
+}
+
+if (descuento > cantidad * precio) {
+    setDetalleMsg((m) => ({
+        ...m,
+        descuento: "El descuento no puede ser mayor al subtotal.",
+    }));
+    return;
+}
+
+const subtotalCalc = cantidad * precio - descuento;
 
         const nuevo = {
             ...detalleForm,
@@ -1072,7 +1138,48 @@ export default function Compras() {
         }
 
         const cantidad = toNum(detalleForm.cantidad);
+        if (cantidad < 1) {
+    setDetalleMsg((m) => ({
+        ...m,
+        cantidad: "No se permiten cantidades negativas ni menores a 1.",
+    }));
+    toast({
+        title: "Cantidad inválida",
+        description: "No se permiten cantidades negativas ni menores a 1.",
+        status: "warning",
+    });
+    return;
+}
+
+if (cantidad > 10000) {
+    setDetalleMsg((m) => ({
+        ...m,
+        cantidad: "La cantidad no puede ser mayor a 10,000.",
+    }));
+    toast({
+        title: "Cantidad inválida",
+        description: "La cantidad no puede ser mayor a 10,000.",
+        status: "warning",
+    });
+    return;
+}
         const precio = toNum(detalleForm.precio_unitario);
+       
+if (precio <= 0) {
+    setDetalleMsg((m) => ({
+        ...m,
+        precio_unitario: "No se permiten precios negativos ni menores o iguales a 0.",
+    }));
+    return;
+}
+
+if (precio > 10000) {
+    setDetalleMsg((m) => ({
+        ...m,
+        precio_unitario: "El precio unitario no puede ser mayor a 10,000.",
+    }));
+    return;
+}
         const descuento = toNum(detalleForm.descuento);
 
         const subtotalCalc = cantidad * precio - descuento;
@@ -1450,7 +1557,7 @@ export default function Compras() {
                 });
                 exportProveedorModal.onClose();
             } else {
-                const doc = new jsPDF({ unit: "pt", format: "a4" });
+                const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
                 const pageWidth = doc.internal.pageSize.width;
 
                 doc.setFillColor(255, 255, 255);
@@ -1491,19 +1598,24 @@ export default function Compras() {
                     head: [cols.map((c) => c.label)],
                     body: rows.map((r) => cols.map((c) => r[c.key] ?? "")),
                     styles: {
-                        fontSize: 8.5,
-                        cellPadding: 5,
-                        valign: "middle",
-                        textColor: [40, 40, 40],
-                        lineColor: [220, 220, 220],
-                        lineWidth: 0.4,
-                    },
+    fontSize: 6.5,
+    cellPadding: 3,
+    valign: "middle",
+    textColor: [40, 40, 40],
+    lineColor: [220, 220, 220],
+    lineWidth: 0.4,
+    overflow: "ellipsize",
+},
                     headStyles: {
                         fillColor: [15, 118, 110],
                         textColor: 255,
                         fontStyle: "bold",
                         halign: "center",
                     },
+                    columnStyles: cols.reduce((acc, _, i) => {
+        acc[i] = { cellWidth: "auto", minCellWidth: 40 };
+        return acc;
+    }, {}),
                     alternateRowStyles: {
                         fillColor: [248, 250, 252],
                     },
@@ -1577,6 +1689,7 @@ export default function Compras() {
             }
 
             const cols = ALL_COLUMNS.filter((c) => selectedColumns.includes(c.key));
+        
 
             if (exportFormat === "excel") {
                 const wb = new ExcelJS.Workbook();
@@ -1710,18 +1823,44 @@ export default function Compras() {
 
 
             } else {
-                const doc = new jsPDF({ unit: "pt", format: "a4" });
-                const pageWidth = doc.internal.pageSize.width;
                 const fechaGeneracion = new Date();
 
+const columnasAnchas = [
+    "proveedor",
+    "correo",
+    "direccion",
+    "observacion",
+    "insumo",
+    "factura_proveedor",
+];
+
+const columnasSeleccionadasKeys = cols.map((c) => c.key);
+
+const tieneColumnasAnchas = columnasSeleccionadasKeys.some((key) =>
+    columnasAnchas.includes(key)
+);
+
+const usarHorizontal = cols.length > 8 || tieneColumnasAnchas;
+
+const doc = new jsPDF({
+    orientation: usarHorizontal ? "landscape" : "portrait",
+    unit: "pt",
+    format: "a4",
+});
+
+const pageWidth = doc.internal.pageSize.width;
+
                 const formattedRows = rows.map((r) => ({
-                    ...r,
-                    precio_unitario: formatearMoneda(r.precio_unitario),
-                    subtotal: formatearMoneda(r.subtotal),
-                    descuento: formatearMoneda(r.descuento),
-                    total: formatearMoneda(r.total),
-                    flete: formatearMoneda(r.flete),
-                }));
+    ...r,
+    precio_unitario: `L. ${formatearMoneda(r.precio_unitario)}`,
+    subtotal: `L. ${formatearMoneda(r.subtotal)}`,
+    descuento: `L. ${formatearMoneda(r.descuento)}`,
+    total: `L. ${formatearMoneda(r.total)}`,
+    flete: `L. ${formatearMoneda(r.flete)}`,
+}));
+                
+
+
 
                 // Fondo cabecera
                 doc.setFillColor(255, 255, 255);
@@ -1760,26 +1899,32 @@ export default function Compras() {
 
                 autoTable(doc, {
                     startY: 150,
-                    head: [cols.map((c) => c.label)],
-                    body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
+                   head: [cols.map((c) => c.label)],
+body: formattedRows.map((r) => cols.map((c) => r[c.key] ?? "")),
                     styles: {
-                        fontSize: 8.5,
-                        cellPadding: 5,
-                        valign: "middle",
-                        textColor: [40, 40, 40],
-                        lineColor: [220, 220, 220],
-                        lineWidth: 0.4,
-                    },
+    fontSize: usarHorizontal ? 6.5 : 8,
+    cellPadding: usarHorizontal ? 3 : 4,
+    valign: "middle",
+    textColor: [40, 40, 40],
+    lineColor: [220, 220, 220],
+    lineWidth: 0.4,
+    overflow: "ellipsize",
+},
                     headStyles: {
-                        fillColor: [15, 118, 110],
-                        textColor: 255,
-                        fontStyle: "bold",
-                        halign: "center",
-                    },
+    fillColor: [15, 118, 110],
+    textColor: 255,
+    fontStyle: "bold",
+    halign: "center",
+    valign: "middle",
+},
+columnStyles: cols.reduce((acc, _, i) => {
+    acc[i] = { cellWidth: "auto", minCellWidth: usarHorizontal ? 40 : 55 };
+    return acc;
+}, {}),
                     alternateRowStyles: {
                         fillColor: [248, 250, 252],
                     },
-                    margin: { left: 40, right: 40 },
+                   margin: { left: usarHorizontal ? 20 : 30, right: usarHorizontal ? 20 : 30 },
                     didDrawPage: () => {
                         const pageSize = doc.internal.pageSize;
                         const pageHeight = pageSize.getHeight();
@@ -2172,6 +2317,7 @@ export default function Compras() {
                                 <Input
                                     size="sm"
                                     placeholder="Ingrese número de factura"
+                                     maxLength={20}
                                     value={orden.factura_proveedor || ""}
                                     onChange={(e) => {
                                         setTieneCambios(true);
@@ -2181,6 +2327,9 @@ export default function Compras() {
                                         }));
                                     }}
                                 />
+                                <Text fontSize="xs" color="gray.500" mt={1}>
+    {(orden.factura_proveedor || "").length} / 20 caracteres
+</Text>
                             </FormControl>
 
                             {/* Observación */}
@@ -2424,50 +2573,178 @@ export default function Compras() {
                     </FormControl>
 
                     {/* Cantidad */}
-                    <FormControl>
-                        <FormLabel fontSize="sm">Cantidad</FormLabel>
-                        <Input
-                            size="sm"
-                            type="number"
-                            value={detalleForm.cantidad}
-                            onChange={(e) => {
-                                setTieneCambios(true);
-                                setDetalleForm({ ...detalleForm, cantidad: e.target.value });
-                            }}
-                        />
-                    </FormControl>
+                    <FormControl isInvalid={!!detalleMsg.cantidad}>
+    <FormLabel fontSize="sm">Cantidad</FormLabel>
+    <Input
+        size="sm"
+        type="number"
+        min={1}
+        max={10000}
+        placeholder="cantidad"
+        value={detalleForm.cantidad}
+        onChange={(e) => {
+            const value = e.target.value;
+
+            if (value === "") {
+                setTieneCambios(true);
+                setDetalleForm({ ...detalleForm, cantidad: "" });
+                setDetalleMsg((m) => ({ ...m, cantidad: "" }));
+                return;
+            }
+
+            const num = Number(value);
+
+            if (num < 1) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    cantidad: "No se permiten cantidades negativas ni menores a 1.",
+                }));
+                return;
+            }
+
+            if (num > 10000) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    cantidad: "La cantidad no puede ser mayor a 10,000.",
+                }));
+                return;
+            }
+
+            setTieneCambios(true);
+            setDetalleForm({ ...detalleForm, cantidad: value });
+            setDetalleMsg((m) => ({ ...m, cantidad: "" }));
+        }}
+    />
+
+    {!!detalleMsg.cantidad && (
+        <FormHelperText color="orange.400" mt={1}>
+            ⚠ {detalleMsg.cantidad}
+        </FormHelperText>
+    )}
+</FormControl>
 
                     {/* Precio */}
-                    <FormControl>
-                        <FormLabel fontSize="sm">Precio Unitario</FormLabel>
-                        <Input
-                            size="sm"
-                            type="number"
-                            value={detalleForm.precio_unitario}
-                            onChange={(e) => {
-                                setTieneCambios(true);
-                                setDetalleForm({
-                                    ...detalleForm,
-                                    precio_unitario: e.target.value,
-                                });
-                            }}
-                        />
-                    </FormControl>
+      <FormControl isInvalid={precioTouched && !!detalleMsg.precio_unitario}>
+    <FormLabel fontSize="sm">Precio Unitario</FormLabel>
+    <Input
+        size="sm"
+        type="number"
+        min={0.01}
+        max={10000}
+        placeholder="precio unidad"
+        value={detalleForm.precio_unitario}
+        onFocus={() => setPrecioTouched(true)}
+        onBlur={() => setPrecioTouched(false)}
+        onChange={(e) => {
+            const value = e.target.value;
+
+            if (value === "") {
+                setTieneCambios(true);
+                setDetalleForm({
+                    ...detalleForm,
+                    precio_unitario: "",
+                });
+                setDetalleMsg((m) => ({ ...m, precio_unitario: "" }));
+                return;
+            }
+
+            const num = Number(value);
+
+            if (num <= 0) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    precio_unitario: "No se permiten precios negativos ni menores o iguales a 0.",
+                }));
+                return;
+            }
+
+            if (num > 10000) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    precio_unitario: "El precio unitario no puede ser mayor a 10,000.",
+                }));
+                return;
+            }
+
+            setTieneCambios(true);
+            setDetalleForm({
+                ...detalleForm,
+                precio_unitario: value,
+            });
+            setDetalleMsg((m) => ({ ...m, precio_unitario: "" }));
+        }}
+    />
+
+    {precioTouched && !!detalleMsg.precio_unitario && (
+        <Text fontSize="sm" color="red.500" mt={1}>
+            {detalleMsg.precio_unitario}
+        </Text>
+    )}
+</FormControl>
 
                     {/* Descuento */}
-                    <FormControl>
-                        <FormLabel fontSize="sm">Descuento</FormLabel>
-                        <Input
-                            size="sm"
-                            type="number"
-                            value={detalleForm.descuento}
-                            onChange={(e) => {
-                                setTieneCambios(true);
-                                setDetalleForm({ ...detalleForm, descuento: e.target.value });
-                            }}
-                        />
-                    </FormControl>
+                   <FormControl isInvalid={descuentoTouched && !!detalleMsg.descuento}>
+    <FormLabel fontSize="sm">Descuento</FormLabel>
+    <Input
+        size="sm"
+        type="number"
+        min={0}
+        max={10000}
+        placeholder="Ingrese el descuento"
+        value={detalleForm.descuento}
+        onFocus={() => setDescuentoTouched(true)}
+        onBlur={() => setDescuentoTouched(false)}
+        onChange={(e) => {
+            const value = e.target.value;
 
+            if (value === "") {
+                setTieneCambios(true);
+                setDetalleForm({ ...detalleForm, descuento: "" });
+                setDetalleMsg((m) => ({ ...m, descuento: "" }));
+                return;
+            }
+
+            const num = Number(value);
+            const cantidad = Number(detalleForm.cantidad || 0);
+            const precio = Number(detalleForm.precio_unitario || 0);
+            const subtotalBase = cantidad * precio;
+
+            if (num < 0) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    descuento: "No se permiten descuentos negativos.",
+                }));
+                return;
+            }
+
+            if (num > 10000) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    descuento: "El descuento no puede ser mayor a 10,000.",
+                }));
+                return;
+            }
+
+            if (subtotalBase > 0 && num > subtotalBase) {
+                setDetalleMsg((m) => ({
+                    ...m,
+                    descuento: "El descuento no puede ser mayor al subtotal.",
+                }));
+                return;
+            }
+
+            setTieneCambios(true);
+            setDetalleForm({ ...detalleForm, descuento: value });
+            setDetalleMsg((m) => ({ ...m, descuento: "" }));
+        }}
+    />
+
+    {descuentoTouched && !!detalleMsg.descuento && (
+        <FormHelperText color="orange.400" mt={1}>
+            ⚠ {detalleMsg.descuento}
+        </FormHelperText>
+    )}
+</FormControl>
 
                     {/* Unidad (auto desde Insumos) */}
                     <FormControl>
@@ -2476,7 +2753,7 @@ export default function Compras() {
                             size="sm"
                             value={detalleForm.unidad_medida || ""}
                             isReadOnly
-                            placeholder="Automática según el insumo"
+                            placeholder="Insumo existente"
                         />
                     </FormControl>
 
@@ -2608,17 +2885,65 @@ export default function Compras() {
           FLETE
       ======================== */}
             <Box mt={4} maxW="200px">
-                <FormLabel fontSize="sm">Flete</FormLabel>
-                <Input
-                    size="sm"
-                    type="number"
-                    value={flete}
-                    onChange={(e) => {
-                        setTieneCambios(true);
-                        setFlete(Number(e.target.value) || 0);
-                    }}
-                />
-            </Box>
+    <FormControl isInvalid={fleteTouched && !!detalleMsg.flete}>
+        <FormLabel fontSize="sm">Flete</FormLabel>
+        <Input
+            size="sm"
+            type="text"
+            inputMode="decimal"
+            placeholder="Ingrese el monto del flete"
+            value={flete}
+            onFocus={() => setFleteTouched(true)}
+            onBlur={() => setFleteTouched(false)}
+            onChange={(e) => {
+                const value = e.target.value;
+
+                if (value === "") {
+                    setTieneCambios(true);
+                    setFlete("");
+                    setDetalleMsg((m) => ({ ...m, flete: "" }));
+                    return;
+                }
+
+                if (!/^\d*\.?\d*$/.test(value)) {
+                    setDetalleMsg((m) => ({
+                        ...m,
+                        flete: "No se permiten letras, solo números.",
+                    }));
+                    return;
+                }
+
+                const num = Number(value);
+
+                if (num < 0) {
+                    setDetalleMsg((m) => ({
+                        ...m,
+                        flete: "No se permiten valores negativos.",
+                    }));
+                    return;
+                }
+
+                if (num > 10000) {
+                    setDetalleMsg((m) => ({
+                        ...m,
+                        flete: "El flete no puede ser mayor a 10,000 Lps.",
+                    }));
+                    return;
+                }
+
+                setTieneCambios(true);
+                setFlete(value);
+                setDetalleMsg((m) => ({ ...m, flete: "" }));
+            }}
+        />
+
+        {fleteTouched && !!detalleMsg.flete && (
+            <Text fontSize="sm" color="red.500" mt={1}>
+                {detalleMsg.flete}
+            </Text>
+        )}
+    </FormControl>
+</Box>
 
             {/* =============================
             RESUMEN DE FACTURA
@@ -2722,11 +3047,11 @@ export default function Compras() {
                                 onChange={(e) => {
                                     const raw = e.target.value;
 
-                                    // 🔴 Validar máximo 100 caracteres
-                                    if (raw.length > 100) {
+                                    // 🔴 Validar máximo 50 caracteres
+                                    if (raw.length > 50) {
                                         setProvMsg((m) => ({
                                             ...m,
-                                            nombre: "El nombre del proveedor no puede exceder los 100 caracteres.",
+                                            nombre: "El nombre del proveedor no puede exceder los 50 caracteres.",
                                         }));
                                         return;
                                     }
@@ -3200,20 +3525,26 @@ export default function Compras() {
                         </FormControl>
 
                         <FormControl>
-                            <FormLabel>Columnas a exportar</FormLabel>
+                            <FormLabel>Columnas a exportar {exportFormat === "pdf" ? "(máximo 10 para PDF)" : ""}</FormLabel>
 
-                            <Checkbox
-                                isChecked={allChecked}
-                                isIndeterminate={isIndeterminate}
-                                onChange={(e) =>
-                                    setSelectedColumns(
-                                        e.target.checked ? ALL_COLUMNS.map((c) => c.key) : []
-                                    )
-                                }
-                                mb={2}
-                            >
-                                Seleccionar todas
-                            </Checkbox>
+                          <Checkbox
+    isChecked={allChecked}
+    isIndeterminate={isIndeterminate}
+    onChange={(e) => {
+        if (e.target.checked) {
+            if (exportFormat === "pdf") {
+                setSelectedColumns(ALL_COLUMNS.slice(0, 10).map((c) => c.key));
+            } else {
+                setSelectedColumns(ALL_COLUMNS.map((c) => c.key));
+            }
+        } else {
+            setSelectedColumns([]);
+        }
+    }}
+    mb={2}
+>
+    Seleccionar todas
+</Checkbox>
 
                             <Box
                                 maxH="200px"
@@ -3222,33 +3553,54 @@ export default function Compras() {
                                 border="1px solid #ddd"
                                 borderRadius="md"
                             >
-                                {ALL_COLUMNS.map((c) => (
-                                    <Checkbox
-                                        key={c.key}
-                                        isChecked={selectedColumns.includes(c.key)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedColumns([...selectedColumns, c.key]);
-                                            } else {
-                                                setSelectedColumns(
-                                                    selectedColumns.filter((x) => x !== c.key)
-                                                );
-                                            }
-                                        }}
-                                        display="block"
-                                        mb={1}
-                                    >
-                                        {c.label}
-                                    </Checkbox>
-                                ))}
+                                
+                                 {ALL_COLUMNS.map((c) => {
+    const yaSeleccionada = selectedColumns.includes(c.key);
+    const bloquearNuevaSeleccion =
+        exportFormat === "pdf" &&
+        selectedColumns.length >= 10 &&
+        !yaSeleccionada;
+
+    return (
+        <Checkbox
+            key={c.key}
+            isChecked={yaSeleccionada}
+            isDisabled={bloquearNuevaSeleccion}
+            onChange={(e) => {
+                if (e.target.checked) {
+                    setSelectedColumns((prev) => [...prev, c.key]);
+                } else {
+                    setSelectedColumns((prev) =>
+                        prev.filter((x) => x !== c.key)
+                    );
+                }
+            }}
+            display="block"
+            mb={1}
+        >
+            {c.label}
+        </Checkbox>
+    );
+})}
                             </Box>
+ {exportFormat === "pdf" && (
+    <Text color="red.500" fontSize="sm" mt={2}>
+        Para exportar en PDF seleccione un máximo de 10 columnas. 
+        Si necesita más, use Excel.
+    </Text>
+)}
                         </FormControl>
                     </ModalBody>
 
                     <ModalFooter>
-                        <Button colorScheme="teal" onClick={exportarReporte} isLoading={loading}>
-                            Exportar
-                        </Button>
+                       <Button
+    colorScheme="teal"
+    onClick={exportarReporte}
+    isLoading={loading}
+    isDisabled={limiteColumnasPDF}
+>
+    Exportar
+</Button>
                         <Button ml={3} onClick={exportModal.onClose}>
                             Cancelar
                         </Button>

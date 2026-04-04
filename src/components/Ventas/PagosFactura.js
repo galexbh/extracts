@@ -198,86 +198,135 @@ export default function PagosFactura() {
   };
 
   // Validación del monto
-  const handleMontoChange = (value) => {
-    const monto = Number(value);
-    const pendiente = Number(selFactura?.saldo_pendiente || 0);
+const handleMontoChange = (value) => {
+  const texto = String(value ?? "");
+  const pendiente = Number(selFactura?.saldo_pendiente || 0);
 
-    setNuevoPago((p) => ({ ...p, monto_pagado: value }));
+  const saldoTexto = pendiente > 0 ? pendiente.toFixed(2) : "";
+  const maxDigitos = saldoTexto.replace(".", "").length;
 
-    if (!value) {
-      setErrorMonto("Debe ingresar un monto");
-      return;
-    }
+  if (texto === "") {
+    setNuevoPago((p) => ({ ...p, monto_pagado: "" }));
+    setErrorMonto("Debe ingresar un monto");
+    return;
+  }
 
-    if (monto <= 0) {
-      setErrorMonto("El monto debe ser mayor a 0");
-      return;
-    }
+  if (!/^\d*\.?\d*$/.test(texto)) {
+    setErrorMonto("No se permiten letras, solo números");
+    return;
+  }
 
-    if (monto > pendiente) {
-      setErrorMonto(
-        `No puede pagar más del saldo pendiente (L ${pendiente.toFixed(2)})`
-      );
-      return;
-    }
+  const puntos = (texto.match(/\./g) || []).length;
+  if (puntos > 1) {
+    setErrorMonto("Solo se permite un punto decimal");
+    return;
+  }
 
-    setErrorMonto("");
-  };
+  if (/^\d+\.\d{3,}$/.test(texto)) {
+    setErrorMonto("Solo se permiten 2 decimales");
+    return;
+  }
 
+  const digitosIngresados = texto.replace(".", "").length;
+  if (maxDigitos > 0 && digitosIngresados > maxDigitos) {
+    setErrorMonto(`Solo puede ingresar hasta ${maxDigitos} dígitos`);
+    return;
+  }
+
+  const monto = Number(texto);
+
+  if (isNaN(monto)) {
+    setErrorMonto("No se permiten letras, solo números");
+    return;
+  }
+
+  if (monto <= 0) {
+    setNuevoPago((p) => ({ ...p, monto_pagado: texto }));
+    setErrorMonto("El monto debe ser mayor a 0");
+    return;
+  }
+
+  if (monto > pendiente) {
+    setErrorMonto(
+      `No puede pagar más del saldo pendiente (L ${pendiente.toFixed(2)})`
+    );
+    return;
+  }
+
+  setNuevoPago((p) => ({ ...p, monto_pagado: texto }));
+  setErrorMonto("");
+};
   // ================================
   // Guardar pago
   // ================================
   const guardarPago = async () => {
-    if (!selFactura) return;
+  if (!selFactura) return;
 
-    const monto = Number(nuevoPago.monto_pagado || 0);
-    const pendiente = Number(selFactura?.saldo_pendiente || 0);
+  const monto = Number(nuevoPago.monto_pagado || 0);
 
-    if (errorMonto) {
-      toast({
-        title: "Monto inválido",
-        description: errorMonto,
-        status: "warning",
-      });
-      return;
-    }
+  if (!nuevoPago.monto_pagado?.toString().trim()) {
+    toast({
+      title: "Monto inválido",
+      description: "Debe ingresar un monto",
+      status: "warning",
+    });
+    return;
+  }
 
-    if (!nuevoPago.id_metodo_pago) {
-      toast({
-        title: "Método de pago requerido",
-        status: "warning",
-      });
-      return;
-    }
+  if (!/^\d*\.?\d*$/.test(String(nuevoPago.monto_pagado))) {
+    toast({
+      title: "Monto inválido",
+      description: "No se permiten letras, solo números",
+      status: "warning",
+    });
+    return;
+  }
 
-    const payload = {
-      id_factura: selFactura.id_factura,
-      fecha_pago: nuevoPago.fecha_pago,
-      monto_pagado: monto,
-      id_metodo_pago: Number(nuevoPago.id_metodo_pago),
-      observacion: nuevoPago.observacion,
-      almacen: nuevoPago.almacen,
-    };
+  if (errorMonto) {
+    toast({
+      title: "Monto inválido",
+      description: errorMonto,
+      status: "warning",
+    });
+    return;
+  }
 
-    try {
-      const res = await api.post("/ventas/pagos-factura", payload);
+  if (!nuevoPago.id_metodo_pago) {
+    toast({
+      title: "Método de pago requerido",
+      status: "warning",
+    });
+    return;
+  }
 
-      toast({
-        title: "Pago registrado",
-        description: res.data?.message || "Pago guardado correctamente",
-        status: "success",
-      });
-
-      await cargarResumen();
-      cerrarModalPago();
-    } catch (err) {
-      toast({
-        title: "Error guardando pago",
-        description: err.response?.data?.error || err.message,
-        status: "error",
-      });
-    }
+  const payload = {
+    id_factura: selFactura.id_factura,
+    fecha_pago: nuevoPago.fecha_pago,
+    monto_pagado: monto,
+    id_metodo_pago: Number(nuevoPago.id_metodo_pago),
+    observacion: nuevoPago.observacion,
+    almacen: nuevoPago.almacen,
   };
+
+  try {
+    const res = await api.post("/ventas/pagos-factura", payload);
+
+    toast({
+      title: "Pago registrado",
+      description: res.data?.message || "Pago guardado correctamente",
+      status: "success",
+    });
+
+    await cargarResumen();
+    cerrarModalPago();
+  } catch (err) {
+    toast({
+      title: "Error guardando pago",
+      description: err.response?.data?.error || err.message,
+      status: "error",
+    });
+  }
+};
 
   // ================================
   // Detalle pagos
@@ -492,20 +541,83 @@ export default function PagosFactura() {
                     />
                   </FormControl>
 
-                  <FormControl>
-                    <FormLabel fontSize="sm">Monto</FormLabel>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={nuevoPago.monto_pagado}
-                      onChange={(e) => handleMontoChange(e.target.value)}
-                    />
-                    {errorMonto && (
-                      <Text fontSize="sm" color="red.500">
-                        {errorMonto}
-                      </Text>
-                    )}
-                  </FormControl>
+                  <FormControl isInvalid={!!errorMonto}>
+  <FormLabel fontSize="sm">Monto</FormLabel>
+  <Input
+    type="text"
+    inputMode="decimal"
+    value={nuevoPago.monto_pagado}
+    onChange={(e) => handleMontoChange(e.target.value)}
+    onKeyDown={(e) => {
+      const teclasPermitidas = [
+        "Backspace",
+        "Delete",
+        "ArrowLeft",
+        "ArrowRight",
+        "Tab",
+        "Home",
+        "End",
+        ".",
+      ];
+
+      const esNumero = /^[0-9]$/.test(e.key);
+      const esPermitida = teclasPermitidas.includes(e.key);
+
+      const pendiente = Number(selFactura?.saldo_pendiente || 0);
+      const maxDigitos =
+        pendiente > 0 ? pendiente.toFixed(2).replace(".", "").length : 0;
+
+      const valorActual = String(nuevoPago.monto_pagado || "");
+      const digitosActuales = valorActual.replace(".", "").length;
+
+      if (!esNumero && !esPermitida) {
+        e.preventDefault();
+        setErrorMonto("No se permiten letras, solo números");
+        return;
+      }
+
+      if (esNumero && maxDigitos > 0 && digitosActuales >= maxDigitos) {
+        e.preventDefault();
+        setErrorMonto(`Solo puede ingresar hasta ${maxDigitos} dígitos`);
+        return;
+      }
+
+      if (e.key === "." && valorActual.includes(".")) {
+        e.preventDefault();
+        setErrorMonto("Solo se permite un punto decimal");
+      }
+    }}
+    onPaste={(e) => {
+      const textoPegado = e.clipboardData.getData("text");
+
+      if (!/^\d*\.?\d*$/.test(textoPegado)) {
+        e.preventDefault();
+        setErrorMonto("No se permiten letras, solo números");
+        return;
+      }
+
+      const pendiente = Number(selFactura?.saldo_pendiente || 0);
+      const maxDigitos =
+        pendiente > 0 ? pendiente.toFixed(2).replace(".", "").length : 0;
+
+      const valorActual = String(nuevoPago.monto_pagado || "");
+      const valorCombinado = valorActual + textoPegado;
+      const digitosCombinados = valorCombinado.replace(".", "").length;
+
+      if (maxDigitos > 0 && digitosCombinados > maxDigitos) {
+        e.preventDefault();
+        setErrorMonto(`Solo puede ingresar hasta ${maxDigitos} dígitos`);
+        return;
+      }
+    }}
+  />
+
+  {errorMonto && (
+    <Text fontSize="sm" color="red.500" mt={1}>
+      {errorMonto}
+    </Text>
+  )}
+</FormControl>
                 </HStack>
 
                 <HStack spacing={4}>

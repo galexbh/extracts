@@ -52,7 +52,7 @@ const menuItems = [
   { label: "Ventas y Reservas", icon: FaRegMoneyBillAlt, to: "/app/ventas" },
   { label: "Producción", icon: FaCogs, to: "/app/produccion" },
   { label: "Inventarios", icon: FaBoxes, to: "/app/inventarios" },
-  { label: "Entregas", icon: FaTruck, to: "/app/entregas" },
+  //{ label: "Entregas", icon: FaTruck, to: "/app/entregas" },
   { label: "Contabilidad", icon: FaMoneyCheckAlt, to: "/app/contabilidad" },
   { label: "Compras", icon: FaShoppingCart, to: "/app/compras" },
   { label: "Seguridad", icon: FaShieldAlt, to: "/app/seguridad" },
