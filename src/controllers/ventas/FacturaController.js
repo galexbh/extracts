@@ -9,22 +9,25 @@ const { registrarBitacora, findUserId } = require("../../utils/bitacora");
 // ============================================================
 exports.listarFacturas = async (_req, res) => {
   const cursor = "cur_facturas";
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
+    await client.query("BEGIN");
 
-    await pool.query(
+    await client.query(
       `CALL ventasyreserva.sp_listar_facturas($1::refcursor)`,
       [cursor]
     );
 
-    const result = await pool.query(`FETCH ALL FROM ${cursor}`);
-    await pool.query("COMMIT");
+    const result = await client.query(`FETCH ALL FROM ${cursor}`);
+    await client.query("COMMIT");
 
     res.json(result.rows);
   } catch (error) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => { });
     console.error("❌ Error listando facturas:", error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -131,6 +134,31 @@ function calcTotal(items, aplica) {
   return calcGravado15(items) + calcISV15(items, aplica);
 }
 
+async function obtenerFacturaEstado(client, id_factura, { lock = false } = {}) {
+  const result = await client.query(
+    `SELECT f.id_factura, f.id_estado_pago, COALESCE(ep.nombre_estado, '') AS estado
+     FROM ventasyreserva.tbl_facturas f
+     LEFT JOIN mantenimiento.tbl_estado_pago ep
+       ON ep.id_estado_pago = f.id_estado_pago
+     WHERE f.id_factura = $1
+     ${lock ? "FOR UPDATE" : ""}`,
+    [id_factura]
+  );
+
+  if (result.rowCount === 0) {
+    const err = new Error("Factura no encontrada");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const factura = result.rows[0];
+  const estado = String(factura.estado || "").trim().toLowerCase();
+  return {
+    ...factura,
+    anulada: factura.id_estado_pago === 2 || estado === "anulada" || estado === "anulado",
+  };
+}
+
 // ============================================================
 // 🔹 CREAR FACTURA
 // ============================================================
@@ -222,9 +250,11 @@ exports.crearFactura = async (req, res) => {
       ]
     );
 
-    const facID = (await client.query(
-      "SELECT MAX(id_factura) AS id FROM ventasyreserva.tbl_facturas"
-    )).rows[0].id;
+    const facID = (
+      await client.query(
+        `SELECT currval(pg_get_serial_sequence('ventasyreserva.tbl_facturas', 'id_factura')) AS id`
+      )
+    ).rows[0].id;
 
     // GUARDAR DETALLES
     for (const item of data.items) {
@@ -292,6 +322,11 @@ exports.actualizarFactura = async (req, res) => {
 
   try {
     await client.query("BEGIN");
+    const facturaActual = await obtenerFacturaEstado(client, id, { lock: true });
+
+    if (facturaActual.anulada) {
+      throw new Error("La factura está anulada y no puede actualizarse.");
+    }
 
     const detalleOriginal = await client.query(
       `SELECT id_producto, cantidad
@@ -437,7 +472,7 @@ exports.actualizarFactura = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error actualizando factura:", error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   } finally {
     client.release();
   }
@@ -452,6 +487,11 @@ exports.eliminarFactura = async (req, res) => {
 
   try {
     await client.query("BEGIN");
+    const facturaActual = await obtenerFacturaEstado(client, id, { lock: true });
+
+    if (facturaActual.anulada) {
+      throw new Error("La factura ya está anulada.");
+    }
 
     const detalle = await client.query(
       `SELECT id_producto, cantidad
@@ -494,7 +534,7 @@ exports.eliminarFactura = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error eliminando factura:", error);
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message });
   } finally {
     client.release();
   }

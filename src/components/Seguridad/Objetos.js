@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Seguridad/Objetos.js
-// ✅ Versión con dashboard, paginación, export modal PDF/Excel y validaciones
+﻿// ============================================================
+// ðŸ“ src/components/Seguridad/Objetos.js
+// âœ… VersiÃ³n con dashboard, paginaciÃ³n, export modal PDF/Excel y validaciones
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -43,21 +43,22 @@ import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon } from "@chakra-ui/icon
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "./CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre Objeto" },
-  { key: "descripcion", label: "Descripción" },
+  { key: "descripcion", label: "DescripciÃ³n" },
   { key: "tipo", label: "Tipo" },
   { key: "estado", label: "Estado" },
   { key: "usuario_creado", label: "Usuario Creado" },
@@ -68,7 +69,7 @@ const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
 export default function Objetos() {
   // ============================================================
-  // ✅ Paleta de colores (modo claro/oscuro) — IGUAL que Roles
+  // âœ… Paleta de colores (modo claro/oscuro) â€” IGUAL que Roles
   // ============================================================
   const accent = useColorModeValue("#0D9488", "#2DD4BF");
   const cardBg = useColorModeValue("#FFFFFF", "#1E293B");
@@ -82,7 +83,7 @@ export default function Objetos() {
   const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // ✅ Estados
+  // âœ… Estados
   // ============================================================
   const toast = useToast();
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ export default function Objetos() {
   const [allData, setAllData] = useState([]); // datos completos sin paginar para exportar
   const [loading, setLoading] = useState(true);
 
-  // Paginación
+  // PaginaciÃ³n
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -101,7 +102,7 @@ export default function Objetos() {
 
   const username = localStorage.getItem("userEmail");
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -120,25 +121,25 @@ export default function Objetos() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // ✅ Cargar estadísticas (sin paginación)
+  // âœ… Cargar estadÃ­sticas (sin paginaciÃ³n)
   // ============================================================
   const cargarStats = useCallback(async () => {
     try {
       const res = await api.get("/seguridad/objetos"); // sin params = retorna todo
       const all = Array.isArray(res.data) ? res.data : res.data.rows || [];
-      setAllData(all); // guardar para exportación
+      setAllData(all); // guardar para exportaciÃ³n
       setStatsData({
         total: all.length,
         activos: all.filter((o) => o.estado === "activo").length,
         inactivos: all.filter((o) => o.estado === "inactivo").length,
       });
     } catch (err) {
-      console.error("❌ Error cargando stats:", err);
+      console.error("âŒ Error cargando stats:", err);
     }
   }, []);
 
   // ============================================================
-  // ✅ Cargar objetos paginados
+  // âœ… Cargar objetos paginados
   // ============================================================
   const cargarObjetos = useCallback(async (currentPage = page) => {
     try {
@@ -159,7 +160,7 @@ export default function Objetos() {
         setTotalRecords(res.data.length);
       }
     } catch (err) {
-      console.error("❌ Error cargando objetos:", err);
+      console.error("âŒ Error cargando objetos:", err);
       toast({
         title: "Error al cargar objetos",
         description: err.message,
@@ -179,12 +180,12 @@ export default function Objetos() {
   }, [page, limit, cargarObjetos, cargarStats]);
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const tipoLabels = {
-    pantalla: "Pantalla", reporte: "Reporte", menu: "Menú", proceso: "Proceso",
-    boton: "Botón", dashboard: "Dashboard", formulario: "Formulario",
-    catalogo: "Catálogo", modulo: "Módulo",
+    pantalla: "Pantalla", reporte: "Reporte", menu: "MenÃº", proceso: "Proceso",
+    boton: "BotÃ³n", dashboard: "Dashboard", formulario: "Formulario",
+    catalogo: "CatÃ¡logo", modulo: "MÃ³dulo",
   };
 
   const buildFilterText = (filters = {}) => {
@@ -233,7 +234,7 @@ export default function Objetos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -261,7 +262,7 @@ export default function Objetos() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
       doc.setFontSize(9);
       doc.setTextColor(120);
@@ -295,7 +296,7 @@ export default function Objetos() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
@@ -317,7 +318,7 @@ export default function Objetos() {
       doc.save(`Objetos_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -325,7 +326,7 @@ export default function Objetos() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -345,7 +346,7 @@ export default function Objetos() {
       const allCols = [
         { key: "id", header: "ID", width: 8, extract: (r) => r.id_objeto },
         { key: "nombre", header: "Nombre Objeto", width: 25, extract: (r) => r.nombre_objeto || "" },
-        { key: "descripcion", header: "Descripción", width: 35, extract: (r) => r.descripcion || "" },
+        { key: "descripcion", header: "DescripciÃ³n", width: 35, extract: (r) => r.descripcion || "" },
         { key: "tipo", header: "Tipo", width: 15, extract: (r) => tipoLabels[r.tipo_objeto] || r.tipo_objeto || "" },
         { key: "estado", header: "Estado", width: 12, extract: (r) => r.estado === "activo" ? "Activo" : "Inactivo" },
         { key: "usuario_creado", header: "Usuario Creado", width: 20, extract: (r) => r.usuario_creado || "" },
@@ -356,13 +357,13 @@ export default function Objetos() {
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Objetos — Extractus";
+      titleCell.value = "Reporte de Objetos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -401,7 +402,7 @@ export default function Objetos() {
       saveAs(new Blob([buffer]), `Objetos_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -409,39 +410,39 @@ export default function Objetos() {
   };
 
   // ============================================================
-  // ✅ Funciones de validación y sanitización
+  // âœ… Funciones de validaciÃ³n y sanitizaciÃ³n
   // ============================================================
   const sanitizeTexto = (valor) => {
     if (!valor) return "";
-    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s._\-]/g, "");
+    return valor.replace(/[^a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s._\-]/g, "");
   };
 
   const validarNombreObjeto = (v) => {
     if (!v || v.trim() === "") return "El nombre del objeto es obligatorio.";
-    if (v.trim().length < 2) return "El nombre debe tener al menos 2 caracteres.";
+    if (v.trim().length < 3) return "El nombre debe tener al menos 3 caracteres.";
     if (v.trim().length > 100) return "El nombre no puede exceder 100 caracteres.";
-    if (/\d/.test(v)) return "El nombre del objeto no debe contener números.";
+    if (/\d/.test(v)) return "El nombre del objeto no debe contener nÃºmeros.";
     return null;
   };
 
   const validarDescripcion = (v) => {
-    if (v && v.length > 500) return "La descripción no puede exceder 500 caracteres.";
+    if (v && v.length > 500) return "La descripciÃ³n no puede exceder 500 caracteres.";
     return null;
   };
 
   const validarTipoObjeto = (v) => {
     const tiposValidos = ["pantalla", "reporte", "menu", "proceso", "boton", "dashboard", "formulario", "catalogo", "modulo"];
-    if (!v || !tiposValidos.includes(v)) return "Debe seleccionar un tipo de objeto válido.";
+    if (!v || !tiposValidos.includes(v)) return "Debe seleccionar un tipo de objeto vÃ¡lido.";
     return null;
   };
 
   const validarEstado = (v) => {
-    if (!v || !["activo", "inactivo"].includes(v)) return "Debe seleccionar un estado válido.";
+    if (!v || !["activo", "inactivo"].includes(v)) return "Debe seleccionar un estado vÃ¡lido.";
     return null;
   };
 
   // ============================================================
-  // ✅ Campos del formulario CRUD
+  // âœ… Campos del formulario CRUD
   // ============================================================
   const fields = [
     {
@@ -449,15 +450,16 @@ export default function Objetos() {
       label: "Nombre del Objeto",
       type: "text",
       required: true,
-      placeholderText: "Ej. Módulo Ventas, Botón Reportes",
+      placeholderText: "Ej. MÃ³dulo Ventas, BotÃ³n Reportes",
       validate: validarNombreObjeto,
       sanitize: sanitizeTexto,
+      sanitizeWarning: "Solo letras, espacios y . _ -. MÃ­nimo 3 caracteres.",
     },
     {
       name: "descripcion",
-      label: "Descripción",
+      label: "DescripciÃ³n",
       type: "textarea",
-      placeholderText: "Describe brevemente la función del objeto",
+      placeholderText: "Describe brevemente la funciÃ³n del objeto",
       validate: validarDescripcion,
       sanitize: sanitizeTexto,
     },
@@ -470,13 +472,13 @@ export default function Objetos() {
       options: [
         { label: "Pantalla", value: "pantalla" },
         { label: "Reporte", value: "reporte" },
-        { label: "Menú", value: "menu" },
+        { label: "MenÃº", value: "menu" },
         { label: "Proceso", value: "proceso" },
-        { label: "Botón", value: "boton" },
+        { label: "BotÃ³n", value: "boton" },
         { label: "Dashboard", value: "dashboard" },
         { label: "Formulario", value: "formulario" },
-        { label: "Catálogo", value: "catalogo" },
-        { label: "Módulo", value: "modulo" },
+        { label: "CatÃ¡logo", value: "catalogo" },
+        { label: "MÃ³dulo", value: "modulo" },
       ],
     },
     {
@@ -493,12 +495,12 @@ export default function Objetos() {
   ];
 
   // ============================================================
-  // ✅ Definición de columnas y extractores
+  // âœ… DefiniciÃ³n de columnas y extractores
   // ============================================================
   const columnsTable = [
     "ID Objeto",
     "Nombre Objeto",
-    "Descripción",
+    "DescripciÃ³n",
     "Tipo",
     "Estado",
     "Usuario Creado",
@@ -510,21 +512,21 @@ export default function Objetos() {
   const extractors = {
     "ID Objeto": (r) => r.id_objeto,
     "Nombre Objeto": (r) => r.nombre_objeto,
-    "Descripción": (r) => r.descripcion || "-",
+    "DescripciÃ³n": (r) => r.descripcion || "-",
     "Tipo": (r) => {
       return tipoLabels[r.tipo_objeto] || r.tipo_objeto || "Pantalla";
     },
-    "Estado": (r) => r.estado === "activo" ? "✅ Activo" : "❌ Inactivo",
-    "Usuario Creado": (r) => r.usuario_creado || "—",
+    "Estado": (r) => r.estado === "activo" ? "âœ… Activo" : "âŒ Inactivo",
+    "Usuario Creado": (r) => r.usuario_creado || "â€”",
     "Fecha Creado": (r) =>
-      r.fecha_creado ? new Date(r.fecha_creado).toISOString().split("T")[0] : "—",
-    "Usuario Modificado": (r) => r.usuario_modificado || "—",
+      r.fecha_creado ? new Date(r.fecha_creado).toISOString().split("T")[0] : "â€”",
+    "Usuario Modificado": (r) => r.usuario_modificado || "â€”",
     "Fecha Modificado": (r) =>
-      r.fecha_modificado ? new Date(r.fecha_modificado).toISOString().split("T")[0] : "—",
+      r.fecha_modificado ? new Date(r.fecha_modificado).toISOString().split("T")[0] : "â€”",
   };
 
   // ============================================================
-  // ✅ Funciones CRUD
+  // âœ… Funciones CRUD
   // ============================================================
   const recargarTodo = async () => {
     await cargarObjetos(page);
@@ -554,7 +556,7 @@ export default function Objetos() {
       });
       await recargarTodo();
     } catch (err) {
-      console.error("❌ Error insertando objeto:", err);
+      console.error("âŒ Error insertando objeto:", err);
       const status = err.response?.status;
       const mensaje = err.response?.data?.error || err.message;
       toast({
@@ -590,7 +592,7 @@ export default function Objetos() {
       });
       await recargarTodo();
     } catch (err) {
-      console.error("❌ Error actualizando objeto:", err);
+      console.error("âŒ Error actualizando objeto:", err);
       const status = err.response?.status;
       const mensaje = err.response?.data?.error || err.message;
       toast({
@@ -605,32 +607,53 @@ export default function Objetos() {
 
   const handleDelete = async (id) => {
     try {
+      const dependenciaRes = await api.get(`/seguridad/objetos/${id}/dependencias`);
+      const dependenciaData = dependenciaRes.data || {};
+
+      if (!dependenciaData.puedeEliminar) {
+        const roles = (dependenciaData.permisos || [])
+          .map((perm) => perm.nombre_rol)
+          .filter(Boolean)
+          .slice(0, 3);
+
+        toast({
+          title: "No se puede eliminar",
+          description: `El objeto "${dependenciaData.nombre_objeto}" tiene ${dependenciaData.totalPermisos} permiso(s) asociado(s)${roles.length ? `: ${roles.join(", ")}${dependenciaData.totalPermisos > 3 ? "..." : ""}` : ""}.`,
+          status: "warning",
+          duration: 5000,
+          isClosable: true,
+        });
+        return false;
+      }
+
       await api.delete(`/seguridad/objetos/${id}`, {
         headers: { "x-user-email": username },
       });
-      toast({
-        title: "Objeto eliminado correctamente",
-        status: "info",
-        duration: 3000,
-        isClosable: true,
-      });
-      await recargarTodo();
-    } catch (err) {
-      console.error("❌ Error eliminando objeto:", err);
+        toast({
+          title: "Objeto eliminado correctamente",
+          status: "info",
+          duration: 3000,
+          isClosable: true,
+        });
+        await recargarTodo();
+        return true;
+      } catch (err) {
+      console.error("âŒ Error eliminando objeto:", err);
       const status = err.response?.status;
       const mensaje = err.response?.data?.error || err.message;
-      toast({
-        title: status === 409 ? "No se puede eliminar" : "Error al eliminar objeto",
-        description: mensaje,
-        status: status === 409 ? "warning" : "error",
-        duration: 4000,
-        isClosable: true,
-      });
-    }
-  };
+        toast({
+          title: status === 409 ? "No se puede eliminar" : "Error al eliminar objeto",
+          description: mensaje,
+          status: status === 409 ? "warning" : "error",
+          duration: 4000,
+          isClosable: true,
+        });
+        return false;
+      }
+    };
 
   // ============================================================
-  // ✅ Loader
+  // âœ… Loader
   // ============================================================
   if (loading && data.length === 0) {
     return (
@@ -641,12 +664,12 @@ export default function Objetos() {
   }
 
   // ============================================================
-  // ✅ Render Final
+  // âœ… Render Final
   // ============================================================
   return (
     <Box p={4}>
-      {/* 🔙 Botón Atrás */}
-      <Tooltip label="Volver al módulo Seguridad" placement="bottom-start">
+      {/* ðŸ”™ BotÃ³n AtrÃ¡s */}
+      <Tooltip label="Volver al mÃ³dulo Seguridad" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
           bg={btnBackBg}
@@ -660,7 +683,7 @@ export default function Objetos() {
         </Button>
       </Tooltip>
 
-      {/* 🏷️ Título + Botón Exportar */}
+      {/* ðŸ·ï¸ TÃ­tulo + BotÃ³n Exportar */}
       <Flex justify="space-between" align="center" mb={3}>
         <Heading size="lg" color={accent}>
           Objetos
@@ -683,7 +706,7 @@ export default function Objetos() {
 
       <Divider mb={4} borderColor={borderClr} />
 
-      {/* ✅ DASHBOARD */}
+      {/* âœ… DASHBOARD */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
         <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
           <Stat>
@@ -710,7 +733,7 @@ export default function Objetos() {
         </Box>
       </SimpleGrid>
 
-      {/* ✅ TABLA CRUD */}
+      {/* âœ… TABLA CRUD */}
       <Box
         bg={cardBg}
         p={3}
@@ -730,9 +753,10 @@ export default function Objetos() {
           onDelete={handleDelete}
           onReload={() => recargarTodo()}
           apiUrl="/seguridad/objetos"
+          enablePagination={false}
         />
 
-        {/* ✅ Paginación */}
+        {/* âœ… PaginaciÃ³n */}
         {totalRecords > 0 && (
           <Flex justify="space-between" align="center" mt={4} p={2} borderTop="1px solid" borderColor={borderClr}>
             <HStack>
@@ -764,7 +788,7 @@ export default function Objetos() {
                 aria-label="Anterior"
               />
               <Text fontSize="sm">
-                Página {page} de {totalPages}
+                PÃ¡gina {page} de {totalPages}
               </Text>
               <IconButton
                 icon={<ChevronRightIcon />}
@@ -778,7 +802,7 @@ export default function Objetos() {
         )}
       </Box>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -792,25 +816,25 @@ export default function Objetos() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los objetos.
+              Si no aplicas filtros, se exportarÃ¡n todos los objetos.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={inputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
               <Input
-                placeholder="Ej: Módulo Ventas"
+                placeholder="Ej: MÃ³dulo Ventas"
                 value={expNombre}
                 onChange={(e) => setExpNombre(e.target.value)}
                 size="sm"
@@ -823,13 +847,13 @@ export default function Objetos() {
               <Select placeholder="Todos los tipos" value={expTipo} onChange={(e) => setExpTipo(e.target.value)} size="sm" bg={inputBg}>
                 <option value="pantalla">Pantalla</option>
                 <option value="reporte">Reporte</option>
-                <option value="menu">Menú</option>
+                <option value="menu">MenÃº</option>
                 <option value="proceso">Proceso</option>
-                <option value="boton">Botón</option>
+                <option value="boton">BotÃ³n</option>
                 <option value="dashboard">Dashboard</option>
                 <option value="formulario">Formulario</option>
-                <option value="catalogo">Catálogo</option>
-                <option value="modulo">Módulo</option>
+                <option value="catalogo">CatÃ¡logo</option>
+                <option value="modulo">MÃ³dulo</option>
               </Select>
             </FormControl>
 
@@ -843,7 +867,7 @@ export default function Objetos() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -911,3 +935,4 @@ export default function Objetos() {
     </Box>
   );
 }
+

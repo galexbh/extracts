@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
   Box, Flex, Heading, FormControl, FormLabel, Input, Button,
-  Text, useToast, Image, Stack, FormHelperText, useColorModeValue
+  Text, useToast, Image, Stack, FormHelperText, useColorModeValue, InputGroup, InputRightElement
 } from "@chakra-ui/react";
+import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { confirmPasswordReset, verifyPasswordResetCode, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";
 import { traducirErrorFirebase } from "../../utils/firebaseErrors"; // ✅ Importar traducciones
@@ -15,6 +16,8 @@ export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
   const [pwd1, setPwd1] = useState("");
   const [pwd2, setPwd2] = useState("");
+  const [showPwd1, setShowPwd1] = useState(false);
+  const [showPwd2, setShowPwd2] = useState(false);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
@@ -133,34 +136,48 @@ export default function ResetPasswordPage() {
 
           <FormControl>
             <FormLabel fontSize="sm">Nueva contraseña</FormLabel>
-            <Input
-              type="password"
-              placeholder="Escribe la nueva contraseña"
-              fontSize="xs" h="34px"
-              borderRadius="8px"
-              borderWidth="2px"
-              borderColor="green.400"
-              _hover={{ borderColor: "green.500" }}
-              _focus={{ borderColor: "green.500", boxShadow: "0 0 0 1px green.500" }}
-              value={pwd1}
-              onChange={(e) => setPwd1(e.target.value)}
-            />
+            <InputGroup>
+              <Input
+                type={showPwd1 ? "text" : "password"}
+                placeholder="Escribe la nueva contraseña"
+                fontSize="xs" h="34px"
+                borderRadius="8px"
+                borderWidth="2px"
+                borderColor="green.400"
+                _hover={{ borderColor: "green.500" }}
+                _focus={{ borderColor: "green.500", boxShadow: "0 0 0 1px green.500" }}
+                value={pwd1}
+                onChange={(e) => setPwd1(e.target.value)}
+              />
+              <InputRightElement h="34px">
+                <Button variant="ghost" size="sm" onClick={() => setShowPwd1((v) => !v)}>
+                  {showPwd1 ? <ViewOffIcon /> : <ViewIcon />}
+                </Button>
+              </InputRightElement>
+            </InputGroup>
           </FormControl>
 
           <FormControl>
             <FormLabel fontSize="sm">Confirmar contraseña</FormLabel>
-            <Input
-              type="password"
-              placeholder="Repite la nueva contraseña"
-              fontSize="xs" h="34px"
-              borderRadius="8px"
-              borderWidth="2px"
-              borderColor="green.400"
-              _hover={{ borderColor: "green.500" }}
-              _focus={{ borderColor: "green.500", boxShadow: "0 0 0 1px green.500" }}
-              value={pwd2}
-              onChange={(e) => setPwd2(e.target.value)}
-            />
+            <InputGroup>
+              <Input
+                type={showPwd2 ? "text" : "password"}
+                placeholder="Repite la nueva contraseña"
+                fontSize="xs" h="34px"
+                borderRadius="8px"
+                borderWidth="2px"
+                borderColor="green.400"
+                _hover={{ borderColor: "green.500" }}
+                _focus={{ borderColor: "green.500", boxShadow: "0 0 0 1px green.500" }}
+                value={pwd2}
+                onChange={(e) => setPwd2(e.target.value)}
+              />
+              <InputRightElement h="34px">
+                <Button variant="ghost" size="sm" onClick={() => setShowPwd2((v) => !v)}>
+                  {showPwd2 ? <ViewOffIcon /> : <ViewIcon />}
+                </Button>
+              </InputRightElement>
+            </InputGroup>
             <FormHelperText fontSize="xs" color={pwd2 && pwd1 !== pwd2 ? "red.400" : "gray.500"}>
               {pwd2 && pwd1 !== pwd2 ? "Las contraseñas no coinciden." : "Repite la nueva contraseña."}
             </FormHelperText>

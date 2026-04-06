@@ -59,6 +59,8 @@ exports.insertDireccion = async (req, res) => {
   try {
     const { id_persona, direccion, ciudad, departamento, pais } = req.body;
     const username = extractUsername(req);
+    const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
+    const soloLetrasConExtras = /^[A-Za-zÁÉÍÓÚÑáéíóúñ\s\-'.]{3,100}$/;
 
     // 🛡️ Validaciones backend
     if (!id_persona) {
@@ -66,6 +68,18 @@ exports.insertDireccion = async (req, res) => {
     }
     if (!direccion || !direccion.trim()) {
       return res.status(400).json({ error: "La dirección es obligatoria." });
+    }
+    if (!textoSeguro.test(direccion.trim())) {
+      return res.status(400).json({ error: "La dirección contiene caracteres no válidos." });
+    }
+    if (!ciudad || !ciudad.trim() || !soloLetrasConExtras.test(ciudad.trim())) {
+      return res.status(400).json({ error: "La ciudad es obligatoria y solo debe contener letras." });
+    }
+    if (!departamento || !departamento.trim() || !soloLetrasConExtras.test(departamento.trim())) {
+      return res.status(400).json({ error: "El departamento es obligatorio y solo debe contener letras." });
+    }
+    if (!pais || !pais.trim() || !soloLetrasConExtras.test(pais.trim())) {
+      return res.status(400).json({ error: "El país es obligatorio y solo debe contener letras." });
     }
 
     await pool.query(
@@ -97,11 +111,39 @@ exports.updateDireccion = async (req, res) => {
   const { id_direccion } = req.params;
   const { id_persona, direccion, ciudad, departamento, pais } = req.body;
   const username = extractUsername(req);
+  const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
+  const soloLetrasConExtras = /^[A-Za-zÁÉÍÓÚÑáéíóúñ\s\-'.]{3,100}$/;
 
   try {
+    // 🛡️ Validaciones backend
+    if (!id_persona) {
+      return res.status(400).json({ error: "Debe indicar la persona." });
+    }
+    if (!direccion || !direccion.trim()) {
+      return res.status(400).json({ error: "La dirección es obligatoria." });
+    }
+    if (!textoSeguro.test(direccion.trim())) {
+      return res.status(400).json({ error: "La dirección contiene caracteres no válidos." });
+    }
+    if (!ciudad || !ciudad.trim() || !soloLetrasConExtras.test(ciudad.trim())) {
+      return res.status(400).json({ error: "La ciudad es obligatoria y solo debe contener letras." });
+    }
+    if (!departamento || !departamento.trim() || !soloLetrasConExtras.test(departamento.trim())) {
+      return res.status(400).json({ error: "El departamento es obligatorio y solo debe contener letras." });
+    }
+    if (!pais || !pais.trim() || !soloLetrasConExtras.test(pais.trim())) {
+      return res.status(400).json({ error: "El país es obligatorio y solo debe contener letras." });
+    }
+
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_direcciones WHERE id_direccion = $1`, [id_direccion]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Dirección no encontrada." });
+    }
+
     await pool.query(
       `CALL seguridad.sp_direcciones_actualizar($1, $2, $3, $4, $5, $6)`,
-      [id_direccion, id_persona, direccion, ciudad, departamento, pais]
+      [id_direccion, id_persona, direccion.trim(), ciudad, departamento, pais]
     );
 
     // 📋 Bitácora
@@ -111,7 +153,10 @@ exports.updateDireccion = async (req, res) => {
       tabla: "seguridad.tbl_direcciones",
       accion: "UPDATE",
       descripcion: `Dirección ID ${id_direccion} actualizada por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_direccion, id_persona, direccion, ciudad, departamento, pais }),
+      detalle: JSON.stringify({
+        antes: anterior.rows[0],
+        despues: { id_persona, direccion, ciudad, departamento, pais }
+      }),
     });
 
     res.json({ message: "✅ Dirección actualizada correctamente" });
@@ -129,6 +174,12 @@ exports.deleteDireccion = async (req, res) => {
   const username = extractUsername(req);
 
   try {
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_direcciones WHERE id_direccion = $1`, [id]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Dirección no encontrada para eliminar." });
+    }
+
     await pool.query(`CALL seguridad.sp_direcciones_eliminar($1)`, [id]);
 
     // 📋 Bitácora
@@ -138,7 +189,7 @@ exports.deleteDireccion = async (req, res) => {
       tabla: "seguridad.tbl_direcciones",
       accion: "DELETE",
       descripcion: `Dirección ID ${id} eliminada por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_direccion: id }),
+      detalle: JSON.stringify({ antes: anterior.rows[0], despues: null }),
     });
 
     res.json({ message: "🗑️ Dirección eliminada correctamente" });

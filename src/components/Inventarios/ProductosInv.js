@@ -1,5 +1,5 @@
-// ============================================================
-// ProductosInv.js — Inventario Productos con Export Modal Clientes-style
+﻿// ============================================================
+// ProductosInv.js â€” Inventario Productos con Export Modal Clientes-style
 // ============================================================
 import React, { useState, useCallback } from "react";
 import {
@@ -14,13 +14,14 @@ import {
 import { DownloadIcon } from "@chakra-ui/icons";
 import { FaFileExport, FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { formatNow } from "../../utils/dateFormat";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
@@ -32,11 +33,11 @@ const EXPORT_FIELDS = [
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
 const productosData = [
-  { id: "01", nombre: "Limón", cantidad: 50, usuario: "Equipo de Venta", observaciones: "Jugo" },
+  { id: "01", nombre: "LimÃ³n", cantidad: 50, usuario: "Equipo de Venta", observaciones: "Jugo" },
   { id: "02", nombre: "Mora", cantidad: 20, usuario: "Equipo de Venta", observaciones: "Concentrado" },
   { id: "03", nombre: "Tamarindo", cantidad: 100, usuario: "Equipo de Venta", observaciones: "Jugo" },
   { id: "04", nombre: "Naranja", cantidad: 250, usuario: "Equipo de Venta", observaciones: "Concentrado" },
-  { id: "05", nombre: "Maracuyá", cantidad: 25, usuario: "Equipo de Venta", observaciones: "Jugo" },
+  { id: "05", nombre: "MaracuyÃ¡", cantidad: 25, usuario: "Equipo de Venta", observaciones: "Jugo" },
 ];
 
 const getEstado = (cantidad) => {
@@ -54,7 +55,7 @@ const ProductosInv = () => {
 
   const [filters, setFilters] = useState({ id: "", nombre: "", cantidad: "", usuario: "", observaciones: "" });
 
-  // Modal exportación
+  // Modal exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -84,7 +85,7 @@ const ProductosInv = () => {
   );
 
   // ============================================================
-  // 🔧 Export helpers
+  // ðŸ”§ Export helpers
   // ============================================================
   const buildFilterText = (f = {}) => {
     const parts = [];
@@ -125,7 +126,7 @@ const ProductosInv = () => {
       img.src = src;
     });
 
-  // 📤 PDF
+  // ðŸ“¤ PDF
   const handleExportPDF = async (f = {}) => {
     try {
       setExporting(true);
@@ -140,7 +141,7 @@ const ProductosInv = () => {
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
       doc.text("INVENTARIO DE PRODUCTOS", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(f)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -162,7 +163,7 @@ const ProductosInv = () => {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -181,12 +182,12 @@ const ProductosInv = () => {
       doc.save(`Inventario_Productos_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
-  // 📊 Excel
+  // ðŸ“Š Excel
   const handleExportExcel = async (f = {}) => {
     try {
       setExporting(true);
@@ -209,13 +210,13 @@ const ProductosInv = () => {
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Inventario de Productos — Extractus";
+      titleCell.value = "Inventario de Productos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(f)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(f)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -249,7 +250,7 @@ const ProductosInv = () => {
       saveAs(new Blob([buffer]), `Inventario_Productos_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
@@ -294,8 +295,8 @@ const ProductosInv = () => {
             <Th><Input size="sm" placeholder="Buscar Nombre" value={filters.nombre} onChange={(e) => handleFilterChange("nombre", e.target.value)} /></Th>
             <Th><Input size="sm" placeholder="Buscar Cantidad" value={filters.cantidad} onChange={(e) => handleFilterChange("cantidad", e.target.value)} /></Th>
             <Th><Input size="sm" placeholder="Buscar Usuario" value={filters.usuario} onChange={(e) => handleFilterChange("usuario", e.target.value)} /></Th>
-            <Th>{/* Fecha dinámica */}</Th>
-            <Th><Input size="sm" placeholder="Buscar Observación" value={filters.observaciones} onChange={(e) => handleFilterChange("observaciones", e.target.value)} /></Th>
+            <Th>{/* Fecha dinÃ¡mica */}</Th>
+            <Th><Input size="sm" placeholder="Buscar ObservaciÃ³n" value={filters.observaciones} onChange={(e) => handleFilterChange("observaciones", e.target.value)} /></Th>
             <Th>{/* Estado */}</Th>
           </Tr>
         </Thead>
@@ -306,13 +307,13 @@ const ProductosInv = () => {
               <Td>{item.nombre}</Td>
               <Td>{item.cantidad}</Td>
               <Td>{item.usuario}</Td>
-              <Td>{new Date().toLocaleString()}</Td>
+              <Td>{formatNow()}</Td>
               <Td>{item.observaciones}</Td>
               <Td>
                 {item.cantidad <= 25 ? (
-                  <Badge colorScheme="red">⚠ Stock Bajo</Badge>
+                  <Badge colorScheme="red">âš  Stock Bajo</Badge>
                 ) : item.cantidad >= 250 ? (
-                  <Badge colorScheme="green">✔ Máximo</Badge>
+                  <Badge colorScheme="green">Máximo</Badge>
                 ) : (
                   <Badge colorScheme="yellow">En Rango</Badge>
                 )}
@@ -322,7 +323,7 @@ const ProductosInv = () => {
         </Tbody>
       </Table>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -341,17 +342,17 @@ const ProductosInv = () => {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
-              <Input placeholder="Ej: Limón, Naranja" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
+              <Input placeholder="Ej: LimÃ³n, Naranja" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
             </FormControl>
 
             <FormControl mb={3}>
@@ -404,3 +405,5 @@ const ProductosInv = () => {
 };
 
 export default ProductosInv;
+
+

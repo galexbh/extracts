@@ -1,5 +1,5 @@
-// ============================================================
-// 💎 Historial de Movimientos de Insumos — Export Modal Clientes-style
+﻿// ============================================================
+// ðŸ’Ž Historial de Movimientos de Insumos â€” Export Modal Clientes-style
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -45,10 +45,11 @@ import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 import extractusLogo from "../login/log.png";
 import { useNavigate } from "react-router-dom";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "insumo", label: "Insumo" },
@@ -56,7 +57,7 @@ const EXPORT_FIELDS = [
   { key: "cantidad", label: "Cantidad" },
   { key: "fecha", label: "Fecha" },
   { key: "usuario", label: "Usuario" },
-  { key: "observacion", label: "Observación" },
+  { key: "observacion", label: "ObservaciÃ³n" },
 ];
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
@@ -73,7 +74,7 @@ export default function MovimientosInsumos() {
   const modalHeadBg = useColorModeValue("teal.50", "gray.700");
   const modalInputBg = useColorModeValue("white", "gray.600");
 
-  // Modal exportación
+  // Modal exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expInsumo, setExpInsumo] = useState("");
@@ -90,7 +91,7 @@ export default function MovimientosInsumos() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // 📡 Cargar movimientos desde el backend
+  // ðŸ“¡ Cargar movimientos desde el backend
   // ============================================================
   const cargarMovimientos = async (params = null) => {
     try {
@@ -104,7 +105,7 @@ export default function MovimientosInsumos() {
     }
   };
 
-  // 🔥 Filtrado dinámico automático
+  // ðŸ”¥ Filtrado dinÃ¡mico automÃ¡tico
   useEffect(() => {
     const filtros = {};
     if (fechaInicio) filtros.fecha_inicio = fechaInicio;
@@ -113,11 +114,11 @@ export default function MovimientosInsumos() {
     else cargarMovimientos();
   }, [fechaInicio, fechaFin]);
 
-  // 🔄 Botón limpiar
+  // ðŸ”„ BotÃ³n limpiar
   const limpiarFiltros = () => { setFechaInicio(""); setFechaFin(""); };
 
   // ============================================================
-  // 🔧 Export helpers
+  // ðŸ”§ Export helpers
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -161,7 +162,7 @@ export default function MovimientosInsumos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -177,7 +178,7 @@ export default function MovimientosInsumos() {
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
       doc.text("MOVIMIENTOS DE INSUMOS", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -187,9 +188,9 @@ export default function MovimientosInsumos() {
         insumo: (r) => r.nombre_insumo || "",
         tipo: (r) => r.tipo_movimiento || "",
         cantidad: (r) => r.cantidad,
-        fecha: (r) => r.fecha_movimiento ? new Date(r.fecha_movimiento).toLocaleString("es-HN") : "",
+        fecha: (r) => r.fecha_movimiento ? formatDateTime(r.fecha_movimiento) : "",
         usuario: (r) => r.usuario_registro || "Sistema",
-        observacion: (r) => r.observacion || "—",
+        observacion: (r) => r.observacion || "â€”",
       };
 
       const activeFields = EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key));
@@ -200,7 +201,7 @@ export default function MovimientosInsumos() {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -221,13 +222,13 @@ export default function MovimientosInsumos() {
       doc.save(`Movimientos_Insumos_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -243,22 +244,22 @@ export default function MovimientosInsumos() {
         { key: "insumo", header: "Insumo", width: 22, extract: (r) => r.nombre_insumo || "" },
         { key: "tipo", header: "Tipo", width: 12, extract: (r) => r.tipo_movimiento || "" },
         { key: "cantidad", header: "Cantidad", width: 12, extract: (r) => r.cantidad },
-        { key: "fecha", header: "Fecha", width: 20, extract: (r) => r.fecha_movimiento ? new Date(r.fecha_movimiento).toLocaleString("es-HN") : "" },
+        { key: "fecha", header: "Fecha", width: 20, extract: (r) => r.fecha_movimiento ? formatDateTime(r.fecha_movimiento) : "" },
         { key: "usuario", header: "Usuario", width: 18, extract: (r) => r.usuario_registro || "Sistema" },
-        { key: "observacion", header: "Observación", width: 25, extract: (r) => r.observacion || "—" },
+        { key: "observacion", header: "ObservaciÃ³n", width: 25, extract: (r) => r.observacion || "â€”" },
       ];
       const columns_exp = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns_exp.length);
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Movimientos de Insumos — Extractus";
+      titleCell.value = "Movimientos de Insumos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -292,7 +293,7 @@ export default function MovimientosInsumos() {
       saveAs(new Blob([buffer]), `Movimientos_Insumos_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
@@ -300,7 +301,7 @@ export default function MovimientosInsumos() {
   return (
     <Box p={6}>
       {/* ====================================================== */}
-      {/* 🔹 Mini Dashboard */}
+      {/* ðŸ”¹ Mini Dashboard */}
       {/* ====================================================== */}
       <SimpleGrid columns={[1, 4]} spacing={4} mb={6}>
         <Card p={4} borderRadius="lg" bg="#e8f7f0">
@@ -325,17 +326,17 @@ export default function MovimientosInsumos() {
         </Card>
 
         <Card p={4} borderRadius="lg" bg="#fff4e6">
-          <Text fontSize="sm" color="gray.600">Último Movimiento</Text>
+          <Text fontSize="sm" color="gray.600">Ãšltimo Movimiento</Text>
           <Text fontSize="md" fontWeight="bold">
             {movimientos[0]
-              ? new Date(movimientos[0].fecha_movimiento).toLocaleString("es-HN")
-              : "—"}
+              ? formatDateTime(movimientos[0].fecha_movimiento)
+              : "â€”"}
           </Text>
         </Card>
       </SimpleGrid>
 
       {/* ====================================================== */}
-      {/* 🔹 Filtros */}
+      {/* ðŸ”¹ Filtros */}
       {/* ====================================================== */}
       <Flex justify="space-between" align="center" mb={5}>
         <HStack spacing={3}>
@@ -378,7 +379,7 @@ export default function MovimientosInsumos() {
       </HStack>
 
       {/* ====================================================== */}
-      {/* 🔹 Tabla */}
+      {/* ðŸ”¹ Tabla */}
       {/* ====================================================== */}
       <Table size="sm" variant="simple">
         <Thead bg="gray.100">
@@ -389,7 +390,7 @@ export default function MovimientosInsumos() {
             <Th>Cantidad</Th>
             <Th>Fecha</Th>
             <Th>Usuario</Th>
-            <Th>Observación</Th>
+            <Th>ObservaciÃ³n</Th>
           </Tr>
         </Thead>
 
@@ -409,16 +410,16 @@ export default function MovimientosInsumos() {
                   {m.tipo_movimiento}
                 </Td>
                 <Td>{m.cantidad}</Td>
-                <Td>{new Date(m.fecha_movimiento).toLocaleString("es-HN")}</Td>
+                <Td>{formatDateTime(m.fecha_movimiento)}</Td>
                 <Td>{m.usuario_registro || "Sistema"}</Td>
-                <Td>{m.observacion || "—"}</Td>
+                <Td>{m.observacion || "â€”"}</Td>
               </Tr>
             ))
           )}
         </Tbody>
       </Table>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -437,17 +438,17 @@ export default function MovimientosInsumos() {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por insumo</FormLabel>
-              <Input placeholder="Ej: Sal, Azúcar" value={expInsumo} onChange={(e) => setExpInsumo(e.target.value)} size="sm" bg={modalInputBg} />
+              <Input placeholder="Ej: Sal, AzÃºcar" value={expInsumo} onChange={(e) => setExpInsumo(e.target.value)} size="sm" bg={modalInputBg} />
             </FormControl>
 
             <FormControl mb={3}>
@@ -497,3 +498,4 @@ export default function MovimientosInsumos() {
     </Box>
   );
 }
+

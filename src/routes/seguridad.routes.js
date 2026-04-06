@@ -34,8 +34,10 @@ router.get("/usuarios", verifyPermission("Usuarios", "read"), usuariosCtrl.getUs
 
 // 🔐 Verificar estado del usuario para el login (va ANTES de :id)
 router.get("/usuarios/estado-login", async (req, res) => {
-  const { uid } = req.query;
-  if (!uid) return res.status(400).json({ error: "UID requerido" });
+  const { uid, email } = req.query;
+  if (!uid && !email) {
+    return res.status(400).json({ error: "UID o email requerido" });
+  }
 
   try {
     const { rows } = await pool.query(
@@ -43,9 +45,9 @@ router.get("/usuarios/estado-login", async (req, res) => {
        FROM seguridad.tbl_usuarios u
        LEFT JOIN mantenimiento.tbl_estado_usuario e
          ON e.id_estado_usuario = u.id_estado_usuario
-       WHERE u.uid_firebase = $1
+       WHERE u.uid_firebase = $1 OR LOWER(u.username) = LOWER($2)
        LIMIT 1;`,
-      [uid]
+      [uid || "", email || ""]
     );
 
     if (!rows.length)
@@ -149,6 +151,7 @@ router.delete("/telefonos/:id", verifyPermission("Telefonos", "delete"), telefon
 // 🧱 OBJETOS
 // ============================================================
 router.get("/objetos", verifyPermission("Objetos", "read"), objetosCtrl.getObjetos);
+router.get("/objetos/:id/dependencias", verifyPermission("Objetos", "read"), objetosCtrl.getObjetoDependencias);
 router.get("/objetos/:id", verifyPermission("Objetos", "read"), objetosCtrl.getObjetoById);
 router.post("/objetos", verifyPermission("Objetos", "create"), objetosCtrl.insertObjeto);
 router.put("/objetos/:id_objeto", verifyPermission("Objetos", "update"), objetosCtrl.updateObjeto);

@@ -87,6 +87,12 @@ exports.updateCorreo = async (req, res) => {
       }
     }
 
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_correos WHERE id_correo = $1`, [id_correo]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Correo no encontrado." });
+    }
+
     await pool.query(`CALL seguridad.sp_correos_update($1, $2, $3)`, [
       id_correo,
       id_persona,
@@ -100,7 +106,10 @@ exports.updateCorreo = async (req, res) => {
       tabla: "seguridad.tbl_correos",
       accion: "UPDATE",
       descripcion: `Correo ID ${id_correo} actualizado por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_correo, id_persona, correo }),
+      detalle: JSON.stringify({
+        antes: anterior.rows[0],
+        despues: { id_persona, correo }
+      }),
     });
 
     res.json({ message: "✏️ Correo actualizado correctamente." });
@@ -118,6 +127,12 @@ exports.deleteCorreo = async (req, res) => {
     const { id } = req.params;
     const username = extractUsername(req);
 
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_correos WHERE id_correo = $1`, [id]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Correo no encontrado para eliminar." });
+    }
+
     await pool.query(`CALL seguridad.sp_correos_delete($1)`, [id]);
 
     // 📋 Bitácora
@@ -127,7 +142,7 @@ exports.deleteCorreo = async (req, res) => {
       tabla: "seguridad.tbl_correos",
       accion: "DELETE",
       descripcion: `Correo ID ${id} eliminado por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_correo: id }),
+      detalle: JSON.stringify({ antes: anterior.rows[0], despues: null }),
     });
 
     res.json({ message: "🗑️ Correo eliminado correctamente." });

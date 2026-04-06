@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Ventas/Pedidos.js
-// 💎 ERP - Pedidos (Ventas & Reservas) — VERSIÓN MEJORADA
+﻿// ============================================================
+// ðŸ“ src/components/Ventas/Pedidos.js
+// ðŸ’Ž ERP - Pedidos (Ventas & Reservas) â€” VERSIÃ“N MEJORADA
 // ============================================================
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -68,6 +68,7 @@ import { DownloadIcon } from "@chakra-ui/icons";
 
 import { useNavigate } from "react-router-dom";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
@@ -75,10 +76,11 @@ import { saveAs } from "file-saver";
 import logo from "../login/log.png";
 
 // =====================================================================
-// ✨ Pedidos — con filtros, paginación, estados dinámicos y bugs corregidos
+// âœ¨ Pedidos â€” con filtros, paginaciÃ³n, estados dinÃ¡micos y bugs corregidos
 // =====================================================================
 
 const ITEMS_PER_PAGE = 10;
+const MAX_TEXTO_OBSERVACIONES = 120;
 
 export default function Pedidos() {
   const toast = useToast();
@@ -122,7 +124,7 @@ export default function Pedidos() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [paginaActual, setPaginaActual] = useState(1);
 
-  // ── Multi-usuario: leer email y rol del usuario autenticado ──
+  // â”€â”€ Multi-usuario: leer email y rol del usuario autenticado â”€â”€
   const userEmail = localStorage.getItem("userEmail") || "";
   const userRol = (localStorage.getItem("userRol") || "").trim().toLowerCase();
   const esAdmin = userRol === "administrador" || userRol === "admin" || userRol === "todos";
@@ -146,7 +148,7 @@ export default function Pedidos() {
     })}`;
 
   // ============================================================
-  // 📡 Cargar catálogos
+  // ðŸ“¡ Cargar catÃ¡logos
   // ============================================================
   const cargarCatalogos = useCallback(async () => {
     try {
@@ -162,7 +164,7 @@ export default function Pedidos() {
       setPedidos(pedidosRes.data || []);
       setEstadosPedido(estadosRes.data || []);
     } catch (err) {
-      console.error("❌ Error cargando catálogos:", err);
+      console.error("âŒ Error cargando catÃ¡logos:", err);
       toast({
         title: "Error cargando datos",
         description: err.message,
@@ -181,7 +183,7 @@ export default function Pedidos() {
     productos.find((p) => p.id_producto === Number(idProducto));
 
   // ============================================================
-  // 🔹 Filtrado + Paginación
+  // ðŸ”¹ Filtrado + PaginaciÃ³n
   // ============================================================
   const pedidosFiltrados = useMemo(() => {
     return pedidos.filter((p) => {
@@ -202,13 +204,13 @@ export default function Pedidos() {
     return pedidosFiltrados.slice(inicio, inicio + ITEMS_PER_PAGE);
   }, [pedidosFiltrados, paginaActual]);
 
-  // Resetear página al cambiar filtros
+  // Resetear pÃ¡gina al cambiar filtros
   useEffect(() => {
     setPaginaActual(1);
   }, [filtroCliente, filtroEstado]);
 
   // ============================================================
-  // 🔹 Añadir productos al pedido
+  // ðŸ”¹ AÃ±adir productos al pedido
   // ============================================================
   const agregarProducto = () =>
     setProductosPedido((prev) => [
@@ -221,8 +223,8 @@ export default function Pedidos() {
 
   const eliminarProducto = (i) => {
     const prod = buscarProducto(productosPedido[i]?.id_producto);
-    const nombre = prod ? prod.nombre_producto : `Línea ${i + 1}`;
-    if (window.confirm(`¿Desea eliminar "${nombre}" del pedido?`)) {
+    const nombre = prod ? prod.nombre_producto : `LÃ­nea ${i + 1}`;
+    if (window.confirm(`Â¿Desea eliminar "${nombre}" del pedido?`)) {
       setProductosPedido((prev) => prev.filter((_, idx) => idx !== i));
     }
   };
@@ -234,7 +236,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 🔹 Validaciones
+  // ðŸ”¹ Validaciones
   // ============================================================
   const validarPedido = () => {
     if (!idCliente) {
@@ -251,9 +253,19 @@ export default function Pedidos() {
       return false;
     }
 
+    const hoy = new Date().toISOString().split("T")[0];
+    if (fechaReserva < hoy) {
+      toast({
+        title: "Fecha invalida",
+        description: "La fecha de reserva no puede ser anterior a hoy.",
+        status: "error",
+      });
+      return false;
+    }
+
     if (new Date(fechaEntrega) < new Date(fechaReserva)) {
       toast({
-        title: "Fechas inválidas",
+        title: "Fechas invalidas",
         description: "La entrega no puede ser antes de la reserva.",
         status: "error",
       });
@@ -263,6 +275,17 @@ export default function Pedidos() {
     if (productosPedido.length === 0) {
       toast({
         title: "Debe agregar productos",
+        status: "warning",
+      });
+      return false;
+    }
+
+    const ids = productosPedido.map((p) => String(p.id_producto || ""));
+    const repetidos = ids.filter((id, index) => id && ids.indexOf(id) !== index);
+    if (repetidos.length > 0) {
+      toast({
+        title: "Productos repetidos",
+        description: "No agregue el mismo producto mas de una vez en el pedido.",
         status: "warning",
       });
       return false;
@@ -284,7 +307,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 🔹 Guardar pedido
+  // ðŸ”¹ Guardar pedido
   // ============================================================
   const guardarPedido = async () => {
     try {
@@ -318,7 +341,7 @@ export default function Pedidos() {
       cancelarEdicion();
       cargarCatalogos();
     } catch (err) {
-      console.error("❌ Error al guardar:", err);
+      console.error("âŒ Error al guardar:", err);
       toast({
         title: "Error guardando pedido",
         description: err.response?.data?.error || err.message,
@@ -330,7 +353,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 🔹 Cargar pedido para edición
+  // ðŸ”¹ Cargar pedido para ediciÃ³n
   // ============================================================
   const seleccionarPedido = async (pedido) => {
     try {
@@ -359,7 +382,7 @@ export default function Pedidos() {
       // Scroll al formulario
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
-      console.error("❌ Error al cargar pedido:", err);
+      console.error("âŒ Error al cargar pedido:", err);
       toast({
         title: "Error cargando pedido",
         description: err.message,
@@ -380,7 +403,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 🔹 Eliminar pedido
+  // ðŸ”¹ Eliminar pedido
   // ============================================================
   const confirmarEliminar = (pedido) => {
     setPedidoAEliminar(pedido);
@@ -396,7 +419,7 @@ export default function Pedidos() {
       onClose();
       cargarCatalogos();
     } catch (err) {
-      console.error("❌ Error al eliminar pedido:", err);
+      console.error("âŒ Error al eliminar pedido:", err);
       toast({
         title: "Error al eliminar",
         description: err.message,
@@ -406,7 +429,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 📄 Exportación individual (per-row) — sin cambios
+  // ðŸ“„ ExportaciÃ³n individual (per-row) â€” sin cambios
   // ============================================================
   const exportarPDFIndividual = async (pedido) => {
     try {
@@ -451,16 +474,16 @@ export default function Pedidos() {
       wb.created = new Date();
       const ws = wb.addWorksheet(`Pedido_${pedido.id_pedido}`);
 
-      // Título profesional
+      // TÃ­tulo profesional
       ws.mergeCells("A1:E1");
       const titleCell = ws.getCell("A1");
-      titleCell.value = `Detalle de Pedido #${pedido.id_pedido} — Extractus`;
+      titleCell.value = `Detalle de Pedido #${pedido.id_pedido} â€” Extractus`;
       titleCell.font = { bold: true, size: 14, color: { argb: "FF008080" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells("A2:E2");
       const infoCell = ws.getCell("A2");
-      infoCell.value = `Cliente: ${pedido.nombre_cliente || "—"}  |  Generado: ${new Date().toLocaleString()}`;
+      infoCell.value = `Cliente: ${pedido.nombre_cliente || "â€”"}  |  Generado: ${formatNow()}`;
       infoCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       infoCell.alignment = { horizontal: "center" };
 
@@ -501,7 +524,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 🔧 Helpers de exportación masiva
+  // ðŸ”§ Helpers de exportaciÃ³n masiva
   // ============================================================
   const buildFilterText = (f = {}) => {
     const parts = [];
@@ -548,7 +571,7 @@ export default function Pedidos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF masivo — Estilo profesional
+  // ðŸ“¤ Exportar PDF masivo â€” Estilo profesional
   // ============================================================
   const exportarPDFMasivo = async (filters = {}) => {
     try {
@@ -575,7 +598,7 @@ export default function Pedidos() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
       doc.setFontSize(9);
       doc.setTextColor(120);
@@ -588,7 +611,7 @@ export default function Pedidos() {
       const tableData = rows.map(p => [
         p.id_pedido,
         p.nombre_cliente || "",
-        p.creado_por || "—",
+        p.creado_por || "â€”",
         p.fecha_reserva?.substring(0, 10) || "",
         p.fecha_entrega?.substring(0, 10) || "",
         p.estado_pedido || "",
@@ -605,7 +628,7 @@ export default function Pedidos() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
@@ -632,7 +655,7 @@ export default function Pedidos() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel masivo — Estilo profesional
+  // ðŸ“Š Exportar Excel masivo â€” Estilo profesional
   // ============================================================
   const exportarExcelMasivo = async (filters = {}) => {
     try {
@@ -650,13 +673,13 @@ export default function Pedidos() {
 
       ws.mergeCells("A1:G1");
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Pedidos — Extractus";
+      titleCell.value = "Reporte de Pedidos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF008080" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells("A2:G2");
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -685,7 +708,7 @@ export default function Pedidos() {
         const values = [
           p.id_pedido,
           p.nombre_cliente || "",
-          p.creado_por || "—",
+          p.creado_por || "â€”",
           p.fecha_reserva?.substring(0, 10) || "",
           p.fecha_entrega?.substring(0, 10) || "",
           p.estado_pedido || "",
@@ -744,7 +767,7 @@ export default function Pedidos() {
     );
 
   // ============================================================
-  // 🎨 UI PRINCIPAL
+  // ðŸŽ¨ UI PRINCIPAL
   // ============================================================
   return (
     <Box bg={bgMain} minH="100vh" color={textColor}>
@@ -766,7 +789,7 @@ export default function Pedidos() {
               onClick={() => navigate("/app/ventas")}
             />
           </Tooltip>
-          <Heading size="md">📦 Gestión de Pedidos</Heading>
+          <Heading size="md">Gestión de Pedidos</Heading>
         </HStack>
 
         <HStack spacing={3}>
@@ -791,7 +814,7 @@ export default function Pedidos() {
       <Box p={6}>
         <Box bg={bgCard} p={6} borderRadius="2xl" boxShadow={shadow} mb={10}>
           <Heading size="md" mb={4} color="teal.400">
-            {editando ? `✏️ Editar Pedido #${pedidoSeleccionado?.id_pedido}` : "🆕 Nuevo Pedido"}
+            {editando ? `Editar Pedido #${pedidoSeleccionado?.id_pedido}` : "Nuevo Pedido"}
           </Heading>
 
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={4}>
@@ -832,7 +855,7 @@ export default function Pedidos() {
               <Input
                 type="date"
                 value={fechaEntrega}
-                min={fechaReserva} // Validación nativa extra
+                min={fechaReserva} // ValidaciÃ³n nativa extra
                 onChange={(e) => setFechaEntrega(e.target.value)}
                 bg={inputBg}
                 size="sm"
@@ -847,14 +870,18 @@ export default function Pedidos() {
               <Textarea
                 placeholder="Observaciones (opcional)"
                 value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
+                onChange={(e) => setObservaciones(e.target.value.slice(0, MAX_TEXTO_OBSERVACIONES))}
                 bg={inputBg}
                 size="sm"
                 rows={2}
+                maxLength={MAX_TEXTO_OBSERVACIONES}
               />
+              <Text fontSize="xs" color={labelColor} textAlign="right" mt={1}>
+                {observaciones.length}/{MAX_TEXTO_OBSERVACIONES}
+              </Text>
             </FormControl>
 
-            {/* Estado — solo visible al editar */}
+            {/* Estado â€” solo visible al editar */}
             {editando && (
               <FormControl>
                 <FormLabel fontSize="xs" color="gray.500" mb={1}>Estado del Pedido</FormLabel>
@@ -920,7 +947,7 @@ export default function Pedidos() {
                 {productosPedido.length === 0 ? (
                   <Tr>
                     <Td colSpan={5} textAlign="center" py={6} color={emptyTextColor}>
-                      Sin productos — haz clic en "Agregar Producto"
+                      Sin productos â€” haz clic en "Agregar Producto"
                     </Td>
                   </Tr>
                 ) : (
@@ -973,7 +1000,7 @@ export default function Pedidos() {
 
                         {/* Precio */}
                         <Td textAlign="center">
-                          {prod ? formatearL(prod.precio_unitario) : "—"}
+                          {prod ? formatearL(prod.precio_unitario) : "â€”"}
                         </Td>
 
                         {/* Subtotal */}
@@ -983,7 +1010,7 @@ export default function Pedidos() {
                               Number(prod.precio_unitario) *
                               Number(p.cantidad || 0)
                             )
-                            : "—"}
+                            : "â€”"}
                         </Td>
 
                         {/* Acciones */}
@@ -1126,7 +1153,7 @@ export default function Pedidos() {
                     <Td colSpan={esAdmin ? 8 : 7} textAlign="center" py={10} color={emptyTextColor}>
                       {filtroCliente || filtroEstado
                         ? "No se encontraron pedidos con los filtros aplicados."
-                        : "No hay pedidos registrados aún."}
+                        : "No hay pedidos registrados aÃºn."}
                     </Td>
                   </Tr>
                 ) : (
@@ -1136,7 +1163,7 @@ export default function Pedidos() {
                       <Td>{p.nombre_cliente}</Td>
                       {esAdmin && (
                         <Td fontSize="xs" color="gray.500">
-                          {p.creado_por || "—"}
+                          {p.creado_por || "â€”"}
                         </Td>
                       )}
                       <Td>{p.fecha_reserva?.substring(0, 10)}</Td>
@@ -1203,12 +1230,12 @@ export default function Pedidos() {
             </Table>
           </Box>
 
-          {/* Paginación */}
+          {/* PaginaciÃ³n */}
           {totalPaginas > 1 && (
             <Flex justify="space-between" align="center" mt={4}>
               <Text fontSize="sm" color="gray.500">
                 Mostrando {Math.min((paginaActual - 1) * ITEMS_PER_PAGE + 1, pedidosFiltrados.length)}
-                –{Math.min(paginaActual * ITEMS_PER_PAGE, pedidosFiltrados.length)} de {pedidosFiltrados.length} pedidos
+                â€“{Math.min(paginaActual * ITEMS_PER_PAGE, pedidosFiltrados.length)} de {pedidosFiltrados.length} pedidos
               </Text>
               <HStack spacing={2}>
                 <IconButton
@@ -1216,7 +1243,7 @@ export default function Pedidos() {
                   size="sm"
                   isDisabled={paginaActual === 1}
                   onClick={() => setPaginaActual((p) => p - 1)}
-                  aria-label="Página anterior"
+                  aria-label="PÃ¡gina anterior"
                 />
                 {Array.from({ length: totalPaginas }, (_, i) => i + 1)
                   .filter((n) => n === 1 || n === totalPaginas || Math.abs(n - paginaActual) <= 1)
@@ -1227,7 +1254,7 @@ export default function Pedidos() {
                   }, [])
                   .map((item, idx) =>
                     item === "..." ? (
-                      <Text key={`dots-${idx}`} px={2} color="gray.400">…</Text>
+                      <Text key={`dots-${idx}`} px={2} color="gray.400">â€¦</Text>
                     ) : (
                       <Button
                         key={item}
@@ -1245,7 +1272,7 @@ export default function Pedidos() {
                   size="sm"
                   isDisabled={paginaActual === totalPaginas}
                   onClick={() => setPaginaActual((p) => p + 1)}
-                  aria-label="Página siguiente"
+                  aria-label="PÃ¡gina siguiente"
                 />
               </HStack>
             </Flex>
@@ -1266,8 +1293,8 @@ export default function Pedidos() {
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              ¿Seguro que deseas eliminar el pedido #
-              {pedidoAEliminar?.id_pedido}? Esta acción no se puede deshacer.
+              Â¿Seguro que deseas eliminar el pedido #
+              {pedidoAEliminar?.id_pedido}? Esta acciÃ³n no se puede deshacer.
             </AlertDialogBody>
 
             <AlertDialogFooter>
@@ -1282,7 +1309,7 @@ export default function Pedidos() {
         </AlertDialogOverlay>
       </AlertDialog>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -1296,20 +1323,20 @@ export default function Pedidos() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Sin filtros se exportarán todos los pedidos.
+              Sin filtros se exportarÃ¡n todos los pedidos.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={e => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color="teal.400">Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color="teal.400">Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por cliente</FormLabel>
@@ -1367,3 +1394,4 @@ export default function Pedidos() {
     </Box>
   );
 }
+

@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Seguridad/Roles.js
-// ✅ Versión con dashboard, export modal PDF/Excel y diseño moderno
+﻿// ============================================================
+// ðŸ“ src/components/Seguridad/Roles.js
+// âœ… VersiÃ³n con dashboard, export modal PDF/Excel y diseÃ±o moderno
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -44,21 +44,22 @@ import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "./CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre Rol" },
-  { key: "descripcion", label: "Descripción" },
+  { key: "descripcion", label: "DescripciÃ³n" },
   { key: "accesos", label: "Accesos" },
 ];
 
@@ -66,7 +67,7 @@ const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
 export default function Roles() {
   // ============================================================
-  // ✅ Paleta de colores (modo claro/oscuro)
+  // âœ… Paleta de colores (modo claro/oscuro)
   // ============================================================
   const accent = useColorModeValue("#0D9488", "#2DD4BF");
   const cardBg = useColorModeValue("#FFFFFF", "#1E293B");
@@ -80,7 +81,7 @@ export default function Roles() {
   const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // ✅ Estados
+  // âœ… Estados
   // ============================================================
   const toast = useToast();
   const navigate = useNavigate();
@@ -88,7 +89,7 @@ export default function Roles() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -105,11 +106,11 @@ export default function Roles() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // ✅ Accesos disponibles
+  // âœ… Accesos disponibles
   // ============================================================
   const opcionesAccesos = [
     "Ventas y Reservas",
-    "Producción",
+    "ProducciÃ³n",
     "Inventarios",
     "Entregas",
     "Contabilidad",
@@ -120,7 +121,7 @@ export default function Roles() {
   ];
 
   // ============================================================
-  // ✅ Cargar Roles
+  // âœ… Cargar Roles
   // ============================================================
   const cargarRoles = useCallback(async () => {
     try {
@@ -156,7 +157,7 @@ export default function Roles() {
   }, [cargarRoles]);
 
   // ============================================================
-  // ✅ Dashboard stats
+  // âœ… Dashboard stats
   // ============================================================
   const totalRoles = data.length;
   const rolesFullAccess = data.filter((r) =>
@@ -167,7 +168,7 @@ export default function Roles() {
   ).length;
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -213,7 +214,7 @@ export default function Roles() {
   };
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -241,7 +242,7 @@ export default function Roles() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
       doc.setFontSize(9);
       doc.setTextColor(120);
@@ -272,7 +273,7 @@ export default function Roles() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
@@ -295,7 +296,7 @@ export default function Roles() {
       doc.save(`Roles_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -303,7 +304,7 @@ export default function Roles() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -323,7 +324,7 @@ export default function Roles() {
       const allCols = [
         { key: "id", header: "ID", width: 8, extract: (r) => r.id_rol },
         { key: "nombre", header: "Nombre Rol", width: 22, extract: (r) => r.nombre_rol || "" },
-        { key: "descripcion", header: "Descripción", width: 35, extract: (r) => r.descripcion || "" },
+        { key: "descripcion", header: "DescripciÃ³n", width: 35, extract: (r) => r.descripcion || "" },
         { key: "accesos", header: "Accesos", width: 40, extract: (r) => getAccesosStr(r) },
       ];
       const columns = allCols.filter((c) => selectedFields.includes(c.key));
@@ -331,13 +332,13 @@ export default function Roles() {
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Roles — Extractus";
+      titleCell.value = "Reporte de Roles â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -376,7 +377,7 @@ export default function Roles() {
       saveAs(new Blob([buffer]), `Roles_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -384,16 +385,16 @@ export default function Roles() {
   };
 
   // ============================================================
-  // ✅ Funciones de validación y sanitización
+  // âœ… Funciones de validaciÃ³n y sanitizaciÃ³n
   // ============================================================
   const sanitizeTexto = (valor) => {
     if (!valor) return "";
-    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
+    return valor.replace(/[^a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]/g, "");
   };
 
   const validarNombreRol = (v) => {
     if (!v || v.trim() === "") return "El nombre del rol es obligatorio.";
-    const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+    const regex = /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]+$/;
     if (!regex.test(v)) return "Solo se permiten letras y espacios.";
     return null;
   };
@@ -404,7 +405,7 @@ export default function Roles() {
   };
 
   // ============================================================
-  // ✅ Campos del CRUD
+  // âœ… Campos del CRUD
   // ============================================================
   const fields = [
     {
@@ -413,25 +414,52 @@ export default function Roles() {
       validate: validarNombreRol,
       sanitize: sanitizeTexto,
     },
-    { name: "descripcion", label: "Descripción", type: "textarea" },
+    { name: "descripcion", label: "DescripciÃ³n", type: "textarea" },
     {
       name: "accesos",
       label: "Accesos",
       type: "custom",
       validate: validarAccesos,
       render: (value, onChange) => (
-        <CheckboxGroup
-          value={Array.isArray(value) ? value : []}
-          onChange={(val) => onChange(val)}
-        >
-          <SimpleGrid columns={[2, 2]} spacing={2} mt={2}>
-            {opcionesAccesos.map((acc) => (
-              <Checkbox key={acc} value={acc}>
-                {acc}
-              </Checkbox>
-            ))}
-          </SimpleGrid>
-        </CheckboxGroup>
+        <>
+          <Flex justify="space-between" align="center" mb={2} wrap="wrap" gap={2}>
+            <HStack spacing={2}>
+              <Badge colorScheme="teal" borderRadius="full">
+                {(Array.isArray(value) ? value : []).length} seleccionados
+              </Badge>
+            </HStack>
+            <HStack spacing={2}>
+              <Button
+                size="xs"
+                variant="outline"
+                colorScheme="teal"
+                onClick={() => onChange(opcionesAccesos)}
+              >
+                Seleccionar todos
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="gray"
+                onClick={() => onChange([])}
+              >
+                Limpiar
+              </Button>
+            </HStack>
+          </Flex>
+          <CheckboxGroup
+            value={Array.isArray(value) ? value : []}
+            onChange={(val) => onChange(val)}
+          >
+            <SimpleGrid columns={[2, 2]} spacing={2} mt={2}>
+              {opcionesAccesos.map((acc) => (
+                <Checkbox key={acc} value={acc}>
+                  {acc}
+                </Checkbox>
+              ))}
+            </SimpleGrid>
+          </CheckboxGroup>
+        </>
       ),
     },
   ];
@@ -439,7 +467,7 @@ export default function Roles() {
   const extractors = {
     "ID Rol": (r) => r.id_rol,
     "Nombre Rol": (r) => r.nombre_rol,
-    "Descripción": (r) => r.descripcion || "-",
+    "DescripciÃ³n": (r) => r.descripcion || "-",
     "Accesos": (r) =>
       Array.isArray(r.accesos)
         ? r.accesos.join(", ")
@@ -449,7 +477,7 @@ export default function Roles() {
   };
 
   // ============================================================
-  // ✅ Loader
+  // âœ… Loader
   // ============================================================
   if (loading) {
     return (
@@ -460,12 +488,12 @@ export default function Roles() {
   }
 
   // ============================================================
-  // ✅ Render Final
+  // âœ… Render Final
   // ============================================================
   return (
     <Box p={4}>
-      {/* 🔙 Botón Atrás */}
-      <Tooltip label="Volver al módulo Seguridad" placement="bottom-start">
+      {/* ðŸ”™ BotÃ³n AtrÃ¡s */}
+      <Tooltip label="Volver al mÃ³dulo Seguridad" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
           bg={btnBackBg}
@@ -479,7 +507,7 @@ export default function Roles() {
         </Button>
       </Tooltip>
 
-      {/* 🏷️ Título + Botón Exportar */}
+      {/* ðŸ·ï¸ TÃ­tulo + BotÃ³n Exportar */}
       <Flex justify="space-between" align="center" mb={3}>
         <Heading size="lg" color={accent}>
           Roles
@@ -502,7 +530,7 @@ export default function Roles() {
 
       <Divider mb={4} borderColor={borderClr} />
 
-      {/* ✅ DASHBOARD */}
+      {/* âœ… DASHBOARD */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
         {/* Total */}
         <Box
@@ -560,7 +588,7 @@ export default function Roles() {
         </Box>
       </SimpleGrid>
 
-      {/* ✅ TABLA CRUD */}
+      {/* âœ… TABLA CRUD */}
       <Box
         bg={cardBg}
         p={3}
@@ -570,7 +598,7 @@ export default function Roles() {
       >
         <CrudTabla
           title="Roles"
-          columns={["ID Rol", "Nombre Rol", "Descripción", "Accesos"]}
+          columns={["ID Rol", "Nombre Rol", "DescripciÃ³n", "Accesos"]}
           extractors={extractors}
           fields={fields}
           idKey="id_rol"
@@ -584,7 +612,7 @@ export default function Roles() {
         />
       </Box>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -598,20 +626,20 @@ export default function Roles() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los roles.
+              Si no aplicas filtros, se exportarÃ¡n todos los roles.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={inputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre de rol</FormLabel>
@@ -626,7 +654,7 @@ export default function Roles() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -692,3 +720,4 @@ export default function Roles() {
     </Box>
   );
 }
+

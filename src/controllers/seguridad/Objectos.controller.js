@@ -118,6 +118,44 @@ exports.getObjetoById = async (req, res) => {
 };
 
 /* ============================================================
+   ðŸ”¹ GET dependencias: permisos asociados a un objeto
+   ============================================================ */
+exports.getObjetoDependencias = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const objetoRes = await pool.query(
+      "SELECT id_objeto, nombre_objeto FROM seguridad.tbl_objetos WHERE id_objeto = $1;",
+      [id]
+    );
+
+    if (objetoRes.rows.length === 0) {
+      return res.status(404).json({ error: "Objeto no encontrado" });
+    }
+
+    const permisosRes = await pool.query(
+      `SELECT p.id_permiso, r.nombre_rol
+       FROM seguridad.tbl_permisos p
+       LEFT JOIN seguridad.tbl_roles r ON p.id_rol = r.id_rol
+       WHERE p.id_objeto = $1
+       ORDER BY p.id_permiso;`,
+      [id]
+    );
+
+    return res.json({
+      id_objeto: objetoRes.rows[0].id_objeto,
+      nombre_objeto: objetoRes.rows[0].nombre_objeto,
+      permisos: permisosRes.rows,
+      totalPermisos: permisosRes.rows.length,
+      puedeEliminar: permisosRes.rows.length === 0,
+    });
+  } catch (err) {
+    console.error("[API] ❌ Error obteniendo dependencias del objeto:", err);
+    return res.status(500).json({ error: "Error al obtener dependencias del objeto" });
+  }
+};
+
+/* ============================================================
    🔹 POST: insertar nuevo objeto
    ============================================================ */
 exports.insertObjeto = async (req, res) => {

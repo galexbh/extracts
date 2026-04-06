@@ -3,6 +3,7 @@
 // ============================================================
 
 const { pool } = require("../../db");
+const MAX_TEXTO_COMENTARIOS = 120;
 
 // ============================================================
 // 1️⃣ LISTAR PEDIDOS PENDIENTES PARA PRODUCCIÓN
@@ -203,6 +204,12 @@ exports.registrarInsumosUsados = async (req, res) => {
   const { insumos, comentarios } = req.body;
 
   const usuario = req.headers["x-user-email"] || "Sistema";
+
+  if (comentarios && String(comentarios).trim().length > MAX_TEXTO_COMENTARIOS) {
+    return res.status(400).json({
+      error: `Los comentarios no pueden exceder ${MAX_TEXTO_COMENTARIOS} caracteres`,
+    });
+  }
 
   if (!Array.isArray(insumos) || insumos.length === 0) {
     return res.status(400).json({ error: "Insumos vacíos" });

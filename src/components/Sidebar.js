@@ -87,24 +87,30 @@ export default function Sidebar({ isMobile, isOpen, onClose }) {
   useEffect(() => {
     const fetchAccess = async () => {
       try {
-        const email = localStorage.getItem("userEmail");
-        if (!email) return;
+        const response = await api.get(`/seguridad/accesos`);
+        const rawAccess = response.data?.accesos;
 
-        const response = await api.get(`/seguridad/usuarios`);
-        const usuario = response.data.find((u) => {
-          const correoBD = u.correo || u.username;
-          return correoBD?.toLowerCase() === email.toLowerCase();
-        });
-
-        if (!usuario) return;
-
-        if (Array.isArray(usuario.accesos)) {
-          if (usuario.accesos.includes("Todos")) {
-            setUserAccess(menuItems.map((m) => m.label));
-          } else {
-            setUserAccess(usuario.accesos);
+        let accesos = [];
+        if (Array.isArray(rawAccess)) {
+          accesos = rawAccess;
+        } else if (typeof rawAccess === "string") {
+          try {
+            accesos = JSON.parse(rawAccess);
+          } catch {
+            accesos = rawAccess
+              .replace(/[\[\]"]/g, "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
           }
         }
+
+        if (accesos.includes("Todos")) {
+          setUserAccess(menuItems.map((m) => m.label));
+          return;
+        }
+
+        setUserAccess(accesos);
       } catch (err) {
         console.error("❌ Error cargando accesos:", err);
       } finally {

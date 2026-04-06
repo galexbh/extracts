@@ -9,6 +9,7 @@ import {
   Flex,
   Button,
   FormControl,
+  FormHelperText,
   Input,
   InputGroup,
   InputLeftElement,
@@ -43,6 +44,7 @@ import { traducirErrorFirebase } from "../../utils/firebaseErrors";
 import { API_URL } from "../../config";
 
 export default function Login() {
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const [mode, setMode] = useState("login");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
@@ -50,6 +52,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [error, setError] = useState("");
+  const [loginInfo, setLoginInfo] = useState("");
   const [emailRecuperar, setEmailRecuperar] = useState("");
   const [showMfaModal, setShowMfaModal] = useState(false);
   const [qr, setQr] = useState(null);
@@ -77,6 +80,44 @@ export default function Login() {
   }, []);
 
   const safeEmail = (s) => (s || "").trim().toLowerCase();
+  const isValidEmail = (value) => EMAIL_REGEX.test(safeEmail(value));
+  const showEmailHint = user.trim().length > 0 && !isValidEmail(user);
+  const formatLockTime = (seconds = 0) => {
+    const total = Math.max(0, Number(seconds) || 0);
+    const min = Math.floor(total / 60);
+    const sec = total % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  };
+
+  const fetchJson = async (url, options = {}) => {
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  };
+
+  const consultarEstadoLogin = async (email) =>
+    fetchJson(`${API_URL}/auth/login-status?email=${encodeURIComponent(email)}`);
+
+  const registrarLoginFallido = async (email, reason) =>
+    fetchJson(`${API_URL}/auth/login-failed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, reason }),
+    });
+
+  const resetearIntentosLogin = async (email) =>
+    fetchJson(`${API_URL}/auth/login-reset-attempts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+  const completarLogin = async (email) =>
+    fetchJson(`${API_URL}/auth/login-complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
 
   const showErr = (e, fallback) => {
     const msg = traducirErrorFirebase(e?.code, e?.message) || fallback || "Error desconocido";
@@ -91,33 +132,65 @@ export default function Login() {
   };
 
   /* =====================================================
-     1️⃣ LOGIN → VERIFICAR ESTADO MFA Y MOSTRAR CÓDIGO
+     1. LOGIN -> VERIFICAR ESTADO MFA Y MOSTRAR CODIGO
      ===================================================== */
+
   const handleLogin = async () => {
     setError("");
+    setLoginInfo("");
+
+    if (!user.trim() || !pass) {
+      setError("Ingresa correo y contraseña.");
+      return;
+    }
+
     const email = safeEmail(user);
-    if (!email || !pass) return setError("Ingresa correo y contraseña.");
+    if (!isValidEmail(email)) {
+      setError("Ingresa un correo con formato válido, por ejemplo usuario@dominio.com.");
+      return;
+    }
 
     try {
       setLoadingLogin(true);
-      // 🔥 Persistencia LOCAL siempre
+
+      const estadoRes = await consultarEstadoLogin(email);
+      const estadoData = estadoRes.data || {};
+
+      if (estadoData.blocked) {
+        setError("Tu cuenta está bloqueada temporalmente por intentos fallidos.");
+        setLoginInfo(`Intenta nuevamente en ${formatLockTime(estadoData.lockRemainingSeconds)}.`);
+        return;
+      }
+
+      if (estadoData.exists && !estadoData.permitido) {
+        const nombreEstado = estadoData.estado || "Inactivo";
+        const mensajes = {
+          inactivo: "Tu cuenta está inactiva. Contacta al administrador.",
+          bloqueado: "Tu cuenta está bloqueada. Contacta al administrador.",
+        };
+        setError(
+          mensajes[String(nombreEstado).toLowerCase()] ||
+          `Tu cuenta se encuentra en estado "${nombreEstado}". Contacta al administrador.`
+        );
+        return;
+      }
+
       await setPersistence(auth, browserLocalPersistence);
 
       const cred = await signInWithEmailAndPassword(auth, email, pass);
+      await resetearIntentosLogin(email);
+
       const idToken = await cred.user.getIdToken();
       const userUid = cred.user.uid;
       setUid(userUid);
 
-      // 🔹 Limpiar valores antiguos sin borrar todo el almacenamiento
       localStorage.removeItem("uid");
       localStorage.removeItem("userEmail");
       sessionStorage.clear();
 
-      // ✅ Guardar UID y correo (para Sidebar y backend)
       localStorage.setItem("uid", userUid);
       localStorage.setItem("userEmail", email);
 
-      // 💾 Recordar dispositivo: guardar o limpiar solo el email
       if (rememberMe) {
         localStorage.setItem("rememberMe", "true");
         localStorage.setItem("rememberEmail", email);
@@ -126,38 +199,30 @@ export default function Login() {
         localStorage.removeItem("rememberEmail");
       }
 
-      // Token: en localStorage si recuerda, en sessionStorage si no
       const storage = rememberMe ? localStorage : sessionStorage;
       storage.setItem("idToken", idToken);
+      localStorage.setItem("usuario", JSON.stringify({ id_usuario: userUid, correo: email }));
 
-      // ✅ Guardar datos básicos del usuario
-      localStorage.setItem(
-        "usuario",
-        JSON.stringify({ id_usuario: userUid, correo: email })
+      const estadoFinalRes = await fetch(
+        `${API_URL}/seguridad/usuarios/estado-login?uid=${encodeURIComponent(userUid)}&email=${encodeURIComponent(email)}`
       );
+      const estadoFinalData = await estadoFinalRes.json();
 
-      // 🔒 Verificar estado del usuario en la base de datos
-      const estadoRes = await fetch(
-        `${API_URL}/seguridad/usuarios/estado-login?uid=${encodeURIComponent(userUid)}`
-      );
-      const estadoData = await estadoRes.json();
-
-      if (!estadoData.permitido) {
-        // Cerrar sesión de Firebase inmediatamente
+      if (!estadoFinalData.permitido) {
         await signOut(auth);
-        // Limpiar storage (respetando rememberMe)
         const keep = ["rememberMe", "rememberEmail", "rememberPass"];
         Object.keys(localStorage).forEach((k) => {
           if (!keep.includes(k)) localStorage.removeItem(k);
         });
         sessionStorage.clear();
 
-        const nombreEstado = estadoData.estado || "Inactivo";
+        const nombreEstado = estadoFinalData.estado || "Inactivo";
         const mensajes = {
           inactivo: "Tu cuenta está inactiva. Contacta al administrador.",
           bloqueado: "Tu cuenta está bloqueada. Contacta al administrador.",
         };
-        const msg = mensajes[nombreEstado.toLowerCase()] ||
+        const msg =
+          mensajes[String(nombreEstado).toLowerCase()] ||
           `Tu cuenta se encuentra en estado "${nombreEstado}". Contacta al administrador.`;
 
         setError(msg);
@@ -165,44 +230,66 @@ export default function Login() {
         return;
       }
 
-      // 🔹 Verificar si el usuario ya tiene MFA activado
-      const statusRes = await fetch(
-        `${API_URL}/mfa/status?uid=${encodeURIComponent(userUid)}`
-      );
+      const statusRes = await fetch(`${API_URL}/mfa/status?uid=${encodeURIComponent(userUid)}`);
       const status = await statusRes.json();
 
       if (status.enrolled) {
-        console.log("🟢 Usuario con MFA activo");
         setQr(null);
-        setSecret(null); // Sin secreto temporal para usuarios ya inscritos
+        setSecret(null);
         setShowMfaModal(true);
       } else {
-        console.log("🟡 Usuario sin MFA → generando QR...");
         const data = await mfaGenerate(userUid, email);
         if (!data.qr) throw new Error("No se pudo generar el QR temporal.");
         setQr(data.qr);
-        setSecret(data.secret); // 🔐 Guardar secreto temporal para verificación
-        console.log("🔑 Secreto temporal guardado, esperando verificación...");
+        setSecret(data.secret);
         setShowMfaModal(true);
       }
     } catch (e) {
+      const errorCode = e?.code || "";
+      if (
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/wrong-password" ||
+        errorCode === "auth/user-not-found" ||
+        errorCode === "auth/invalid-login-credentials"
+      ) {
+        const intentoRes = await registrarLoginFallido(email, errorCode);
+        const intentoData = intentoRes.data || {};
+
+        if (intentoData.blocked) {
+          setError("Tu cuenta está bloqueada temporalmente por intentos fallidos.");
+          setLoginInfo(`Intenta nuevamente en ${formatLockTime(intentoData.lockRemainingSeconds)}.`);
+          return;
+        }
+
+        setError("Correo o contraseña incorrectos.");
+        if (typeof intentoData.attemptsRemaining === "number") {
+          setLoginInfo(`Te quedan ${intentoData.attemptsRemaining} intento(s) antes del bloqueo temporal.`);
+        }
+        return;
+      }
+
       showErr(e, "No se pudo iniciar sesión.");
     } finally {
       setLoadingLogin(false);
     }
   };
 
-  /* =====================================================
-     2️⃣ VERIFICAR CÓDIGO DE 6 DÍGITOS (GOOGLE AUTH)
-     ===================================================== */
   const handleVerifyCode = async () => {
+    const email = localStorage.getItem("userEmail") || "";
+    if (!isValidEmail(email)) {
+      return toast({
+        title: "Error",
+        description: "Ingresa un correo con formato válido, por ejemplo usuario@dominio.com.",
+        status: "error",
+      });
+    }
     try {
-      // 🔐 Pasar el secreto solo si es primera inscripción (cuando hay QR visible)
+      // Pasar el secreto solo si es primera inscripción (cuando hay QR visible)
       const data = await mfaVerify(uid, code, secret);
       if (data.success) {
-        // ✅ Obtener el rol del usuario y guardarlo para filtrado multi-usuario
+        // Obtener el rol del usuario y guardarlo para filtrado multi-usuario
         try {
-          const email = localStorage.getItem("userEmail") || "";
+          await completarLogin(email);
           const rolRes = await fetch(
             `${API_URL}/seguridad/usuarios/rol?email=${encodeURIComponent(email)}`
           );
@@ -237,7 +324,7 @@ export default function Login() {
   };
 
   /* =====================================================
-     3️⃣ RECUPERAR CONTRASEÑA
+     3. RECUPERAR CONTRASEÑA
      ===================================================== */
   const handleEnviarRecuperacion = async () => {
     const email = safeEmail(emailRecuperar || user);
@@ -306,6 +393,11 @@ export default function Login() {
             {error}
           </Text>
         )}
+        {mode === "login" && loginInfo && (
+          <Text color="orange.400" fontSize="sm" mb="2">
+            {loginInfo}
+          </Text>
+        )}
 
         {mode === "login" && (
           <form id="login-form" autoComplete="on" onSubmit={handleSubmitLogin}>
@@ -320,11 +412,17 @@ export default function Login() {
                   placeholder="correo@ejemplo.com"
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
+                  isInvalid={showEmailHint}
                   borderColor="green.400"
                   borderRadius="10px"
                   h="44px"
                 />
               </InputGroup>
+              {showEmailHint && (
+                <FormHelperText color="orange.500" mt="-2" mb="3">
+                  El correo debe incluir nombre, @, dominio y extensión. Ejemplo: usuario@dominio.com
+                </FormHelperText>
+              )}
 
               <InputGroup mb="5">
                 <InputLeftElement pointerEvents="none">

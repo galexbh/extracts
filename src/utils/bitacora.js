@@ -45,6 +45,24 @@ const sanitizeForLog = (data) => {
  */
 const registrarBitacora = async ({ id_usuario, id_objeto, tabla, accion, descripcion, detalle }) => {
   try {
+    // 🛡️ SEGURIDAD: Si id_usuario es null, buscar un respaldo para evitar error NOT NULL en DB
+    let id_final = id_usuario;
+    if (!id_final) {
+      const fallback = await pool.query(`
+        SELECT u.id_usuario 
+        FROM seguridad.tbl_usuarios u 
+        JOIN seguridad.personas p ON u.id_usuario = p.id_persona 
+        ORDER BY u.id_usuario ASC LIMIT 1
+      `);
+      id_final = fallback.rows.length > 0 ? fallback.rows[0].id_usuario : null;
+    }
+
+    // Si aún es null (tabla usuarios vacía), no podemos insertar en bitácora por restricción DB
+    if (!id_final) {
+      console.warn("[Bitácora] ⚠️ No se pudo registrar: No hay usuarios en el sistema para asociar.");
+      return;
+    }
+
     // 🔒 Sanitizar detalle para excluir campos sensibles
     let detalleJSON = null;
     if (detalle) {
@@ -64,7 +82,7 @@ const registrarBitacora = async ({ id_usuario, id_objeto, tabla, accion, descrip
       `INSERT INTO seguridad.tbl_ms_bitacora
         (id_usuario, id_objeto, tabla, accion, descripcion, detalle, fecha_evento, id_usuario_creado, fecha_creado)
        VALUES ($1, $2, $3, $4, $5, $6, NOW(), $1, NOW());`,
-      [id_usuario, id_objeto || null, tabla, accion, descripcion, detalleJSON]
+      [id_final, id_objeto || null, tabla, accion, descripcion, detalleJSON]
     );
   } catch (err) {
     console.error("[Bitácora] ❌ Error registrando:", err.message);

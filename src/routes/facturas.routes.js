@@ -17,8 +17,8 @@ const {
 // 🔹 ENDPOINTS DE FACTURAS
 // ============================================================
 
-router.get("/", listarFacturas);
-router.get("/:id", obtenerFactura);
+router.get("/", verifyPermission("Facturas", "read"), listarFacturas);
+router.get("/:id", verifyPermission("Facturas", "read"), obtenerFactura);
 router.post("/", verifyPermission("Facturas", "create"), crearFactura);
 router.put("/:id", verifyPermission("Facturas", "update"), actualizarFactura);
 router.delete("/:id", verifyPermission("Facturas", "delete"), eliminarFactura);

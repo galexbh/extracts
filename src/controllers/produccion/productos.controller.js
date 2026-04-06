@@ -4,6 +4,12 @@
 
 const { pool } = require("../../db");
 
+const MAX_DESCRIPCION_PRODUCTO = 250;
+const sanitizarDescripcion = (valor) => {
+  if (!valor) return null;
+  return String(valor).replace(/[\u0000-\u001F\u007F<>]/g, "").trim();
+};
+
 // ============================================================
 // 🔹 GET: Obtener todos los productos
 // ============================================================
@@ -79,6 +85,7 @@ exports.insertProducto = async (req, res) => {
 
     // 🔒 Validaciones y Sanitización Backend
     nombre_producto = nombre_producto ? nombre_producto.trim() : null;
+    descripcion = sanitizarDescripcion(descripcion);
     unidad_medida = unidad_medida ? unidad_medida.trim() : null;
 
     if (!nombre_producto || !unidad_medida) {
@@ -104,6 +111,12 @@ exports.insertProducto = async (req, res) => {
 
     if (Number(stock_maximo) < Number(stock_minimo)) {
       return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
+
+    if (descripcion && descripcion.length > MAX_DESCRIPCION_PRODUCTO) {
+      return res.status(400).json({
+        error: `La descripcion no puede exceder los ${MAX_DESCRIPCION_PRODUCTO} caracteres.`,
+      });
     }
 
     await client.query("BEGIN");
@@ -169,6 +182,7 @@ exports.updateProducto = async (req, res) => {
 
     // 🔒 Validaciones y Sanitización Backend
     nombre_producto = nombre_producto ? nombre_producto.trim() : null;
+    descripcion = sanitizarDescripcion(descripcion);
     unidad_medida = unidad_medida ? unidad_medida.trim() : null;
 
     if (!nombre_producto || !unidad_medida) {
@@ -194,6 +208,12 @@ exports.updateProducto = async (req, res) => {
 
     if (Number(stock_maximo) < Number(stock_minimo)) {
       return res.status(400).json({ error: "El stock máximo no puede ser menor al mínimo." });
+    }
+
+    if (descripcion && descripcion.length > MAX_DESCRIPCION_PRODUCTO) {
+      return res.status(400).json({
+        error: `La descripcion no puede exceder los ${MAX_DESCRIPCION_PRODUCTO} caracteres.`,
+      });
     }
 
     await client.query("BEGIN");

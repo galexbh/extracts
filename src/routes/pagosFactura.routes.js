@@ -5,6 +5,7 @@
 const express = require("express");
 const router = express.Router();
 const { pool } = require("../db"); 
+const verifyPermission = require("../middleware/verifyObjectPermission");
 
 const {
   listarResumenFacturasConPagos,
@@ -16,7 +17,7 @@ const {
 // ============================================================
 // 🔹 ENDPOINT FIJO — Debe ir ANTES de rutas dinámicas
 // ============================================================
-router.get("/metodos-pago", async (req, res) => {
+router.get("/metodos-pago", verifyPermission("Pagos", "read"), async (req, res) => {
   try {
     const q =
       "SELECT id_metodo_pago, nombre_metodo FROM mantenimiento.tbl_metodo_pago ORDER BY id_metodo_pago";
@@ -34,15 +35,15 @@ router.get("/metodos-pago", async (req, res) => {
 // ============================================================
 
 // Resumen tipo "reporte"
-router.get("/resumen", listarResumenFacturasConPagos);
+router.get("/resumen", verifyPermission("Pagos", "read"), listarResumenFacturasConPagos);
 
 // Detalle de pagos por factura
-router.get("/:id_factura", listarPagosPorFactura);
+router.get("/:id_factura", verifyPermission("Pagos", "read"), listarPagosPorFactura);
 
 // Crear pago
-router.post("/", crearPago);
+router.post("/", verifyPermission("Pagos", "create"), crearPago);
 
 // Eliminar pago
-router.delete("/:id_pago", eliminarPago);
+router.delete("/:id_pago", verifyPermission("Pagos", "delete"), eliminarPago);
 
 module.exports = router;

@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Ventas/Clientes.js
-// 🎯 Clientes con mini dashboard, PDF/Excel, validaciones y soporte claro/oscuro
+﻿// ============================================================
+// ðŸ“ src/components/Ventas/Clientes.js
+// ðŸŽ¯ Clientes con mini dashboard, PDF/Excel, validaciones y soporte claro/oscuro
 // ============================================================
 
 import React, {
@@ -59,27 +59,28 @@ import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "../Seguridad/CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ✅ Validaciones
+// âœ… Validaciones
 import {
   validarRequerido,
   validarTelefono,
   validarRTN,
-  validarEmail,
+  validarEmailSeguridad,
   validarLongitudMinima,
   formatearTelefono,
 } from "../../utils/validaciones";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
@@ -93,9 +94,10 @@ const EXPORT_FIELDS = [
 ];
 
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map(f => f.key);
+const MAX_NOMBRE_CLIENTE = 60;
 
 export default function Clientes() {
-  // 🎨 Colores adaptados a día/noche
+  // ðŸŽ¨ Colores adaptados a dÃ­a/noche
   const accent = useColorModeValue("#009e73", "teal.300");
   const pageBg = useColorModeValue("#f7faf8", "#020617");
   const cardBg = useColorModeValue("white", "#0b1120");
@@ -126,7 +128,7 @@ export default function Clientes() {
 );
   const [loading, setLoading] = useState(true);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -149,7 +151,7 @@ export default function Clientes() {
   const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // 🔹 Cargar clientes desde la API
+  // ðŸ”¹ Cargar clientes desde la API
   // ============================================================
   const cargarClientes = useCallback(async () => {
     try {
@@ -157,7 +159,7 @@ export default function Clientes() {
       const res = await api.get("/ventas/clientes");
       setData(res.data);
     } catch (err) {
-      console.error("❌ Error cargando clientes:", err);
+      console.error("âŒ Error cargando clientes:", err);
       toast({
         title: "Error al cargar clientes",
         description: err.message,
@@ -172,7 +174,7 @@ export default function Clientes() {
   }, [toast]);
 
   // ============================================================
-  // 🔹 Cargar tipos y estados (catálogos)
+  // ðŸ”¹ Cargar tipos y estados (catÃ¡logos)
   // ============================================================
   const cargarTiposYEstados = useCallback(async () => {
     try {
@@ -183,9 +185,9 @@ export default function Clientes() {
       setTiposCliente(tipos.data);
       setEstadosCliente(estados.data);
     } catch (err) {
-      console.error("❌ Error cargando catálogos:", err);
+      console.error("âŒ Error cargando catÃ¡logos:", err);
       toast({
-        title: "Error al cargar catálogos",
+        title: "Error al cargar catÃ¡logos",
         description: err.message,
         status: "error",
         duration: 4000,
@@ -196,14 +198,14 @@ export default function Clientes() {
   }, [toast]);
 
   // ============================================================
-  // 🔹 Carga inicial
+  // ðŸ”¹ Carga inicial
   // ============================================================
   useEffect(() => {
     Promise.all([cargarClientes(), cargarTiposYEstados()]);
   }, [cargarClientes, cargarTiposYEstados]);
 
   // ============================================================
-  // 📊 Mini dashboard (totales)
+  // ðŸ“Š Mini dashboard (totales)
   // ============================================================
   const { totalClientes, clientesActivos, clientesInactivos, clientesSuspendidos } = useMemo(() => {
     const total = data.length;
@@ -233,7 +235,7 @@ export default function Clientes() {
   }, [data]);
 
   // ============================================================
-  // 🔍 Validadores por campo
+  // ðŸ” Validadores por campo
   // ============================================================
   const validators = {
     nombre_cliente: (v) => {
@@ -241,9 +243,9 @@ export default function Clientes() {
       if (req) return req;
       if (String(v).trim().length < 3)
         return "El nombre debe tener al menos 3 caracteres.";
-      if (String(v).trim().length > 150)
-        return "El nombre no puede exceder 150 caracteres.";
-      if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(String(v)))
+      if (String(v).trim().length > MAX_NOMBRE_CLIENTE)
+        return `El nombre no puede exceder ${MAX_NOMBRE_CLIENTE} caracteres.`;
+      if (!/^[A-Za-zÃÃ‰ÃÃ“ÃšÃ‘Ã¡Ã©Ã­Ã³ÃºÃ±\s]+$/.test(String(v)))
         return "El nombre solo debe contener letras y espacios.";
       return null;
     },
@@ -252,20 +254,21 @@ export default function Clientes() {
       if (req) return req;
       const limpio = String(v).replace(/-/g, "");
       if (!/^[0-9]{13,14}$/.test(limpio))
-        return "El RTN / ID debe tener entre 13 y 14 dígitos numéricos.";
+        return "El RTN / ID debe tener entre 13 y 14 dÃ­gitos numÃ©ricos.";
       return null;
     },
     direccion: (v) =>
-      validarRequerido(v, "Dirección") ||
-      validarLongitudMinima(v, "Dirección", 5),
+      validarRequerido(v, "Direccion") ||
+      validarLongitudMinima(v, "Direccion", 5) ||
+      (String(v || "").trim().length > 250 ? "La direccion no puede exceder 250 caracteres." : null),
     telefono: (v) =>
       validarRequerido(v, "Teléfono") || validarTelefono(v),
     correo_electronico: (v) =>
-      validarRequerido(v, "Correo") || validarEmail(v),
+      validarRequerido(v, "Correo") || validarEmailSeguridad(v),
   };
 
   // ============================================================
-  // 🔹 Campos del formulario CRUD
+  // ðŸ”¹ Campos del formulario CRUD
   // ============================================================
   const fields = [
     {
@@ -275,17 +278,19 @@ export default function Clientes() {
       required: true,
       placeholderText: "Ej. Juan Perez",
       validate: validators.nombre_cliente,
-      maxLength: 150,
-      sanitize: (v) => String(v).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, "").slice(0, 150),
+      maxLength: MAX_NOMBRE_CLIENTE,
+      sanitize: (v) => String(v).replace(/[^A-Za-zÃÃ‰ÃÃ“ÃšÃ‘Ã¡Ã©Ã­Ã³ÃºÃ±\s]/g, "").slice(0, MAX_NOMBRE_CLIENTE),
+      sanitizeWarning: `Solo letras y espacios. MÃ¡ximo ${MAX_NOMBRE_CLIENTE} caracteres.`,
     },
     {
       name: "rtn",
-      label: "RTN / ID (13 o 14 dígitos)",
+      label: "RTN / ID (13 o 14 dÃ­gitos)",
       type: "text",
       required: true,
       placeholderText: "Ej. 0801199012345",
       validate: validators.rtn,
       sanitize: (v) => String(v).replace(/[^0-9-]/g, "").slice(0, 15),
+      sanitizeWarning: "Solo numeros y guiones. Usa 13 o 14 digitos.",
     },
     {
       name: "id_tipo_cliente",
@@ -305,6 +310,9 @@ export default function Clientes() {
       required: true,
       placeholderText: "Ej. Col. Kennedy, Bloque 4",
       validate: validators.direccion,
+      maxLength: 250,
+      sanitize: (v) => String(v).replace(/[^A-Za-zÃÃ‰ÃÃ“ÃšÃ¡Ã©Ã­Ã³ÃºÃ±Ã‘0-9 .,#-]/g, "").slice(0, 250),
+      sanitizeWarning: "Solo letras, numeros y . , # -. Minimo 5 y maximo 250 caracteres.",
     },
     {
       name: "telefono",
@@ -314,6 +322,8 @@ export default function Clientes() {
       placeholderText: "Ej. 9999-9999",
       validate: validators.telefono,
       sanitize: (v) => formatearTelefono(v),
+      maxLength: 9,
+      sanitizeWarning: "Solo numeros. Formato esperado: 9999-9999.",
     },
     {
       name: "correo_electronico",
@@ -322,6 +332,9 @@ export default function Clientes() {
       required: true,
       placeholderText: "Ej. correo@ejemplo.com",
       validate: validators.correo_electronico,
+      maxLength: 100,
+      sanitize: (v) => String(v || "").replace(/\s/g, "").toLowerCase().slice(0, 100),
+      sanitizeWarning: "Ingresa un correo valido como usuario@dominio.com.",
     },
     {
   name: "id_estado_cliente",
@@ -338,7 +351,7 @@ export default function Clientes() {
 
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -383,7 +396,7 @@ export default function Clientes() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF — Estilo profesional
+  // ðŸ“¤ Exportar PDF â€” Estilo profesional
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -398,35 +411,35 @@ export default function Clientes() {
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
       const pageWidth = doc.internal.pageSize.width;
 
-      // ── Logo ──
+      // â”€â”€ Logo â”€â”€
       try {
         const dataURL = await imgToDataURL(extractusLogo);
         doc.addImage(dataURL, "PNG", 40, 20, 45, 45);
       } catch (e) { /* sin logo */ }
 
-      // ── Título ──
+      // â”€â”€ TÃ­tulo â”€â”€
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.setTextColor(25, 55, 80);
       doc.text("REPORTE DE CLIENTES", pageWidth / 2, 45, { align: "center" });
 
-      // ── Fecha/hora ──
+      // â”€â”€ Fecha/hora â”€â”€
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
-      // ── Filtros ──
+      // â”€â”€ Filtros â”€â”€
       doc.setFontSize(9);
       doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
 
-      // ── Línea separadora ──
+      // â”€â”€ LÃ­nea separadora â”€â”€
       doc.setDrawColor(0, 158, 115);
       doc.setLineWidth(1);
       doc.line(40, 90, pageWidth - 40, 90);
 
-      // ── Tabla (dinámica por campos seleccionados) ──
+      // â”€â”€ Tabla (dinÃ¡mica por campos seleccionados) â”€â”€
       const fieldExtractors = {
         id: r => r.id_cliente,
         nombre: r => r.nombre_cliente,
@@ -457,11 +470,11 @@ export default function Clientes() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
-      // ── Resumen ──
+      // â”€â”€ Resumen â”€â”€
       const finalY = doc.lastAutoTable.finalY + 25;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
@@ -482,7 +495,7 @@ export default function Clientes() {
       doc.save(`Clientes_Extractus_${new Date().toISOString().split('T')[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -490,7 +503,7 @@ export default function Clientes() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel — Estilo profesional
+  // ðŸ“Š Exportar Excel â€” Estilo profesional
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -507,7 +520,7 @@ export default function Clientes() {
       wb.created = new Date();
       const ws = wb.addWorksheet("Clientes");
 
-      // ── Columnas dinámicas por campos seleccionados ──
+      // â”€â”€ Columnas dinÃ¡micas por campos seleccionados â”€â”€
       const allCols = [
         { key: "id", header: "ID", width: 8, extract: r => r.id_cliente },
         { key: "nombre", header: "Nombre", width: 25, extract: r => r.nombre_cliente },
@@ -522,16 +535,16 @@ export default function Clientes() {
       const columns = allCols.filter(c => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns.length); // A=1
 
-      // ── Título + Filtros ──
+      // â”€â”€ TÃ­tulo + Filtros â”€â”€
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Clientes — Extractus";
+      titleCell.value = "Reporte de Clientes â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -546,7 +559,7 @@ export default function Clientes() {
         cell.border = { bottom: { style: "thin", color: { argb: "FF007A5A" } } };
       });
 
-      // ── Datos ──
+      // â”€â”€ Datos â”€â”€
       rows.forEach((r, idx) => {
         const rowNum = headerRow + 1 + idx;
         columns.forEach((col, i) => {
@@ -560,7 +573,7 @@ export default function Clientes() {
         }
       });
 
-      // ── Auto-width ──
+      // â”€â”€ Auto-width â”€â”€
       columns.forEach((col, i) => {
         let maxLen = col.header.length;
         rows.forEach(r => {
@@ -574,7 +587,7 @@ export default function Clientes() {
       saveAs(new Blob([buffer]), `Clientes_Extractus_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -582,7 +595,7 @@ export default function Clientes() {
   };
 
   // ============================================================
-  // 🔹 Loader
+  // ðŸ”¹ Loader
   // ============================================================
   if (loading) {
     return (
@@ -593,7 +606,7 @@ export default function Clientes() {
   }
 
   // ============================================================
-  // 🔹 Render principal
+  // ðŸ”¹ Render principal
   // ============================================================
   return (
     <Box bg={pageBg} minH="100vh" p={4}>
@@ -620,7 +633,7 @@ export default function Clientes() {
         borderWidth="1px"
         boxShadow="md"
       >
-        {/* Encabezado con título + botones */}
+        {/* Encabezado con tÃ­tulo + botones */}
         <CardHeader pb={3}>
           <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
             <Box>
@@ -782,13 +795,21 @@ export default function Clientes() {
               onReload={cargarClientes}
               apiUrl="/ventas/clientes"
               validators={validators}
-              showReloadButton={false} // 👈 sin botón Refrescar al lado de Agregar
+              showReloadButton={false}
+              addButtonLabel="Agregar cliente"
+              addButtonProps={{
+                colorScheme: "teal",
+                borderRadius: "full",
+                px: 5,
+                boxShadow: "sm",
+                _hover: { transform: "translateY(-1px)", boxShadow: "md" },
+              }}
             />
           </Box>
         </CardBody>
       </Card>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -802,20 +823,20 @@ export default function Clientes() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los clientes.
+              Si no aplicas filtros, se exportarÃ¡n todos los clientes.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={e => setExportFormat(e.target.value)} bg={inputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
@@ -850,7 +871,7 @@ export default function Clientes() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -918,3 +939,4 @@ export default function Clientes() {
     </Box>
   );
 }
+

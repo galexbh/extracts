@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Seguridad/Permisos.js
-// ✅ Versión con dashboard, export modal PDF/Excel y diseño uniforme
+﻿// ============================================================
+// ðŸ“ src/components/Seguridad/Permisos.js
+// âœ… VersiÃ³n con dashboard, export modal PDF/Excel y diseÃ±o uniforme
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -41,17 +41,18 @@ import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "./CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "rol", label: "Rol" },
@@ -66,7 +67,7 @@ const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
 export default function Permisos() {
   // ============================================================
-  // ✅ Paleta de colores (modo claro/oscuro) — IGUAL que Roles/Objetos
+  // âœ… Paleta de colores (modo claro/oscuro) â€” IGUAL que Roles/Objetos
   // ============================================================
   const accent = useColorModeValue("#0D9488", "#2DD4BF");
   const cardBg = useColorModeValue("#FFFFFF", "#1E293B");
@@ -80,7 +81,7 @@ export default function Permisos() {
   const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // ✅ Estados
+  // âœ… Estados
   // ============================================================
   const toast = useToast();
   const navigate = useNavigate();
@@ -92,7 +93,7 @@ export default function Permisos() {
 
   const username = localStorage.getItem("userEmail");
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expRol, setExpRol] = useState("");
@@ -110,14 +111,14 @@ export default function Permisos() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // ✅ Cargar datos
+  // âœ… Cargar datos
   // ============================================================
   const cargarPermisos = useCallback(async () => {
     try {
       const res = await api.get("/seguridad/permisos");
       setData(res.data);
     } catch (err) {
-      console.error("❌ Error cargando permisos:", err);
+      console.error("âŒ Error cargando permisos:", err);
       toast({
         title: "Error al cargar permisos",
         description: err.message,
@@ -135,7 +136,7 @@ export default function Permisos() {
       const res = await api.get("/seguridad/roles");
       setRoles(res.data);
     } catch (error) {
-      console.error("❌ Error cargando roles:", error);
+      console.error("âŒ Error cargando roles:", error);
     }
   }, []);
 
@@ -145,7 +146,7 @@ export default function Permisos() {
       const all = Array.isArray(res.data) ? res.data : res.data.rows || [];
       setObjetos(all);
     } catch (error) {
-      console.error("❌ Error cargando objetos:", error);
+      console.error("âŒ Error cargando objetos:", error);
     }
   }, []);
 
@@ -154,7 +155,7 @@ export default function Permisos() {
   }, [cargarPermisos, cargarRoles, cargarObjetos]);
 
   // ============================================================
-  // ✅ Dashboard stats
+  // âœ… Dashboard stats
   // ============================================================
   const totalPermisos = data.length;
   const permisosCompletos = data.filter(
@@ -165,7 +166,7 @@ export default function Permisos() {
   ).length;
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -212,7 +213,7 @@ export default function Permisos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -240,7 +241,7 @@ export default function Permisos() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
       doc.setFontSize(9);
       doc.setTextColor(120);
@@ -254,10 +255,10 @@ export default function Permisos() {
         id: (r) => r.id_permiso,
         rol: (r) => r.nombre_rol || "",
         objeto: (r) => r.nombre_objeto || "",
-        crear: (r) => r.can_create ? "Sí" : "No",
-        leer: (r) => r.can_read ? "Sí" : "No",
-        actualizar: (r) => r.can_update ? "Sí" : "No",
-        eliminar: (r) => r.can_delete ? "Sí" : "No",
+        crear: (r) => r.can_create ? "SÃ­" : "No",
+        leer: (r) => r.can_read ? "SÃ­" : "No",
+        actualizar: (r) => r.can_update ? "SÃ­" : "No",
+        eliminar: (r) => r.can_delete ? "SÃ­" : "No",
       };
 
       const activeFields = EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key));
@@ -274,7 +275,7 @@ export default function Permisos() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
@@ -297,7 +298,7 @@ export default function Permisos() {
       doc.save(`Permisos_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -305,7 +306,7 @@ export default function Permisos() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -326,23 +327,23 @@ export default function Permisos() {
         { key: "id", header: "ID", width: 8, extract: (r) => r.id_permiso },
         { key: "rol", header: "Rol", width: 20, extract: (r) => r.nombre_rol || "" },
         { key: "objeto", header: "Objeto", width: 22, extract: (r) => r.nombre_objeto || "" },
-        { key: "crear", header: "Crear", width: 10, extract: (r) => r.can_create ? "Sí" : "No" },
-        { key: "leer", header: "Leer", width: 10, extract: (r) => r.can_read ? "Sí" : "No" },
-        { key: "actualizar", header: "Actualizar", width: 12, extract: (r) => r.can_update ? "Sí" : "No" },
-        { key: "eliminar", header: "Eliminar", width: 10, extract: (r) => r.can_delete ? "Sí" : "No" },
+        { key: "crear", header: "Crear", width: 10, extract: (r) => r.can_create ? "SÃ­" : "No" },
+        { key: "leer", header: "Leer", width: 10, extract: (r) => r.can_read ? "SÃ­" : "No" },
+        { key: "actualizar", header: "Actualizar", width: 12, extract: (r) => r.can_update ? "SÃ­" : "No" },
+        { key: "eliminar", header: "Eliminar", width: 10, extract: (r) => r.can_delete ? "SÃ­" : "No" },
       ];
       const columns = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns.length);
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Permisos — Extractus";
+      titleCell.value = "Reporte de Permisos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -381,7 +382,7 @@ export default function Permisos() {
       saveAs(new Blob([buffer]), `Permisos_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -389,9 +390,9 @@ export default function Permisos() {
   };
 
   // ============================================================
-  // ✅ Campos del formulario CRUD
+  // âœ… Campos del formulario CRUD
   // ============================================================
-  // Validación: al menos un permiso debe estar marcado
+  // ValidaciÃ³n: al menos un permiso debe estar marcado
   const validarAlMenosUno = (_val, form) => {
     const alguno = form.can_create || form.can_read || form.can_update || form.can_delete;
     if (!alguno) return "Debe asignar al menos un permiso (crear, leer, actualizar o eliminar).";
@@ -425,7 +426,7 @@ export default function Permisos() {
   ];
 
   // ============================================================
-  // ✅ Columnas y extractores
+  // âœ… Columnas y extractores
   // ============================================================
   const columnsTable = [
     "ID Permiso",
@@ -445,24 +446,24 @@ export default function Permisos() {
     "ID Permiso": (r) => r.id_permiso,
     Rol: (r) => r.nombre_rol,
     Objeto: (r) => r.nombre_objeto,
-    Crear: (r) => (r.can_create ? "✅" : "❌"),
-    Leer: (r) => (r.can_read ? "✅" : "❌"),
-    Actualizar: (r) => (r.can_update ? "✅" : "❌"),
-    Eliminar: (r) => (r.can_delete ? "✅" : "❌"),
-    "Usuario Creado": (r) => r.usuario_creado || "—",
+    Crear: (r) => (r.can_create ? "âœ…" : "âŒ"),
+    Leer: (r) => (r.can_read ? "âœ…" : "âŒ"),
+    Actualizar: (r) => (r.can_update ? "âœ…" : "âŒ"),
+    Eliminar: (r) => (r.can_delete ? "âœ…" : "âŒ"),
+    "Usuario Creado": (r) => r.usuario_creado || "â€”",
     "Fecha Creado": (r) =>
       r.fecha_creado
         ? new Date(r.fecha_creado).toISOString().split("T")[0]
-        : "—",
-    "Usuario Modificado": (r) => r.usuario_modificado || "—",
+        : "â€”",
+    "Usuario Modificado": (r) => r.usuario_modificado || "â€”",
     "Fecha Modificado": (r) =>
       r.fecha_modificado
         ? new Date(r.fecha_modificado).toISOString().split("T")[0]
-        : "—",
+        : "â€”",
   };
 
   // ============================================================
-  // ✅ Funciones CRUD
+  // âœ… Funciones CRUD
   // ============================================================
   const handleInsert = async (nuevo) => {
     try {
@@ -486,10 +487,11 @@ export default function Permisos() {
         status: "success",
         duration: 3000,
         isClosable: true,
-      });
-      await cargarPermisos();
-    } catch (err) {
-      console.error("❌ Error insertando permiso:", err);
+        });
+        await cargarPermisos();
+        return true;
+      } catch (err) {
+      console.error("âŒ Error insertando permiso:", err);
       const status = err.response?.status;
       const mensaje = err.response?.data?.error || err.message;
       toast({
@@ -527,11 +529,11 @@ export default function Permisos() {
       });
       await cargarPermisos();
     } catch (err) {
-      console.error("❌ Error actualizando permiso:", err);
+      console.error("âŒ Error actualizando permiso:", err);
       const status = err.response?.status;
       const mensaje = err.response?.data?.error || err.message;
       toast({
-        title: status === 409 ? "Combinación duplicada" : "Error al actualizar permiso",
+        title: status === 409 ? "CombinaciÃ³n duplicada" : "Error al actualizar permiso",
         description: mensaje,
         status: status === 409 ? "warning" : "error",
         duration: 4000,
@@ -545,27 +547,29 @@ export default function Permisos() {
       await api.delete(`/seguridad/permisos/${id}`, {
         headers: { "x-user-email": username },
       });
-      toast({
-        title: "Permiso eliminado correctamente",
-        status: "info",
-        duration: 3000,
-        isClosable: true,
-      });
-      await cargarPermisos();
-    } catch (err) {
-      console.error("❌ Error eliminando permiso:", err);
-      toast({
-        title: "Error al eliminar permiso",
-        description: err.response?.data?.error || err.message,
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
-    }
+        toast({
+          title: "Permiso eliminado correctamente",
+          status: "info",
+          duration: 3000,
+          isClosable: true,
+        });
+        await cargarPermisos();
+        return true;
+      } catch (err) {
+      console.error("âŒ Error eliminando permiso:", err);
+        toast({
+          title: "Error al eliminar permiso",
+          description: err.response?.data?.error || err.message,
+          status: "error",
+          duration: 4000,
+          isClosable: true,
+        });
+        return false;
+      }
   };
 
   // ============================================================
-  // ✅ Loader
+  // âœ… Loader
   // ============================================================
   if (loading) {
     return (
@@ -576,12 +580,12 @@ export default function Permisos() {
   }
 
   // ============================================================
-  // ✅ Render Final — Diseño uniforme con Roles/Objetos
+  // âœ… Render Final â€” DiseÃ±o uniforme con Roles/Objetos
   // ============================================================
   return (
     <Box p={4}>
-      {/* 🔙 Botón Atrás */}
-      <Tooltip label="Volver al módulo Seguridad" placement="bottom-start">
+      {/* ðŸ”™ BotÃ³n AtrÃ¡s */}
+      <Tooltip label="Volver al mÃ³dulo Seguridad" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
           bg={btnBackBg}
@@ -595,7 +599,7 @@ export default function Permisos() {
         </Button>
       </Tooltip>
 
-      {/* 🏷️ Título + Botón Exportar */}
+      {/* ðŸ·ï¸ TÃ­tulo + BotÃ³n Exportar */}
       <Flex justify="space-between" align="center" mb={3}>
         <Heading size="lg" color={accent}>
           Permisos por Rol / Objeto
@@ -618,7 +622,7 @@ export default function Permisos() {
 
       <Divider mb={4} borderColor={borderClr} />
 
-      {/* ✅ DASHBOARD */}
+      {/* âœ… DASHBOARD */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
         <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
           <Stat>
@@ -645,7 +649,7 @@ export default function Permisos() {
         </Box>
       </SimpleGrid>
 
-      {/* ✅ TABLA CRUD */}
+      {/* âœ… TABLA CRUD */}
       <Box
         bg={cardBg}
         p={3}
@@ -668,7 +672,7 @@ export default function Permisos() {
         />
       </Box>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -682,20 +686,20 @@ export default function Permisos() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los permisos.
+              Si no aplicas filtros, se exportarÃ¡n todos los permisos.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={inputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por rol</FormLabel>
@@ -717,7 +721,7 @@ export default function Permisos() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -784,3 +788,4 @@ export default function Permisos() {
     </Box>
   );
 }
+

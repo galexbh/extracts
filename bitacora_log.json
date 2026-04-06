@@ -1,0 +1,56 @@
+[
+  {
+    "accion": "DELETE",
+    "tabla": "ventasyreserva.tbl_facturas",
+    "descripcion": "Factura ID 41 eliminada por clarissaguzman1996@gmail.com",
+    "fecha_evento": "2026-04-04T08:36:06.545Z",
+    "detalle": {
+      "id_factura": "41",
+      "productos_devueltos": 1
+    }
+  },
+  {
+    "accion": "DELETE",
+    "tabla": "ventasyreserva.tbl_pedidos",
+    "descripcion": "Pedido #65 eliminado por clarissaguzman1996@gmail.com",
+    "fecha_evento": "2026-04-04T08:33:41.378Z",
+    "detalle": {
+      "id_pedido": "65"
+    }
+  },
+  {
+    "accion": "DELETE",
+    "tabla": "seguridad.tbl_usuarios",
+    "descripcion": "Usuario ID 63 eliminado por clarissaguzman1996@gmail.com",
+    "fecha_evento": "2026-04-04T08:00:24.132Z",
+    "detalle": {
+      "id_usuario": "63",
+      "uid_firebase": "tzLnwEZjZfWhtje9lAUgaxzAjA03"
+    }
+  },
+  {
+    "accion": "DELETE",
+    "tabla": "seguridad.tbl_usuarios",
+    "descripcion": "Usuario ID 65 eliminado por clarissaguzman1996@gmail.com",
+    "fecha_evento": "2026-04-04T08:00:06.492Z",
+    "detalle": {
+      "id_usuario": "65",
+      "uid_firebase": "xEC1FynhONTaXAmJI50h42FoMIa2"
+    }
+  },
+  {
+    "accion": "INSERT",
+    "tabla": "ventasyreserva.clientes",
+    "descripcion": "Cliente \"Perlita\" creado por clarissaguzman1996@gmail.com",
+    "fecha_evento": "2026-04-04T07:42:47.964Z",
+    "detalle": {
+      "rtn": "0801199618382",
+      "telefono": "2222-2222",
+      "direccion": "Barrio el confite",
+      "nombre_cliente": "Perlita",
+      "id_tipo_cliente": "16",
+      "id_estado_cliente": "11",
+      "correo_electronico": "perlita@gmail.com"
+    }
+  }
+]

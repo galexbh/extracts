@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Produccion/Produccion.js
-// 🎨 Paleta UNIFORME con el sistema + Export Modal PDF/Excel
+﻿// ============================================================
+// ðŸ“ src/components/Produccion/Produccion.js
+// ðŸŽ¨ Paleta UNIFORME con el sistema + Export Modal PDF/Excel
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -62,15 +62,16 @@ import {
 import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID Pedido" },
   { key: "cliente", label: "Cliente" },
@@ -81,8 +82,11 @@ const EXPORT_FIELDS = [
   { key: "estado_produccion", label: "Estado Producción" },
 ];
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
+const MAX_TEXTO_COMENTARIOS = 120;
+const sanitizeComentarios = (valor = "") =>
+  String(valor).replace(/[\u0000-\u001F\u007F<>]/g, "").slice(0, MAX_TEXTO_COMENTARIOS);
 
-// ── Helpers ──────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const normalizarPedidos = (lista) => {
   const mapa = new Map();
   lista.forEach((p) => {
@@ -92,10 +96,10 @@ const normalizarPedidos = (lista) => {
 };
 
 const formatFecha = (iso) => {
-  if (!iso) return "—";
+  if (!iso) return "â€”";
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso; // Fallback al original si no es fecha válida
+    if (isNaN(d.getTime())) return iso; // Fallback al original si no es fecha vÃ¡lida
     return d.toLocaleDateString("es-HN", {
       day: "2-digit",
       month: "2-digit",
@@ -120,9 +124,9 @@ const iconEstado = (estado) => {
   return FaBoxOpen;
 };
 
-// ─────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Produccion() {
-  // 🎨 Colores adaptados a día/noche (Idénticos al módulo Clientes)
+  // ðŸŽ¨ Colores adaptados a dÃ­a/noche (IdÃ©nticos al mÃ³dulo Clientes)
   const accent = useColorModeValue("#009e73", "teal.300");
   const pageBg = useColorModeValue("#f7faf8", "#020617");
   const cardBg = useColorModeValue("white", "#0b1120");
@@ -151,13 +155,14 @@ export default function Produccion() {
   const modalHeadBg = useColorModeValue("teal.50", "gray.700");
   const expInputBg = useColorModeValue("white", "gray.600");
 
-  // 🔁 Estados
+  // ðŸ” Estados
   const [pedidos, setPedidos] = useState([]);
   const [detalle, setDetalle] = useState([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [insumosCatalogo, setInsumosCatalogo] = useState([]);
   const [insumosUsados, setInsumosUsados] = useState([]);
   const [comentariosInsumos, setComentariosInsumos] = useState("");
+  const [comentariosWarning, setComentariosWarning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [accionLoading, setAccionLoading] = useState(null);
@@ -167,7 +172,7 @@ export default function Produccion() {
   const detalleModal = useDisclosure();
   const insumosModal = useDisclosure();
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expCliente, setExpCliente] = useState("");
@@ -183,18 +188,18 @@ export default function Produccion() {
   const toggleAll = () =>
     setSelectedFields(allFieldsSelected ? [] : [...ALL_FIELD_KEYS]);
 
-  // ── Stats ────────────────────────────────────────────────
+  // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const total = pedidos.length;
   const enProceso = pedidos.filter((p) => {
     const e = (p.estado_produccion || "").toLowerCase();
-    // 🔒 INC-021: Deben ser iniciados pero NO "sin iniciar"
+    // ðŸ”’ INC-021: Deben ser iniciados pero NO "sin iniciar"
     return (e.includes("inici") || e.includes("proces")) && !e.includes("sin");
   }).length;
   const finalizados = pedidos.filter((p) =>
     (p.estado_produccion || "").toLowerCase().includes("finaliz")
   ).length;
 
-  // ── Cargar pedidos ────────────────────────────────────────
+  // â”€â”€ Cargar pedidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cargarPedidos = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsRefreshing(true);
     try {
@@ -218,7 +223,7 @@ export default function Produccion() {
 
   useEffect(() => { cargarPedidos(); }, [cargarPedidos]);
 
-  // ── Ver detalle ───────────────────────────────────────────
+  // â”€â”€ Ver detalle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const verDetalle = async (pedido) => {
     try {
       setPedidoSeleccionado(pedido);
@@ -230,12 +235,12 @@ export default function Produccion() {
     }
   };
 
-  // ── Iniciar producción ────────────────────────────────────
+  // â”€â”€ Iniciar producciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const iniciarProduccion = async (pedido) => {
     setAccionLoading(pedido.id_pedido);
     try {
       const res = await api.post(`/produccion/ordenes/iniciar/${pedido.id_pedido}`);
-      toast({ title: "✅ Producción iniciada", description: res.data?.message, status: "success", position: "top" });
+      toast({ title: "Producción iniciada", description: res.data?.message, status: "success", position: "top" });
       cargarPedidos();
     } catch (err) {
       toast({ title: "Error", description: err.response?.data?.error || err.message, status: "error" });
@@ -244,12 +249,12 @@ export default function Produccion() {
     }
   };
 
-  // ── Abrir modal insumos ───────────────────────────────────
+  // â”€â”€ Abrir modal insumos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const finalizarProduccion = async (pedido) => {
     if (!pedido.id_orden)
       return toast({
         title: "Sin orden iniciada",
-        description: "Inicia la producción antes de finalizar.",
+        description: "Inicia la producciÃ³n antes de finalizar.",
         status: "warning",
         position: "top",
       });
@@ -260,13 +265,14 @@ export default function Produccion() {
       setInsumosCatalogo(res.data.filter((i) => i.id_insumo && i.nombre_insumo));
       setInsumosUsados([{ filaId: 1, id_insumo: "", cantidad_usada: "" }]);
       setComentariosInsumos("");
+      setComentariosWarning(false);
       insumosModal.onOpen();
     } catch (err) {
       toast({ title: "Error cargando inventario", description: err.message, status: "error" });
     }
   };
 
-  // ── Gestión de filas insumos ──────────────────────────────
+  // â”€â”€ GestiÃ³n de filas insumos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const agregarFilaInsumo = () =>
     setInsumosUsados((prev) => [
       ...prev,
@@ -281,7 +287,7 @@ export default function Produccion() {
   const eliminarFilaInsumo = (filaId) =>
     setInsumosUsados((prev) => prev.filter((f) => f.filaId !== filaId));
 
-  // ── Guardar insumos ───────────────────────────────────────
+  // â”€â”€ Guardar insumos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const guardarInsumos = async () => {
     if (!pedidoSeleccionado?.id_orden)
       return toast({ title: "Sin orden", description: "No hay orden seleccionada.", status: "error" });
@@ -292,7 +298,7 @@ export default function Produccion() {
     });
 
     if (insumosValidos.length === 0)
-      return toast({ title: "Agrega al menos 1 insumo con cantidad válida", status: "warning", position: "top" });
+      return toast({ title: "Agrega al menos 1 insumo con cantidad vÃ¡lida", status: "warning", position: "top" });
 
     try {
       await api.post(`/produccion/ordenes/${pedidoSeleccionado.id_orden}/insumos`, {
@@ -303,7 +309,7 @@ export default function Produccion() {
         comentarios: comentariosInsumos || null,
       });
 
-      toast({ title: "✅ Producción finalizada", status: "success", position: "top" });
+      toast({ title: "Producción finalizada", status: "success", position: "top" });
       insumosModal.onClose();
       cargarPedidos();
     } catch (err) {
@@ -312,7 +318,7 @@ export default function Produccion() {
   };
 
   // ============================================================
-  // 🔧 Export helpers
+  // ðŸ”§ Export helpers
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -353,7 +359,7 @@ export default function Produccion() {
       img.src = src;
     });
 
-  // 📤 PDF
+  // ðŸ“¤ PDF
   const handleExportPDF = async (filters = {}) => {
     try {
       setExporting(true);
@@ -366,9 +372,9 @@ export default function Produccion() {
       try { const dataURL = await imgToDataURL(extractusLogo); doc.addImage(dataURL, "PNG", 40, 20, 45, 45); } catch (e) { /* sin logo */ }
 
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
-      doc.text("REPORTE DE PRODUCCIÓN", pageWidth / 2, 45, { align: "center" });
+      doc.text("REPORTE DE PRODUCCIÃ“N", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -378,8 +384,8 @@ export default function Produccion() {
         cliente: (r) => r.nombre_cliente || "",
         fecha_reserva: (r) => r.fecha_reserva || "",
         fecha_entrega: (r) => r.fecha_entrega || "",
-        estado_pedido: (r) => r.estado_pedido || "—",
-        id_orden: (r) => r.id_orden ? `#${r.id_orden}` : "—",
+        estado_pedido: (r) => r.estado_pedido || "â€”",
+        id_orden: (r) => r.id_orden ? `#${r.id_orden}` : "â€”",
         estado_produccion: (r) => r.estado_produccion || "Pendiente",
       };
 
@@ -391,7 +397,7 @@ export default function Produccion() {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -399,7 +405,7 @@ export default function Produccion() {
       doc.text("RESUMEN", 40, finalY);
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(60);
       let y = finalY + 18;
-      doc.text(`Total de órdenes exportadas: ${rows.length}`, 50, y); y += 16;
+      doc.text(`Total de Ã³rdenes exportadas: ${rows.length}`, 50, y); y += 16;
       const proc = rows.filter((r) => (r.estado_produccion || "").toLowerCase().includes("inici") || (r.estado_produccion || "").toLowerCase().includes("proces")).length;
       const fin = rows.filter((r) => (r.estado_produccion || "").toLowerCase().includes("finaliz")).length;
       doc.text(`En proceso: ${proc}`, 50, y); y += 16;
@@ -408,12 +414,12 @@ export default function Produccion() {
       doc.save(`Produccion_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
-  // 📊 Excel
+  // ðŸ“Š Excel
   const handleExportExcel = async (filters = {}) => {
     try {
       setExporting(true);
@@ -428,8 +434,8 @@ export default function Produccion() {
         { key: "cliente", header: "Cliente", width: 25, extract: (r) => r.nombre_cliente || "" },
         { key: "fecha_reserva", header: "Fecha Reserva", width: 14, extract: (r) => r.fecha_reserva || "" },
         { key: "fecha_entrega", header: "Fecha Entrega", width: 14, extract: (r) => r.fecha_entrega || "" },
-        { key: "estado_pedido", header: "Estado Pedido", width: 16, extract: (r) => r.estado_pedido || "—" },
-        { key: "id_orden", header: "Orden", width: 10, extract: (r) => r.id_orden ? `#${r.id_orden}` : "—" },
+        { key: "estado_pedido", header: "Estado Pedido", width: 16, extract: (r) => r.estado_pedido || "â€”" },
+        { key: "id_orden", header: "Orden", width: 10, extract: (r) => r.id_orden ? `#${r.id_orden}` : "â€”" },
         { key: "estado_produccion", header: "Estado Producción", width: 18, extract: (r) => r.estado_produccion || "Pendiente" },
       ];
       const columns_exp = allCols.filter((c) => selectedFields.includes(c.key));
@@ -443,7 +449,7 @@ export default function Produccion() {
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -477,27 +483,27 @@ export default function Produccion() {
       saveAs(new Blob([buffer]), `Produccion_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
-  // ── Loader ────────────────────────────────────────────────
+  // â”€â”€ Loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (loading) {
     return (
       <Flex justify="center" align="center" minH="60vh" bg={pageBg}>
         <VStack spacing={3}>
           <Spinner size="xl" color="green.500" thickness="4px" speed="0.7s" />
-          <Text color={subtleText} fontSize="sm">Cargando módulo de producción...</Text>
+          <Text color={subtleText} fontSize="sm">Cargando mÃ³dulo de producciÃ³n...</Text>
         </VStack>
       </Flex>
     );
   }
 
-  // ── RENDER PRINCIPAL ──────────────────────────────────────
+  // â”€â”€ RENDER PRINCIPAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <Box bg={pageBg} minH="100vh" p={4}>
-      {/* Botón Atrás */}
+      {/* BotÃ³n AtrÃ¡s */}
       <Tooltip label="Volver al menú Producción" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
@@ -578,7 +584,7 @@ export default function Produccion() {
 
         <Divider mt={4} borderColor={cardBorder} />
 
-        {/* ── MINI DASHBOARD — 3 tarjetas ── */}
+        {/* â”€â”€ MINI DASHBOARD â€” 3 tarjetas â”€â”€ */}
         <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mt={5}>
 
           {/* Total */}
@@ -627,7 +633,7 @@ export default function Produccion() {
                 <StatNumber fontSize="3xl" fontWeight="800" color={activosNumberColor}>
                   {enProceso}
                 </StatNumber>
-                <StatHelpText fontSize="xs" color={subtleText}>Órdenes iniciadas</StatHelpText>
+                <StatHelpText fontSize="xs" color={subtleText}>Ã“rdenes iniciadas</StatHelpText>
               </Stat>
               <Flex w={11} h={11} bg="whiteAlpha.600" borderRadius="lg" align="center" justify="center">
                 <Icon as={FaClock} boxSize={5} color="green" />
@@ -664,7 +670,7 @@ export default function Produccion() {
         </SimpleGrid>
       </Box>
 
-      {/* ── TABLA DE PEDIDOS ── */}
+      {/* â”€â”€ TABLA DE PEDIDOS â”€â”€ */}
       <Box
         bg={cardBg}
         borderRadius="xl"
@@ -712,7 +718,7 @@ export default function Produccion() {
                     <Flex direction="column" align="center" py={14} gap={3}>
                       <Icon as={FaBoxOpen} boxSize={10} color="gray.300" />
                       <Text color={subtleText} fontSize="sm">
-                        No hay pedidos pendientes de producción
+                        No hay pedidos pendientes de producciÃ³n
                       </Text>
                     </Flex>
                   </Td>
@@ -746,12 +752,12 @@ export default function Produccion() {
                         py={0.5}
                         fontSize="xs"
                       >
-                        {p.estado_pedido || "—"}
+                        {p.estado_pedido || "â€”"}
                       </Badge>
                     </Td>
                     <Td>
                       <Text fontSize="xs" color={subtleText} fontFamily="mono">
-                        {p.id_orden ? `#${p.id_orden}` : "—"}
+                        {p.id_orden ? `#${p.id_orden}` : "â€”"}
                       </Text>
                     </Td>
                     <Td>
@@ -789,7 +795,7 @@ export default function Produccion() {
                         </Tooltip>
 
                         {!p.id_orden && (
-                          <Tooltip label="Iniciar producción">
+                          <Tooltip label="Iniciar producciÃ³n">
                             <Button
                               size="xs"
                               colorScheme="green"
@@ -827,13 +833,13 @@ export default function Produccion() {
       </Box>
 
 
-      {/* ════════════════════════════════════════════════════
-          MODAL — DETALLE DEL PEDIDO
-      ════════════════════════════════════════════════════ */}
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          MODAL â€” DETALLE DEL PEDIDO
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Modal isOpen={detalleModal.isOpen} onClose={detalleModal.onClose} size="xl" isCentered>
         <ModalOverlay backdropFilter="blur(4px)" bg="blackAlpha.400" />
         <ModalContent bg={modalBg} borderRadius="xl" overflow="hidden" boxShadow="xl">
-          {/* Header verde — igual que sidebar activo */}
+          {/* Header verde â€” igual que sidebar activo */}
           <Box bg={topBarBg} px={5} py={4}>
             <HStack justify="space-between">
               <HStack spacing={3}>
@@ -856,11 +862,11 @@ export default function Produccion() {
             <SimpleGrid columns={2} spacing={3} mb={4}>
               <Box bg={statTotalBg} borderRadius="lg" p={3}>
                 <Text fontSize="xs" color={subtleText}>Fecha Reserva</Text>
-                <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_reserva || "—"}</Text>
+                <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_reserva || "â€”"}</Text>
               </Box>
               <Box bg={statActivosBg} borderRadius="lg" p={3}>
                 <Text fontSize="xs" color={subtleText}>Fecha Entrega</Text>
-                <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_entrega || "—"}</Text>
+                <Text fontWeight="600" fontSize="sm">{pedidoSeleccionado?.fecha_entrega || "â€”"}</Text>
               </Box>
             </SimpleGrid>
 
@@ -910,9 +916,9 @@ export default function Produccion() {
       </Modal>
 
 
-      {/* ════════════════════════════════════════════════════
-          MODAL — INSUMOS USADOS (Finalizar)
-      ════════════════════════════════════════════════════ */}
+      {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          MODAL â€” INSUMOS USADOS (Finalizar)
+      â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
       <Modal isOpen={insumosModal.isOpen} onClose={insumosModal.onClose} size="xl" isCentered>
         <ModalOverlay backdropFilter="blur(4px)" bg="blackAlpha.400" />
         <ModalContent bg={modalBg} borderRadius="xl" overflow="hidden" boxShadow="xl">
@@ -925,7 +931,7 @@ export default function Produccion() {
                     Finalizar Producción
                   </Text>
                   <Text color="whiteAlpha.800" fontSize="xs">
-                    Orden #{pedidoSeleccionado?.id_orden} — {pedidoSeleccionado?.nombre_cliente}
+                    Orden #{pedidoSeleccionado?.id_orden} â€” {pedidoSeleccionado?.nombre_cliente}
                   </Text>
                 </Box>
               </HStack>
@@ -935,7 +941,7 @@ export default function Produccion() {
 
           <ModalBody p={5}>
             <Text fontSize="sm" color={subtleText} mb={4}>
-              Registra los insumos utilizados. El inventario se actualizará automáticamente.
+              Registra los insumos utilizados. El inventario se actualizarÃ¡ automÃ¡ticamente.
             </Text>
 
             <VStack align="stretch" spacing={2} mb={4}>
@@ -952,7 +958,7 @@ export default function Produccion() {
                   >
                     {insumosCatalogo.map((ins) => (
                       <option key={ins.id_insumo} value={ins.id_insumo}>
-                        {ins.nombre_insumo} ({ins.unidad_medida}) — Stock: {ins.stock_actual}
+                        {ins.nombre_insumo} ({ins.unidad_medida}) â€” Stock: {ins.stock_actual}
                       </option>
                     ))}
                   </Select>
@@ -1001,13 +1007,34 @@ export default function Produccion() {
 
             <Textarea
               value={comentariosInsumos}
-              onChange={(e) => setComentariosInsumos(e.target.value)}
-              placeholder="Comentarios u observaciones (opcional)..."
+              onChange={(e) => {
+                const original = e.target.value || "";
+                const sanitized = sanitizeComentarios(original);
+                setComentariosInsumos(sanitized);
+                if (sanitized !== original) {
+                  setComentariosWarning(true);
+                  setTimeout(() => setComentariosWarning(false), 2500);
+                }
+              }}
+              placeholder="Comentarios u observaciones (opcional)."
               rows={3}
               bg={inputBg}
               borderRadius="md"
               fontSize="sm"
+              maxLength={MAX_TEXTO_COMENTARIOS}
             />
+            {comentariosWarning ? (
+              <Text fontSize="xs" color="orange.500" mt={1}>
+                Se eliminaron caracteres no permitidos.
+              </Text>
+            ) : (
+              <Text fontSize="xs" color={subtleText} mt={1}>
+                Maximo {MAX_TEXTO_COMENTARIOS} caracteres.
+              </Text>
+            )}
+            <Text fontSize="xs" color={subtleText} textAlign="right" mt={1}>
+              {comentariosInsumos.length}/{MAX_TEXTO_COMENTARIOS}
+            </Text>
           </ModalBody>
 
           <ModalFooter borderTopWidth="1px" borderColor={cardBorder} gap={2}>
@@ -1026,7 +1053,7 @@ export default function Produccion() {
         </ModalContent>
       </Modal>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -1045,21 +1072,21 @@ export default function Produccion() {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={expInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por cliente</FormLabel>
-              <Input placeholder="Ej: Juan Pérez" value={expCliente} onChange={(e) => setExpCliente(e.target.value)} size="sm" bg={expInputBg} />
+              <Input placeholder="Ej: Juan PÃ©rez" value={expCliente} onChange={(e) => setExpCliente(e.target.value)} size="sm" bg={expInputBg} />
             </FormControl>
 
             <FormControl mb={3}>
-              <FormLabel fontSize="sm">Por estado de producción</FormLabel>
+              <FormLabel fontSize="sm">Por estado de producciÃ³n</FormLabel>
               <Select placeholder="Todos" value={expEstadoProd} onChange={(e) => setExpEstadoProd(e.target.value)} size="sm" bg={expInputBg}>
                 <option value="Pendiente">Pendiente</option>
                 <option value="Iniciado">Iniciado</option>
@@ -1107,3 +1134,4 @@ export default function Produccion() {
     </Box>
   );
 }
+

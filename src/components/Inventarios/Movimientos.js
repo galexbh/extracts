@@ -1,6 +1,6 @@
-// ============================================================
+﻿// ============================================================
 // src/components/Inventarios/Movimientos.js
-// 💎 Movimientos de Insumos y Productos — Export Modal Clientes-style
+// ðŸ’Ž Movimientos de Insumos y Productos â€” Export Modal Clientes-style
 // ============================================================
 import React, { useState, useCallback } from "react";
 import {
@@ -33,13 +33,14 @@ import {
 import { DownloadIcon } from "@chakra-ui/icons";
 import { FaFileExport, FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { formatNow } from "../../utils/dateFormat";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
@@ -47,7 +48,7 @@ const EXPORT_FIELDS = [
   { key: "cantidad", label: "Cantidad" },
   { key: "venta", label: "Venta" },
   { key: "fecha", label: "Fecha" },
-  { key: "categoria", label: "Categoría (Insumo/Producto)" },
+  { key: "categoria", label: "CategorÃ­a (Insumo/Producto)" },
 ];
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
@@ -55,21 +56,21 @@ const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 const initialInsumos = [
   { id: "01", tipo: "entrada", nombre: "botes de litro", cantidad: 500, venta: "Juan", fecha: "2025-08-01" },
   { id: "02", tipo: "salida", nombre: "botes de litro", cantidad: 100, venta: "Maria", fecha: "2025-08-02" },
-  { id: "03", tipo: "entrada", nombre: "botes de galón", cantidad: 300, venta: "Luis", fecha: "2025-08-01" },
-  { id: "04", tipo: "salida", nombre: "botes de galón", cantidad: 50, venta: "Ana", fecha: "2025-08-03" },
+  { id: "03", tipo: "entrada", nombre: "botes de galÃ³n", cantidad: 300, venta: "Luis", fecha: "2025-08-01" },
+  { id: "04", tipo: "salida", nombre: "botes de galÃ³n", cantidad: 50, venta: "Ana", fecha: "2025-08-03" },
   { id: "05", tipo: "entrada", nombre: "tapaderas", cantidad: 400, venta: "Carlos", fecha: "2025-08-02" },
   { id: "06", tipo: "salida", nombre: "stickers", cantidad: 120, venta: "Luisa", fecha: "2025-08-04" },
 ];
 
 // Datos iniciales PRODUCTOS
 const initialProductos = [
-  { id: "01", tipo: "entrada", nombre: "limón", cantidad: 200, venta: "Pedro", fecha: "2025-08-01" },
-  { id: "02", tipo: "salida", nombre: "limón", cantidad: 80, venta: "Ana", fecha: "2025-08-02" },
+  { id: "01", tipo: "entrada", nombre: "limÃ³n", cantidad: 200, venta: "Pedro", fecha: "2025-08-01" },
+  { id: "02", tipo: "salida", nombre: "limÃ³n", cantidad: 80, venta: "Ana", fecha: "2025-08-02" },
   { id: "03", tipo: "entrada", nombre: "mora", cantidad: 150, venta: "Luis", fecha: "2025-08-01" },
   { id: "04", tipo: "salida", nombre: "mora", cantidad: 40, venta: "Maria", fecha: "2025-08-03" },
   { id: "05", tipo: "entrada", nombre: "tamarindo", cantidad: 120, venta: "Juan", fecha: "2025-08-02" },
   { id: "06", tipo: "salida", nombre: "naranja", cantidad: 50, venta: "Carlos", fecha: "2025-08-04" },
-  { id: "07", tipo: "entrada", nombre: "maracuyá", cantidad: 180, venta: "Luisa", fecha: "2025-08-05" },
+  { id: "07", tipo: "entrada", nombre: "maracuyÃ¡", cantidad: 180, venta: "Luisa", fecha: "2025-08-05" },
 ];
 
 function Movimientos() {
@@ -83,7 +84,7 @@ function Movimientos() {
   const [insumos] = useState(initialInsumos);
   const [productos] = useState(initialProductos);
 
-  // Modal exportación
+  // Modal exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -123,13 +124,13 @@ function Movimientos() {
   );
 
   // ============================================================
-  // 🔧 Export helpers
+  // ðŸ”§ Export helpers
   // ============================================================
   const buildFilterText = (f = {}) => {
     const parts = [];
     if (f.nombre) parts.push(`Nombre: ${f.nombre}`);
     if (f.tipo) parts.push(`Tipo: ${f.tipo}`);
-    if (f.categoria) parts.push(`Categoría: ${f.categoria}`);
+    if (f.categoria) parts.push(`CategorÃ­a: ${f.categoria}`);
     return parts.length > 0 ? parts.join("  |  ") : "Sin filtros aplicados";
   };
 
@@ -174,7 +175,7 @@ function Movimientos() {
       img.src = src;
     });
 
-  // 📤 PDF
+  // ðŸ“¤ PDF
   const handleExportPDF = async (f = {}) => {
     try {
       setExporting(true);
@@ -189,7 +190,7 @@ function Movimientos() {
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
       doc.text("MOVIMIENTOS DE INSUMOS Y PRODUCTOS", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(f)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -212,7 +213,7 @@ function Movimientos() {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -229,12 +230,12 @@ function Movimientos() {
       doc.save(`Movimientos_Inv_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
-  // 📊 Excel
+  // ðŸ“Š Excel
   const handleExportExcel = async (f = {}) => {
     try {
       setExporting(true);
@@ -251,20 +252,20 @@ function Movimientos() {
         { key: "cantidad", header: "Cantidad", width: 12, extract: (r) => r.cantidad },
         { key: "venta", header: "Venta", width: 14, extract: (r) => r.venta },
         { key: "fecha", header: "Fecha", width: 14, extract: (r) => r.fecha },
-        { key: "categoria", header: "Categoría", width: 14, extract: (r) => r.categoria },
+        { key: "categoria", header: "CategorÃ­a", width: 14, extract: (r) => r.categoria },
       ];
       const columns_exp = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns_exp.length);
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Movimientos de Insumos y Productos — Extractus";
+      titleCell.value = "Movimientos de Insumos y Productos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(f)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(f)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -298,13 +299,13 @@ function Movimientos() {
       saveAs(new Blob([buffer]), `Movimientos_Inv_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // UI — Render boxes de entradas/salidas
+  // UI â€” Render boxes de entradas/salidas
   // ============================================================
   const renderBoxes = (data, tipoItem) => {
     const entradas = data.filter((m) => m.tipo === "entrada");
@@ -369,7 +370,7 @@ function Movimientos() {
         </Button>
       </Flex>
 
-      {/* Filtros en una sola línea */}
+      {/* Filtros en una sola lÃ­nea */}
       <Flex gap={3} mb={6} flexWrap="nowrap">
         <Input size="sm" placeholder="Buscar ID" value={filters.id} onChange={(e) => handleFilterChange("id", e.target.value)} />
         <Input size="sm" placeholder="Buscar Nombre" value={filters.nombre} onChange={(e) => handleFilterChange("nombre", e.target.value)} />
@@ -392,7 +393,7 @@ function Movimientos() {
         </Box>
       </Flex>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -411,17 +412,17 @@ function Movimientos() {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
-              <Input placeholder="Ej: limón, tapaderas" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
+              <Input placeholder="Ej: limÃ³n, tapaderas" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
             </FormControl>
 
             <FormControl mb={3}>
@@ -433,7 +434,7 @@ function Movimientos() {
             </FormControl>
 
             <FormControl mb={3}>
-              <FormLabel fontSize="sm">Por categoría</FormLabel>
+              <FormLabel fontSize="sm">Por categorÃ­a</FormLabel>
               <Select placeholder="Todas" value={expCategoria} onChange={(e) => setExpCategoria(e.target.value)} size="sm" bg={modalInputBg}>
                 <option value="Insumo">Insumo</option>
                 <option value="Producto">Producto</option>
@@ -481,3 +482,4 @@ function Movimientos() {
 }
 
 export default Movimientos;
+

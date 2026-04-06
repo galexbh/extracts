@@ -3,6 +3,7 @@
 // ============================================================
 const { pool } = require("../../db");
 const { registrarBitacora, findUserId } = require("../../utils/bitacora");
+const MAX_TEXTO_OBSERVACIONES = 120;
 
 // ____________________________________________________________
 // 🔧 Helper: obtener rol del usuario por email
@@ -25,6 +26,95 @@ function esAdmin(nombre_rol) {
   if (!nombre_rol) return false;
   const rol = nombre_rol.trim().toLowerCase();
   return rol === "administrador" || rol === "admin" || rol === "todos";
+}
+
+function getRequestEmail(req) {
+  return (
+    req.user?.email ||
+    req.headers["x-user-email"] ||
+    req.headers["X-User-Email"] ||
+    null
+  );
+}
+
+function validarDatosPedido({
+  id_cliente,
+  fecha_reserva,
+  fecha_entrega,
+  observaciones,
+  productos = [],
+  requiereEstado = false,
+  id_estado_pedido,
+}) {
+  if (!id_cliente || !fecha_reserva || !fecha_entrega) {
+    throw new Error("Datos incompletos, faltan campos basicos (cliente y fechas).");
+  }
+
+  if (new Date(fecha_entrega) < new Date(fecha_reserva)) {
+    throw new Error("La fecha de entrega no puede ser anterior a la de reserva.");
+  }
+
+  if (!Array.isArray(productos) || productos.length === 0) {
+    throw new Error("Debe incluir al menos un producto en el pedido.");
+  }
+
+  const hoy = new Date().toISOString().split("T")[0];
+  if (fecha_reserva < hoy) {
+    throw new Error("La fecha de reserva no puede ser anterior a la fecha actual.");
+  }
+
+  if (requiereEstado && (!id_estado_pedido || Number(id_estado_pedido) <= 0)) {
+    throw new Error("El estado del pedido es obligatorio.");
+  }
+
+  if (observaciones && String(observaciones).trim().length > MAX_TEXTO_OBSERVACIONES) {
+    throw new Error(`Las observaciones no pueden exceder ${MAX_TEXTO_OBSERVACIONES} caracteres.`);
+  }
+
+  const idsProductos = productos.map((p) => String(p.id_producto || ""));
+  const tieneDuplicados = idsProductos.some((id, index) => id && idsProductos.indexOf(id) !== index);
+  if (tieneDuplicados) {
+    throw new Error("No se puede repetir el mismo producto dentro del pedido.");
+  }
+
+  for (const p of productos) {
+    const cant = Number(p.cantidad);
+    if (!p.id_producto) {
+      throw new Error("Cada linea debe incluir un producto valido.");
+    }
+    if (!Number.isFinite(cant) || cant <= 0 || cant > 9999) {
+      throw new Error(`La cantidad debe ser entre 1 y 9999 para cada producto. Valor recibido: ${p.cantidad}`);
+    }
+  }
+}
+
+async function verificarAccesoPedido(client, req, id_pedido, { lock = false } = {}) {
+  const email = getRequestEmail(req);
+  const usuario = email ? await getRolUsuario(client, email) : null;
+  const admin = esAdmin(usuario?.nombre_rol);
+
+  const pedidoRes = await client.query(
+    `SELECT id_pedido, creado_por
+     FROM ventasyreserva.tbl_pedidos
+     WHERE id_pedido = $1
+     ${lock ? "FOR UPDATE" : ""};`,
+    [id_pedido]
+  );
+
+  if (pedidoRes.rowCount === 0) {
+    const err = new Error("Pedido no encontrado");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const pedido = pedidoRes.rows[0];
+  if (!admin && email && String(pedido.creado_por || "").toLowerCase() !== String(email).toLowerCase()) {
+    const err = new Error("No tiene permisos para acceder a este pedido.");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return { pedido, email, admin };
 }
 
 // ============================================================
@@ -71,7 +161,7 @@ exports.getProductos = async (_req, res) => {
 // Regla: Admin → ve todos | Otro rol → solo sus propios pedidos
 // ============================================================
 exports.getPedidos = async (req, res) => {
-  const email = req.headers["x-user-email"];
+  const email = getRequestEmail(req);
 
   try {
     // Determinar el rol del usuario actual
@@ -81,7 +171,7 @@ exports.getPedidos = async (req, res) => {
     let query;
     let params;
 
-    if (admin || !email) {
+    if (admin) {
       // Administrador o sin email → todos los pedidos
       query = `
         SELECT 
@@ -142,6 +232,8 @@ exports.getPedidoById = async (req, res) => {
   const { id_pedido } = req.params;
 
   try {
+    await verificarAccesoPedido(pool, req, id_pedido);
+
     const pedidoRes = await pool.query(
       `SELECT 
           p.*, 
@@ -168,11 +260,15 @@ exports.getPedidoById = async (req, res) => {
       [id_pedido]
     );
 
+    if (pedidoRes.rowCount === 0) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
     res.json({ pedido: pedidoRes.rows[0], detalle: detalleRes.rows });
 
   } catch (error) {
     console.error("❌ [GET pedidoById] error:", error);
-    res.status(500).json({ error: "Error al obtener pedido" });
+    res.status(error.statusCode || 500).json({ error: error.message || "Error al obtener pedido" });
   }
 };
 
@@ -196,7 +292,15 @@ exports.insertPedido = async (req, res) => {
     const id_estado_pedido = 1; // 🔒 Siempre nace como "Pendiente" y no depende del frontend
 
     // Email del vendedor que crea el pedido
-    const creado_por = req.headers["x-user-email"] || null;
+    const creado_por = getRequestEmail(req);
+
+    validarDatosPedido({
+      id_cliente,
+      fecha_reserva,
+      fecha_entrega,
+      observaciones,
+      productos,
+    });
 
     if (!id_cliente || !fecha_reserva || !fecha_entrega) {
       throw new Error("Datos incompletos, faltan campos básicos (Cliente y Fechas).");
@@ -315,7 +419,18 @@ exports.updatePedido = async (req, res) => {
       productos = [],
     } = req.body;
 
+    validarDatosPedido({
+      id_cliente,
+      fecha_reserva,
+      fecha_entrega,
+      observaciones,
+      productos,
+      requiereEstado: true,
+      id_estado_pedido,
+    });
+
     await client.query("BEGIN");
+    const acceso = await verificarAccesoPedido(client, req, id_pedido, { lock: true });
 
     // Actualizar encabezado (no se cambia el creado_por)
     await client.query(
@@ -371,7 +486,7 @@ exports.updatePedido = async (req, res) => {
     res.json({ message: "Pedido actualizado correctamente" });
 
     // 📋 Bitácora
-    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const userEmail = acceso.email;
     const id_usuario = userEmail ? await findUserId(userEmail) : null;
     await registrarBitacora({
       id_usuario,
@@ -386,10 +501,12 @@ exports.updatePedido = async (req, res) => {
     console.error("❌ [PUT pedido] error:", error);
     const msg = error.message?.includes("value too long")
       ? "El valor ingresado excede el límite permitido."
-      : error.message?.startsWith("Producto ID")
+      : error.statusCode
+        ? error.message
+        : error.message?.startsWith("Producto ID") || error.message?.startsWith("Debe incluir") || error.message?.startsWith("Datos incompletos") || error.message?.startsWith("La fecha") || error.message?.startsWith("La cantidad") || error.message?.startsWith("Cada línea") || error.message?.startsWith("El estado")
         ? error.message
         : "Error interno al actualizar el pedido. Contacte al administrador.";
-    res.status(400).json({ error: msg });
+    res.status(error.statusCode || 400).json({ error: msg });
 
   } finally {
     client.release();
@@ -406,6 +523,7 @@ exports.deletePedido = async (req, res) => {
 
   try {
     await client.query("BEGIN");
+    const acceso = await verificarAccesoPedido(client, req, id_pedido, { lock: true });
 
     await client.query(
       `DELETE FROM ventasyreserva.tbl_detalle_pedidos WHERE id_pedido=$1`,
@@ -422,7 +540,7 @@ exports.deletePedido = async (req, res) => {
     res.json({ message: "Pedido eliminado correctamente" });
 
     // 📋 Bitácora
-    const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
+    const userEmail = acceso.email;
     const id_usuario = userEmail ? await findUserId(userEmail) : null;
     await registrarBitacora({
       id_usuario,
@@ -435,7 +553,7 @@ exports.deletePedido = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ [DELETE pedido] error:", error);
-    res.status(500).json({ error: "Error al eliminar el pedido. Contacte al administrador." });
+    res.status(error.statusCode || 500).json({ error: error.message || "Error al eliminar el pedido. Contacte al administrador." });
 
   } finally {
     client.release();

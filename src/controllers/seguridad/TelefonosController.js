@@ -65,6 +65,9 @@ exports.insertTelefono = async (req, res) => {
     if (!/^[0-9]{8}$/.test(limpio)) {
       return res.status(400).json({ error: "El teléfono debe tener 8 dígitos." });
     }
+    if (!/^[23789]/.test(limpio)) {
+      return res.status(400).json({ error: "El teléfono debe iniciar con 2, 3, 7, 8 o 9." });
+    }
 
     await pool.query(
       `CALL seguridad.sp_telefonos_insertar($1, $2, $3)`,
@@ -97,9 +100,30 @@ exports.updateTelefono = async (req, res) => {
     const { id_persona, numero, id_tipo_telefono } = req.body;
     const username = extractUsername(req);
 
+    // 🛡️ Validaciones backend
+    if (!id_persona) {
+      return res.status(400).json({ error: "Debe indicar la persona." });
+    }
+    if (!numero || !numero.trim()) {
+      return res.status(400).json({ error: "El número de teléfono es obligatorio." });
+    }
+    const limpio = numero.replace(/-/g, "").trim();
+    if (!/^[0-9]{8}$/.test(limpio)) {
+      return res.status(400).json({ error: "El teléfono debe tener 8 dígitos." });
+    }
+    if (!/^[23789]/.test(limpio)) {
+      return res.status(400).json({ error: "El teléfono debe iniciar con 2, 3, 7, 8 o 9." });
+    }
+
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_telefonos WHERE id_telefono = $1`, [id_telefono]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Teléfono no encontrado." });
+    }
+
     await pool.query(
       `CALL seguridad.sp_telefonos_actualizar($1, $2, $3, $4)`,
-      [id_telefono, id_persona, numero, id_tipo_telefono]
+      [id_telefono, id_persona, numero.trim(), id_tipo_telefono]
     );
 
     // 📋 Bitácora
@@ -109,7 +133,10 @@ exports.updateTelefono = async (req, res) => {
       tabla: "seguridad.tbl_telefonos",
       accion: "UPDATE",
       descripcion: `Teléfono ID ${id_telefono} actualizado por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_telefono, id_persona, numero, id_tipo_telefono }),
+      detalle: JSON.stringify({
+        antes: anterior.rows[0],
+        despues: { id_persona, numero, id_tipo_telefono }
+      }),
     });
 
     res.json({ message: "✅ Teléfono actualizado correctamente" });
@@ -127,6 +154,12 @@ exports.deleteTelefono = async (req, res) => {
     const { id } = req.params;
     const username = extractUsername(req);
 
+    // 🔎 Obtener estado anterior para bitácora
+    const anterior = await pool.query(`SELECT * FROM seguridad.tbl_telefonos WHERE id_telefono = $1`, [id]);
+    if (anterior.rows.length === 0) {
+      return res.status(404).json({ error: "Teléfono no encontrado para eliminar." });
+    }
+
     await pool.query(`CALL seguridad.sp_telefonos_eliminar($1)`, [id]);
 
     // 📋 Bitácora
@@ -136,7 +169,7 @@ exports.deleteTelefono = async (req, res) => {
       tabla: "seguridad.tbl_telefonos",
       accion: "DELETE",
       descripcion: `Teléfono ID ${id} eliminado por ${username || "desconocido"}`,
-      detalle: JSON.stringify({ id_telefono: id }),
+      detalle: JSON.stringify({ antes: anterior.rows[0], despues: null }),
     });
 
     res.json({ message: "✅ Teléfono eliminado correctamente" });

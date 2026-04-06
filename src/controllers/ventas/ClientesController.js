@@ -6,6 +6,7 @@
 // ============================================================
 const { pool } = require("../../db");
 const { registrarBitacora, findUserId } = require("../../utils/bitacora");
+const MAX_NOMBRE_CLIENTE = 60;
 
 // ─── Helper de validación ────────────────────────────────────
 function validar(data) {
@@ -16,8 +17,8 @@ function validar(data) {
     errores.push("El nombre del cliente es obligatorio.");
   else if (String(nombre_cliente).trim().length < 3)
     errores.push("El nombre debe tener al menos 3 caracteres.");
-  else if (String(nombre_cliente).trim().length > 150)
-    errores.push("El nombre no puede exceder 150 caracteres.");
+  else if (String(nombre_cliente).trim().length > MAX_NOMBRE_CLIENTE)
+    errores.push(`El nombre no puede exceder ${MAX_NOMBRE_CLIENTE} caracteres.`);
   else if (!/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/.test(String(nombre_cliente).trim()))
     errores.push("El nombre solo debe contener letras y espacios.");
 
@@ -60,6 +61,10 @@ function validar(data) {
     errores.push("La dirección no puede exceder 250 caracteres.");
 
   return errores;
+}
+
+function normalizarRTN(valor) {
+  return String(valor || "").replace(/-/g, "").trim();
 }
 
 // ============================================================
@@ -133,9 +138,12 @@ exports.insertCliente = async (req, res) => {
   try {
     // 🔒 Validar unicidad de RTN antes de insertar
     if (rtn) {
+      const rtnNormalizado = normalizarRTN(rtn);
       const existeRTN = await pool.query(
-        `SELECT id_cliente FROM ventasyreserva.clientes WHERE rtn = $1`,
-        [String(rtn).trim()]
+        `SELECT id_cliente
+         FROM ventasyreserva.clientes
+         WHERE REPLACE(COALESCE(rtn, ''), '-', '') = $1`,
+        [rtnNormalizado]
       );
       if (existeRTN.rowCount > 0)
         return res.status(409).json({ error: "Ya existe un cliente registrado con ese RTN / ID." });
@@ -145,7 +153,7 @@ exports.insertCliente = async (req, res) => {
       `CALL ventasyreserva.sp_insertar_clientes($1, $2, $3, $4, $5, $6, $7)`,
       [
         String(nombre_cliente).trim(),
-        rtn ? String(rtn).trim() : null,
+        rtn ? normalizarRTN(rtn) : null,
         id_tipo_cliente,
         direccion ? String(direccion).trim() : null,
         String(telefono).trim(),
@@ -154,7 +162,7 @@ exports.insertCliente = async (req, res) => {
       ]
     );
 
-    res.status(201).json({ message: "✅ Cliente insertado correctamente" });
+    res.status(201).json({ message: "Cliente insertado correctamente" });
 
     // 📋 Bitácora
     const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
@@ -169,7 +177,7 @@ exports.insertCliente = async (req, res) => {
   } catch (error) {
     console.error("❌ Error al insertar cliente:", error);
     const msg = error.message?.includes("value too long")
-      ? "El valor ingresado excede el límite de caracteres permitido."
+      ? "El valor ingresado excede el limite de caracteres permitido."
       : "Error interno del servidor. Contacte al administrador.";
     res.status(500).json({ error: msg });
   }
@@ -197,9 +205,13 @@ exports.updateCliente = async (req, res) => {
   try {
     // 🔒 Validar unicidad de RTN (excluyendo el cliente actual)
     if (rtn) {
+      const rtnNormalizado = normalizarRTN(rtn);
       const existeRTN = await pool.query(
-        `SELECT id_cliente FROM ventasyreserva.clientes WHERE rtn = $1 AND id_cliente != $2`,
-        [String(rtn).trim(), id_cliente]
+        `SELECT id_cliente
+         FROM ventasyreserva.clientes
+         WHERE REPLACE(COALESCE(rtn, ''), '-', '') = $1
+           AND id_cliente != $2`,
+        [rtnNormalizado, id_cliente]
       );
       if (existeRTN.rowCount > 0)
         return res.status(409).json({ error: "Ya existe otro cliente registrado con ese RTN / ID." });
@@ -210,7 +222,7 @@ exports.updateCliente = async (req, res) => {
       [
         id_cliente,
         String(nombre_cliente).trim(),
-        rtn ? String(rtn).trim() : null,
+        rtn ? normalizarRTN(rtn) : null,
         id_tipo_cliente,
         direccion ? String(direccion).trim() : null,
         String(telefono).trim(),
@@ -219,7 +231,7 @@ exports.updateCliente = async (req, res) => {
       ]
     );
 
-    res.json({ message: "✅ Cliente actualizado correctamente" });
+    res.json({ message: "Cliente actualizado correctamente" });
 
     // 📋 Bitácora
     const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];
@@ -234,7 +246,7 @@ exports.updateCliente = async (req, res) => {
   } catch (error) {
     console.error("❌ Error al actualizar cliente:", error);
     const msg = error.message?.includes("value too long")
-      ? "El valor ingresado excede el límite de caracteres permitido."
+      ? "El valor ingresado excede el limite de caracteres permitido."
       : "Error interno del servidor. Contacte al administrador.";
     res.status(500).json({ error: msg });
   }
@@ -251,7 +263,7 @@ exports.deleteCliente = async (req, res) => {
 
   try {
     await pool.query(`CALL ventasyreserva.sp_eliminar_clientes($1)`, [id_cliente]);
-    res.json({ message: "🗑️ Cliente eliminado correctamente" });
+    res.json({ message: "Cliente eliminado correctamente" });
 
     // 📋 Bitácora
     const userEmail = req.headers["x-user-email"] || req.headers["X-User-Email"];

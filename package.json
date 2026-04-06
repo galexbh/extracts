@@ -43,11 +43,11 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "build": "react-scripts build",
+    "build": "cross-env DISABLE_ESLINT_PLUGIN=true react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "cross-env API_PORT=4000 nodemon src/server.js",
-    "dev": "npm run kill-ports && concurrently -n WEB,API -c cyan,yellow \"cross-env PORT=3001 react-scripts start\" \"cross-env API_PORT=4000 nodemon src/server.js\"",
+    "dev": "node scripts/dev.js",
     "kill-ports": "npx kill-port 3001 4000"
   },
   "proxy": "http://localhost:4000",

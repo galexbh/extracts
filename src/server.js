@@ -9,9 +9,64 @@ const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
 const { pool } = require("./db"); // conexión PostgreSQL
 const firebaseUidInjector = require("./middleware/firebaseUidInjector");
+const { registrarBitacora, findUserId } = require("./utils/bitacora");
 
 const app = express();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCK_WINDOW_MS = 15 * 60 * 1000;
+const loginAttemptStore = new Map();
 
+const normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
+
+function getLoginAttemptEntry(email) {
+  const key = normalizeEmail(email);
+  if (!key) return null;
+
+  const current = loginAttemptStore.get(key);
+  if (!current) return null;
+
+  if (current.blockedUntil && current.blockedUntil <= Date.now()) {
+    loginAttemptStore.delete(key);
+    return null;
+  }
+
+  return current;
+}
+
+function buildLoginAttemptStatus(email) {
+  const current = getLoginAttemptEntry(email);
+  const failedAttempts = current?.failedAttempts || 0;
+  const blockedUntil = current?.blockedUntil || null;
+  const lockRemainingMs = blockedUntil ? Math.max(0, blockedUntil - Date.now()) : 0;
+
+  return {
+    failedAttempts,
+    blocked: lockRemainingMs > 0,
+    attemptsRemaining: Math.max(0, MAX_LOGIN_ATTEMPTS - failedAttempts),
+    lockRemainingMs,
+    lockRemainingSeconds: Math.ceil(lockRemainingMs / 1000),
+    lockDurationMinutes: Math.round(LOGIN_LOCK_WINDOW_MS / 60000),
+  };
+}
+
+function registerFailedLoginAttempt(email) {
+  const key = normalizeEmail(email);
+  const current = getLoginAttemptEntry(key);
+  const failedAttempts = (current?.failedAttempts || 0) + 1;
+  const shouldBlock = failedAttempts >= MAX_LOGIN_ATTEMPTS;
+  const blockedUntil = shouldBlock ? Date.now() + LOGIN_LOCK_WINDOW_MS : null;
+
+  loginAttemptStore.set(key, { failedAttempts, blockedUntil });
+  return buildLoginAttemptStatus(key);
+}
+
+function clearFailedLoginAttempts(email) {
+  const key = normalizeEmail(email);
+  if (key) loginAttemptStore.delete(key);
+}
+
+// Configurar 'trust proxy' en true/1 para proxies inversos y express-rate-limit
+app.set("trust proxy", 1);
 /* ============================================================
    🔹 HELMET — Headers de seguridad HTTP
    ============================================================ */
@@ -57,6 +112,141 @@ const apiLimiter = rateLimit({
    🔹 Healthcheck (público)
    ============================================================ */
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/auth/login-status", async (req, res) => {
+  const email = normalizeEmail(req.query.email);
+  if (!email) {
+    return res.status(400).json({ error: "EMAIL_REQUERIDO", message: "Email requerido." });
+  }
+
+  try {
+    const userResult = await pool.query(
+      `SELECT u.id_usuario, u.username, u.id_estado_usuario, e.nombre_estado
+       FROM seguridad.tbl_usuarios u
+       LEFT JOIN mantenimiento.tbl_estado_usuario e
+         ON e.id_estado_usuario = u.id_estado_usuario
+       WHERE LOWER(u.username) = LOWER($1)
+       LIMIT 1;`,
+      [email]
+    );
+
+    const attemptStatus = buildLoginAttemptStatus(email);
+
+    if (!userResult.rows.length) {
+      return res.json({
+        email,
+        exists: false,
+        permitido: !attemptStatus.blocked,
+        estado: null,
+        ...attemptStatus,
+      });
+    }
+
+    const user = userResult.rows[0];
+    const estado = String(user.nombre_estado || "").trim();
+    const permitidoPorEstado = estado.toLowerCase() === "activo";
+
+    return res.json({
+      email,
+      exists: true,
+      permitido: permitidoPorEstado && !attemptStatus.blocked,
+      estado,
+      id_estado_usuario: user.id_estado_usuario,
+      ...attemptStatus,
+    });
+  } catch (error) {
+    console.error("❌ Error consultando estado de login por email:", error);
+    return res.status(500).json({ error: "LOGIN_STATUS_ERROR", message: "No se pudo consultar el estado de login." });
+  }
+});
+
+app.post("/api/auth/login-failed", async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const reason = String(req.body?.reason || "Credenciales inválidas");
+
+  if (!email) {
+    return res.status(400).json({ error: "EMAIL_REQUERIDO", message: "Email requerido." });
+  }
+
+  try {
+    const status = registerFailedLoginAttempt(email);
+    const id_usuario = await findUserId(email);
+
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_usuarios",
+      accion: "LOGIN",
+      descripcion: `Intento fallido de login para ${email}`,
+      detalle: {
+        email,
+        resultado: "FAILED",
+        reason,
+        failedAttempts: status.failedAttempts,
+        attemptsRemaining: status.attemptsRemaining,
+        blocked: status.blocked,
+        lockRemainingSeconds: status.lockRemainingSeconds,
+      },
+    });
+
+    return res.status(status.blocked ? 423 : 200).json({
+      email,
+      ...status,
+      message: status.blocked
+        ? `Cuenta bloqueada temporalmente. Intenta nuevamente en ${Math.ceil(status.lockRemainingSeconds / 60)} minuto(s).`
+        : `Credenciales inválidas. Te quedan ${status.attemptsRemaining} intento(s).`,
+    });
+  } catch (error) {
+    console.error("❌ Error registrando intento fallido de login:", error);
+    return res.status(500).json({ error: "LOGIN_FAIL_ERROR", message: "No se pudo registrar el intento fallido." });
+  }
+});
+
+app.post("/api/auth/login-reset-attempts", async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email) {
+    return res.status(400).json({ error: "EMAIL_REQUERIDO", message: "Email requerido." });
+  }
+
+  clearFailedLoginAttempts(email);
+  return res.json({ ok: true });
+});
+
+app.post("/api/auth/login-complete", async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email) {
+    return res.status(400).json({ error: "EMAIL_REQUERIDO", message: "Email requerido." });
+  }
+
+  try {
+    clearFailedLoginAttempts(email);
+
+    const userResult = await pool.query(
+      `UPDATE seguridad.tbl_usuarios
+       SET ultimo_login = NOW()
+       WHERE LOWER(username) = LOWER($1)
+       RETURNING id_usuario;`,
+      [email]
+    );
+
+    const id_usuario = userResult.rows[0]?.id_usuario || (await findUserId(email));
+
+    await registrarBitacora({
+      id_usuario,
+      tabla: "seguridad.tbl_usuarios",
+      accion: "LOGIN",
+      descripcion: `Inicio de sesión exitoso de ${email}`,
+      detalle: {
+        email,
+        resultado: "SUCCESS",
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("❌ Error registrando login exitoso:", error);
+    return res.status(500).json({ error: "LOGIN_SUCCESS_ERROR", message: "No se pudo registrar el login exitoso." });
+  }
+});
 
 /* ============================================================
    🔹 ENDPOINTS MFA — Pre-autenticación (flujo de login)

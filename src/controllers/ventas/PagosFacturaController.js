@@ -2,6 +2,39 @@
 // 📁 CONTROLLER: PAGOS DE FACTURA (VERSIÓN FINAL)
 // ============================================================
 const { pool } = require("../../db");
+const { registrarBitacora, findUserId } = require("../../utils/bitacora");
+
+function getRequestEmail(req) {
+  return (
+    req.user?.email ||
+    req.headers["x-user-email"] ||
+    req.headers["X-User-Email"] ||
+    null
+  );
+}
+
+async function obtenerFacturaPagoEstado(client, id_factura, { lock = false } = {}) {
+  const result = await client.query(
+    `SELECT f.id_factura, f.total_a_pagar, f.id_estado_pago, COALESCE(ep.nombre_estado, '') AS estado
+     FROM ventasyreserva.tbl_facturas f
+     LEFT JOIN mantenimiento.tbl_estado_pago ep
+       ON ep.id_estado_pago = f.id_estado_pago
+     WHERE f.id_factura = $1
+     ${lock ? "FOR UPDATE" : ""}`,
+    [id_factura]
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  const factura = result.rows[0];
+  const estado = String(factura.estado || "").trim().toLowerCase();
+  return {
+    ...factura,
+    anulada: factura.id_estado_pago === 2 || estado === "anulada" || estado === "anulado",
+  };
+}
 
 // ============================================================
 // 🔹 Helper: recalcular estado de la factura
@@ -62,24 +95,33 @@ exports.listarResumenFacturasConPagos = async (_req, res) => {
         COALESCE(SUM(p.monto_pagado), 0) AS total_pagado,
         f.total_a_pagar - COALESCE(SUM(p.monto_pagado), 0) AS saldo_pendiente,
         ep.nombre_estado AS estado,
-        MAX(mp.nombre_metodo) AS metodo_ultimo_pago,
-        MAX(p.almacen) AS almacen_ultimo_pago
+        ult.nombre_metodo AS metodo_ultimo_pago,
+        ult.almacen AS almacen_ultimo_pago
       FROM ventasyreserva.tbl_facturas f
       LEFT JOIN ventasyreserva.clientes c
         ON c.id_cliente = f.id_cliente
       LEFT JOIN ventasyreserva.tbl_pagos_factura p
         ON p.id_factura = f.id_factura
-      LEFT JOIN mantenimiento.tbl_metodo_pago mp
-        ON mp.id_metodo_pago = p.id_metodo_pago
       LEFT JOIN mantenimiento.tbl_estado_pago ep
         ON ep.id_estado_pago = f.id_estado_pago
+      LEFT JOIN LATERAL (
+        SELECT mp.nombre_metodo, pf.almacen
+        FROM ventasyreserva.tbl_pagos_factura pf
+        LEFT JOIN mantenimiento.tbl_metodo_pago mp
+          ON mp.id_metodo_pago = pf.id_metodo_pago
+        WHERE pf.id_factura = f.id_factura
+        ORDER BY pf.fecha_pago DESC, pf.id_pago DESC
+        LIMIT 1
+      ) ult ON true
       GROUP BY 
         f.id_factura,
         f.numero_factura,
         f.fecha_emision,
         c.nombre_cliente,
         f.total_a_pagar,
-        ep.nombre_estado
+        ep.nombre_estado,
+        ult.nombre_metodo,
+        ult.almacen
       ORDER BY f.fecha_emision DESC, f.numero_factura DESC
     `);
 
@@ -193,17 +235,19 @@ exports.crearPago = async (req, res) => {
     // ===============================================
     // 🛡️ REGLA: Comprobar el Saldo Actual de la Factura
     // ===============================================
-    const facRes = await client.query(
-      `SELECT total_a_pagar FROM ventasyreserva.tbl_facturas WHERE id_factura = $1 FOR UPDATE`,
-      [id_factura]
-    );
+    const factura = await obtenerFacturaPagoEstado(client, id_factura, { lock: true });
 
-    if (facRes.rows.length === 0) {
+    if (!factura) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "Factura no encontrada para recibir el pago." });
     }
 
-    const totalDeuda = Number(facRes.rows[0].total_a_pagar) || 0;
+    if (factura.anulada) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "No se pueden registrar pagos sobre una factura anulada." });
+    }
+
+    const totalDeuda = Number(factura.total_a_pagar) || 0;
 
     const pagosRes = await client.query(
       `SELECT COALESCE(SUM(monto_pagado), 0) AS total_pagado
@@ -252,6 +296,22 @@ exports.crearPago = async (req, res) => {
       pago: insertRes.rows[0],
       resumen,
     });
+
+    const userEmail = getRequestEmail(req);
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_pagos_factura",
+      accion: "INSERT",
+      descripcion: `Pago registrado para factura ID ${id_factura} por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({
+        id_factura,
+        id_pago: insertRes.rows[0].id_pago,
+        monto_pagado: Number(monto_pagado),
+        id_metodo_pago: Number(id_metodo_pago),
+        almacen,
+      }),
+    });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error creando pago:", error);
@@ -272,7 +332,9 @@ exports.eliminarPago = async (req, res) => {
     await client.query("BEGIN");
 
     const pagoRes = await client.query(
-      `SELECT id_factura FROM ventasyreserva.tbl_pagos_factura WHERE id_pago = $1`,
+      `SELECT id_factura, monto_pagado, id_metodo_pago, almacen
+       FROM ventasyreserva.tbl_pagos_factura
+       WHERE id_pago = $1`,
       [id_pago]
     );
 
@@ -282,6 +344,17 @@ exports.eliminarPago = async (req, res) => {
     }
 
     const id_factura = pagoRes.rows[0].id_factura;
+    const factura = await obtenerFacturaPagoEstado(client, id_factura, { lock: true });
+
+    if (!factura) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Factura no encontrada." });
+    }
+
+    if (factura.anulada) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "No se pueden eliminar pagos de una factura anulada." });
+    }
 
     await client.query(
       `DELETE FROM ventasyreserva.tbl_pagos_factura WHERE id_pago = $1`,
@@ -295,6 +368,22 @@ exports.eliminarPago = async (req, res) => {
     res.json({
       message: "Pago eliminado correctamente",
       resumen,
+    });
+
+    const userEmail = getRequestEmail(req);
+    const id_usuario = userEmail ? await findUserId(userEmail) : null;
+    await registrarBitacora({
+      id_usuario,
+      tabla: "ventasyreserva.tbl_pagos_factura",
+      accion: "DELETE",
+      descripcion: `Pago ID ${id_pago} eliminado por ${userEmail || "desconocido"}`,
+      detalle: JSON.stringify({
+        id_pago,
+        id_factura,
+        monto_pagado: pagoRes.rows[0].monto_pagado,
+        id_metodo_pago: pagoRes.rows[0].id_metodo_pago,
+        almacen: pagoRes.rows[0].almacen,
+      }),
     });
   } catch (error) {
     await client.query("ROLLBACK");

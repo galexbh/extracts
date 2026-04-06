@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Seguridad/personas.js
-// ✅ Versión con export modal PDF/Excel, Modo Claro/Oscuro optimizado
+﻿// ============================================================
+// ðŸ“ src/components/Seguridad/personas.js
+// âœ… VersiÃ³n con export modal PDF/Excel, Modo Claro/Oscuro optimizado
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -20,6 +20,7 @@ import {
   Select,
   Text,
   HStack,
+  Tooltip,
   SimpleGrid,
   Checkbox,
   Badge,
@@ -49,18 +50,19 @@ import { DownloadIcon } from "@chakra-ui/icons";
 
 import { useNavigate } from "react-router-dom";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 import CrudTabla from "./CrudTabla";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre Completo" },
@@ -80,7 +82,7 @@ export default function Personas() {
   const navigate = useNavigate();
 
   // ============================================================
-  // ✅ PALETA HÍBRIDA (definida UNA VEZ)
+  // âœ… PALETA HÃBRIDA (definida UNA VEZ)
   // ============================================================
   const cardBg = useColorModeValue("#FFFFFF", "#1E293B");
   const borderClr = useColorModeValue("#E2E8F0", "#334155");
@@ -106,7 +108,7 @@ export default function Personas() {
   const modalInputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // ✅ Estados
+  // âœ… Estados
   // ============================================================
   const [empleados, setEmpleados] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -134,7 +136,7 @@ export default function Personas() {
     pais: "",
   });
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -156,11 +158,11 @@ export default function Personas() {
   // VALIDACIONES (Mejoradas)
   // ============================================================
   const validarFormulario = () => {
-    const soloLetrasConExtras = /^[A-Za-záéíóúÁÉÍÓÚñÑ\s\-'.]{3,100}$/;
+    const soloLetrasConExtras = /^[A-Za-zÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s\-'.]{3,100}$/;
     const dniRegex = /^(\d{13}|\d{4}-\d{4}-\d{5})$/;
     const telefonoRegex = /^[23789]\d{3}-?\d{4}$/;
     const correoRegex = /^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/;
-    const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
+    const textoSeguro = /^[A-Za-zÃÃ‰ÃÃ“ÃšÃ¡Ã©Ã­Ã³ÃºÃ±Ã‘0-9 .,#-]{3,255}$/;
 
     const esVacio = (valor) => !valor || (typeof valor === 'string' && valor.trim() === "");
 
@@ -169,7 +171,7 @@ export default function Personas() {
       return false;
     }
     if (!soloLetrasConExtras.test(form.nombre.trim())) {
-      toast({ title: "Nombre inválido", description: "Solo letras, mínimo 3 y máximo 100 caracteres.", status: "warning" });
+      toast({ title: "Nombre invÃ¡lido", description: "Solo letras, mÃ­nimo 3 y mÃ¡ximo 100 caracteres.", status: "warning" });
       return false;
     }
 
@@ -178,20 +180,20 @@ export default function Personas() {
       return false;
     }
     if (!soloLetrasConExtras.test(form.apellido.trim())) {
-      toast({ title: "Apellido inválido", description: "Solo letras, mínimo 3 y máximo 100 caracteres.", status: "warning" });
+      toast({ title: "Apellido invÃ¡lido", description: "Solo letras, mÃ­nimo 3 y mÃ¡ximo 100 caracteres.", status: "warning" });
       return false;
     }
 
     if (esVacio(form.identificacion)) {
-      toast({ title: "La Identificación es requerida", status: "warning" });
+      toast({ title: "La IdentificaciÃ³n es requerida", status: "warning" });
       return false;
     }
     if (form.identificacion.trim().length > 50) {
-      toast({ title: "Identificación inválida", description: "No puede exceder 50 caracteres (BD).", status: "warning" });
+      toast({ title: "IdentificaciÃ³n invÃ¡lida", description: "No puede exceder 50 caracteres (BD).", status: "warning" });
       return false;
     }
     if (!dniRegex.test(form.identificacion.trim())) {
-      toast({ title: "Identificación inválida", description: "Debe ser 13 dígitos o formato 0000-0000-00000.", status: "warning" });
+      toast({ title: "IdentificaciÃ³n invÃ¡lida", description: "Debe ser 13 dÃ­gitos o formato 0000-0000-00000.", status: "warning" });
       return false;
     }
 
@@ -202,11 +204,11 @@ export default function Personas() {
     const fecha = new Date(form.fecha_nacimiento);
     const hoy = new Date();
     if (isNaN(fecha)) {
-      toast({ title: "Fecha inválida", description: "Verifique el formato de la fecha.", status: "warning" });
+      toast({ title: "Fecha invÃ¡lida", description: "Verifique el formato de la fecha.", status: "warning" });
       return false;
     }
     if (fecha > hoy) {
-      toast({ title: "Fecha inválida", description: "No puede ser futura.", status: "warning" });
+      toast({ title: "Fecha invÃ¡lida", description: "No puede ser futura.", status: "warning" });
       return false;
     }
     let edad = hoy.getFullYear() - fecha.getFullYear();
@@ -215,12 +217,12 @@ export default function Personas() {
       edad--;
     }
     if (edad < 18) {
-      toast({ title: "Edad mínima: 18 años", status: "warning" });
+      toast({ title: "Edad mÃ­nima: 18 aÃ±os", status: "warning" });
       return false;
     }
 
     if (esVacio(form.genero)) {
-      toast({ title: "Seleccione un género", status: "warning" });
+      toast({ title: "Seleccione un gÃ©nero", status: "warning" });
       return false;
     }
 
@@ -243,16 +245,16 @@ export default function Personas() {
       return false;
     }
     if (!correoRegex.test(form.correo.trim())) {
-      toast({ title: "Correo inválido", status: "warning" });
+      toast({ title: "Correo invÃ¡lido", status: "warning" });
       return false;
     }
 
     if (esVacio(form.direccion)) {
-      toast({ title: "La Dirección es requerida", status: "warning" });
+      toast({ title: "La DirecciÃ³n es requerida", status: "warning" });
       return false;
     }
     if (!textoSeguro.test(form.direccion.trim())) {
-      toast({ title: "Dirección inválida", description: "Mínimo 3, máximo 255 caracteres permitidos.", status: "warning" });
+      toast({ title: "DirecciÃ³n invÃ¡lida", description: "MÃ­nimo 3, mÃ¡ximo 255 caracteres permitidos.", status: "warning" });
       return false;
     }
 
@@ -262,7 +264,7 @@ export default function Personas() {
         return false;
       }
       if (!soloLetrasConExtras.test(form[field].trim())) {
-        toast({ title: `${label} inválido`, status: "warning" });
+        toast({ title: `${label} invÃ¡lido`, status: "warning" });
         return false;
       }
       return true;
@@ -270,13 +272,13 @@ export default function Personas() {
 
     if (!validacionDireccion('ciudad', 'Ciudad')) return false;
     if (!validacionDireccion('departamento', 'Departamento')) return false;
-    if (!validacionDireccion('pais', 'País')) return false;
+    if (!validacionDireccion('pais', 'PaÃ­s')) return false;
 
     return true;
   };
 
   // ============================================================
-  // ✅ Cargar datos
+  // âœ… Cargar datos
   // ============================================================
   const cargar = useCallback(async () => {
     try {
@@ -313,7 +315,7 @@ export default function Personas() {
   }, [cargar]);
 
   // ============================================================
-  // ✅ Form handlers
+  // âœ… Form handlers
   // ============================================================
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -341,7 +343,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ Editar
+  // âœ… Editar
   // ============================================================
   const editar = (emp) => {
     setModoEdicion(true);
@@ -368,7 +370,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ Guardar nuevo
+  // âœ… Guardar nuevo
   // ============================================================
   const guardarNuevo = async () => {
     if (!validarFormulario()) return;
@@ -392,7 +394,7 @@ export default function Personas() {
         departamento: form.departamento, pais: form.pais,
       });
 
-      toast({ title: "✅ Empleado creado", status: "success" });
+      toast({ title: "âœ… Empleado creado", status: "success" });
       limpiar();
       cargar();
     } catch (e) {
@@ -401,7 +403,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ Actualizar empleado
+  // âœ… Actualizar empleado
   // ============================================================
   const actualizar = async () => {
     if (!validarFormulario()) return;
@@ -434,7 +436,7 @@ export default function Personas() {
           departamento: form.departamento, pais: form.pais,
         });
 
-      toast({ title: "✅ Empleado actualizado", status: "success" });
+      toast({ title: "âœ… Empleado actualizado", status: "success" });
       limpiar();
       cargar();
     } catch (e) {
@@ -443,12 +445,12 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ Eliminar
+  // âœ… Eliminar
   // ============================================================
   const eliminar = async (id) => {
     try {
       await api.delete(`/seguridad/personas/${id}`);
-      toast({ title: "🗑️ Empleado eliminado", status: "success" });
+      toast({ title: "ðŸ—‘ï¸ Empleado eliminado", status: "success" });
       cargar();
     } catch (e) {
       toast({ title: "Error al eliminar", description: e.response?.data?.error || e.message, status: "error" });
@@ -456,7 +458,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -504,7 +506,7 @@ export default function Personas() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -532,7 +534,7 @@ export default function Personas() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
       doc.setFontSize(9);
       doc.setTextColor(120);
@@ -568,7 +570,7 @@ export default function Personas() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
@@ -591,7 +593,7 @@ export default function Personas() {
       doc.save(`Empleados_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -599,7 +601,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -619,7 +621,7 @@ export default function Personas() {
       const allCols = [
         { key: "id", header: "ID", width: 8, extract: (r) => r.id_persona },
         { key: "nombre", header: "Nombre Completo", width: 28, extract: (r) => `${r.nombre || ""} ${r.apellido || ""}`.trim() },
-        { key: "identificacion", header: "Identificación", width: 18, extract: (r) => r.identificacion || "" },
+        { key: "identificacion", header: "IdentificaciÃ³n", width: 18, extract: (r) => r.identificacion || "" },
         { key: "genero", header: "Género", width: 12, extract: (r) => r.genero || "" },
         { key: "tipo", header: "Tipo Empleado", width: 18, extract: (r) => r.nombre_tipo_persona || "" },
         { key: "telefono", header: "Teléfono", width: 14, extract: (r) => r.telefono?.numero || "" },
@@ -632,13 +634,13 @@ export default function Personas() {
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Empleados — Extractus";
+      titleCell.value = "Reporte de Empleados â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -677,7 +679,7 @@ export default function Personas() {
       saveAs(new Blob([buffer]), `Empleados_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -685,7 +687,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ Loading
+  // âœ… Loading
   // ============================================================
   if (loading) {
     return (
@@ -695,20 +697,25 @@ export default function Personas() {
     );
   }
 
-  // ✅ Stats Dashboard
+  // âœ… Stats Dashboard
   const statsData = {
     total: empleados.length,
     masculinos: empleados.filter(e => (e.genero || "").toLowerCase() === "masculino").length,
     femeninos: empleados.filter(e => (e.genero || "").toLowerCase() === "femenino").length
   };
 
-  // ✅ CRUD Logic para CrudTabla
-  const soloLetrasConExtras = /^[A-Za-záéíóúÁÉÍÓÚñÑ\s\-'.]{3,100}$/;
+  // âœ… CRUD Logic para CrudTabla
+  const soloLetrasConExtras = /^[A-Za-zÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s\-'.]{3,100}$/;
   const dniRegex = /^(\d{13}|\d{4}-\d{4}-\d{5})$/;
   const telefonoRegex = /^[23789]\d{3}-?\d{4}$/;
   const correoRegex = /^[\w.-]+@[\w.-]+\.[A-Za-z]{2,}$/;
-  const textoSeguro = /^[A-Za-zÁÉÍÓÚáéíóúñÑ0-9 .,#-]{3,255}$/;
-  
+  const textoSeguro = /^[A-Za-zÃÃ‰ÃÃ“ÃšÃ¡Ã©Ã­Ã³ÃºÃ±Ã‘0-9 .,#-]{3,255}$/;
+  const sanitizeSoloLetras = (val) => String(val || "").replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]/g, "");
+  const sanitizeIdentidad = (val) => String(val || "").replace(/[^0-9-]/g, "").slice(0, 15);
+  const sanitizeTelefono = (val) => String(val || "").replace(/[^0-9-]/g, "").slice(0, 9);
+  const sanitizeCorreo = (val) => String(val || "").replace(/\s/g, "").toLowerCase().slice(0, 100);
+  const sanitizeTextoDireccion = (val) => String(val || "").replace(/[^A-Za-zÃÃ‰ÃÃ“ÃšÃ¡Ã©Ã­Ã³ÃºÃ±Ã‘0-9 .,#-]/g, "");
+
   const validateText = (v) => (!v || !v.trim()) ? "Obligatorio" : (!soloLetrasConExtras.test(v.trim())) ? "Solo letras, 3 a 100 caracteres" : null;
 
   const fields = [
@@ -716,20 +723,31 @@ export default function Personas() {
       name: "nombre",
       label: "Nombre",
       type: "text",
+      placeholderText: "Ej. Juan",
+      maxLength: 100,
       validate: validateText,
+      sanitize: sanitizeSoloLetras,
+      sanitizeWarning: "Solo letras, espacios y caracteres permitidos. MÃ­nimo 3 y mÃ¡ximo 100 caracteres.",
     },
     {
       name: "apellido",
       label: "Apellido",
       type: "text",
+      placeholderText: "Ej. PÃ©rez",
+      maxLength: 100,
       validate: validateText,
+      sanitize: sanitizeSoloLetras,
+      sanitizeWarning: "Solo letras, espacios y caracteres permitidos. MÃ­nimo 3 y mÃ¡ximo 100 caracteres.",
     },
     {
       name: "identificacion",
-      label: "Identificación",
+      label: "IdentificaciÃ³n",
       type: "text",
-      placeholderText: "Ej: 0000-0000-00000 o 13 dígitos",
-      validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!dniRegex.test(v.trim())) ? "Formato inválido" : null,
+      placeholderText: "Ej: 0000-0000-00000 o 13 dÃ­gitos",
+      maxLength: 15,
+      validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!dniRegex.test(v.trim())) ? "Formato invÃ¡lido" : null,
+      sanitize: sanitizeIdentidad,
+      sanitizeWarning: "Solo nÃºmeros y guiones. Usa 13 dÃ­gitos o formato 0000-0000-00000.",
     },
     {
       name: "fecha_nacimiento",
@@ -769,37 +787,60 @@ export default function Personas() {
       label: "Teléfono",
       type: "tel",
       placeholderText: "Ocho dígitos ej. 99998888",
+      maxLength: 9,
       validate: (v) => (!v || String(v).trim() === "") ? "Obligatorio" : (!telefonoRegex.test(String(v).trim())) ? "Inválido (8 dígitos)" : null,
+      sanitize: sanitizeTelefono,
+      sanitizeWarning: "Solo números. Debe contener 8 dígitos y comenzar con 2, 3, 7, 8 o 9.",
     },
     {
       name: "correo",
       label: "Correo Electrónico",
       type: "email",
+      placeholderText: "Ej. usuario@dominio.com",
+      maxLength: 100,
       validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!correoRegex.test(v.trim())) ? "Correo incorrecto" : null,
+      sanitize: sanitizeCorreo,
+      sanitizeWarning: "Ingresa un correo válido con nombre, @, dominio y extensión.",
     },
     {
       name: "direccion",
       label: "Dirección Exacta",
       type: "textarea",
+      placeholderText: "Ej. Colonia Kennedy, bloque 4, casa 12",
+      maxLength: 255,
       validate: (v) => (!v || !v.trim()) ? "Obligatorio" : (!textoSeguro.test(v.trim())) ? "Caracteres no válidos" : null,
+      sanitize: sanitizeTextoDireccion,
+      sanitizeWarning: "Solo letras, números y . , # -. Mínimo 3 y máximo 255 caracteres.",
     },
     {
       name: "ciudad",
       label: "Ciudad",
       type: "text",
+      placeholderText: "Ej. Tegucigalpa",
+      maxLength: 100,
       validate: validateText,
+      sanitize: sanitizeSoloLetras,
+      sanitizeWarning: "Solo letras, espacios y caracteres permitidos. Mínimo 3 y máximo 100 caracteres.",
     },
     {
       name: "departamento",
       label: "Departamento",
       type: "text",
+      placeholderText: "Ej. Francisco Morazán",
+      maxLength: 100,
       validate: validateText,
+      sanitize: sanitizeSoloLetras,
+      sanitizeWarning: "Solo letras, espacios y caracteres permitidos. Mínimo 3 y máximo 100 caracteres.",
     },
     {
       name: "pais",
       label: "País",
       type: "text",
+      placeholderText: "Ej. Honduras",
+      maxLength: 100,
       validate: validateText,
+      sanitize: sanitizeSoloLetras,
+      sanitizeWarning: "Solo letras, espacios y caracteres permitidos. Mínimo 3 y máximo 100 caracteres.",
     }
   ];
 
@@ -821,8 +862,8 @@ export default function Personas() {
     "Género": (r) => r.genero || "",
     "Tipo": (r) => r.nombre_tipo_persona || r.tipo_persona || "",
     "Teléfono": (r) => r.telefono?.numero || r.telefono || "—",
-    "Correo": (r) => r.correo?.correo || r.correo || "—",
-    "Ciudad": (r) => r.direccion?.ciudad || r.ciudad || "—",
+    "Correo": (r) => r.correo?.correo || r.correo || "â€”",
+    "Ciudad": (r) => r.direccion?.ciudad || r.ciudad || "â€”",
   };
 
   const handleInsert = async (nuevo) => {
@@ -874,7 +915,7 @@ export default function Personas() {
   };
 
   // ============================================================
-  // ✅ UI FINAL
+  // âœ… UI FINAL
   // ============================================================
   
   // Transformar lista final para modal flat
@@ -896,20 +937,24 @@ export default function Personas() {
   return (
     <Box p={5}>
 
-      {/* ✅ Botón Atrás */}
-      <Button
-        leftIcon={<FaArrowLeft />}
-        bg={colorBtn}
-        color="white"
-        _hover={{ bg: colorBtnHover }}
-        size="sm"
-        mb={4}
-        onClick={() => navigate("/app/seguridad")}
-      >
-        Atrás
-      </Button>
+      {/* Botón Atrás */}
+      <Tooltip label="Volver al menú Seguridad" placement="bottom-start">
+        <Button
+          leftIcon={<FaArrowLeft />}
+          bg={colorBtn}
+          color="white"
+          _hover={{ bg: colorBtnHover, transform: "scale(1.03)" }}
+          size="sm"
+          mb={4}
+          boxShadow="sm"
+          borderRadius="full"
+          onClick={() => navigate("/app/seguridad")}
+        >
+          Atrás
+        </Button>
+      </Tooltip>
 
-      {/* Título + Botón Exportar */}
+      {/* TÃ­tulo + BotÃ³n Exportar */}
       <Flex justify="space-between" align="center" mb={3}>
         <Heading size="lg" color={accent}>
           Gestión de Empleados
@@ -932,7 +977,7 @@ export default function Personas() {
 
       <Divider mb={5} borderColor={borderClr} />
 
-      {/* ✅ DASHBOARD */}
+      {/* âœ… DASHBOARD */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
         <Box bg={cardBg} border={`1px solid ${borderClr}`} p={5} rounded="md" shadow="sm">
           <Stat>
@@ -959,7 +1004,7 @@ export default function Personas() {
         </Box>
       </SimpleGrid>
 
-      {/* ✅ TABLA CRUD */}
+      {/* âœ… TABLA CRUD */}
       <Box
         bg={cardBg}
         p={3}
@@ -982,7 +1027,7 @@ export default function Personas() {
         />
       </Box>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -996,25 +1041,25 @@ export default function Personas() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los empleados.
+              Si no aplicas filtros, se exportarÃ¡n todos los empleados.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
               <Input
-                placeholder="Ej: Juan Pérez"
+                placeholder="Ej: Juan PÃ©rez"
                 value={expNombre}
                 onChange={(e) => setExpNombre(e.target.value)}
                 size="sm"
@@ -1023,7 +1068,7 @@ export default function Personas() {
             </FormControl>
 
             <FormControl mb={3}>
-              <FormLabel fontSize="sm">Por género</FormLabel>
+              <FormLabel fontSize="sm">Por gÃ©nero</FormLabel>
               <Select placeholder="Todos" value={expGenero} onChange={(e) => setExpGenero(e.target.value)} size="sm" bg={modalInputBg}>
                 <option value="Femenino">Femenino</option>
                 <option value="Masculino">Masculino</option>
@@ -1041,7 +1086,7 @@ export default function Personas() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -1109,3 +1154,4 @@ export default function Personas() {
     </Box>
   );
 }
+

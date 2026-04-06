@@ -10,16 +10,23 @@ const { registrarBitacora, extractUsername, findUserId } = require("../../utils/
    🔹 GET: listar todos los permisos
    ============================================================ */
 exports.getPermisos = async (_req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query("BEGIN");
-    await pool.query("CALL seguridad.sp_permisos_listar('cur_permisos')");
-    const result = await pool.query("FETCH ALL FROM cur_permisos");
-    await pool.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query("CALL seguridad.sp_permisos_listar('cur_permisos')");
+    const result = await client.query("FETCH ALL FROM cur_permisos");
+    await client.query("COMMIT");
     res.json(result.rows);
   } catch (err) {
-    await pool.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {
+      // ignorar rollback fallido
+    }
     console.error("[API] ❌ Error obteniendo permisos:", err);
     res.status(500).json({ error: "Error al obtener permisos" });
+  } finally {
+    client.release();
   }
 };
 

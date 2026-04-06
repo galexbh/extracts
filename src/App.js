@@ -2,7 +2,7 @@
 // 📁 src/App.js — VERSIÓN FINAL UNIFICADA Y OPTIMIZADA
 // ============================================================
 import React from 'react';
-import { ChakraProvider } from '@chakra-ui/react';
+import { ChakraProvider, extendTheme } from '@chakra-ui/react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from "./context/AuthContext";
@@ -116,9 +116,24 @@ import MantenimientoEstadoInventarioProducto from './components/Mantenimiento/Ma
 // ============================================================
 //                        APP PRINCIPAL
 // ============================================================
+const theme = extendTheme({
+  fonts: {
+    heading: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    body: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    mono: "Consolas, 'Courier New', monospace",
+  },
+  components: {
+    Button: {
+      baseStyle: {
+        fontFamily: "body",
+      },
+    },
+  },
+});
+
 function App() {
   return (
-    <ChakraProvider>
+    <ChakraProvider theme={theme}>
       <AuthProvider>
         <BrowserRouter>
           <Routes>

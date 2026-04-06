@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Produccion/Productos.js
-// 💎 Gestión de Productos con control de stock, dashboard y export modal
+﻿// ============================================================
+// ðŸ“ src/components/Produccion/Productos.js
+// ðŸ’Ž GestiÃ³n de Productos con control de stock, dashboard y export modal
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -51,29 +51,31 @@ import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "../Seguridad/CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
   { key: "unidad", label: "Unidad de Medida" },
   { key: "precio", label: "Precio Unitario" },
-  { key: "stock_min", label: "Stock Mínimo" },
-  { key: "stock_max", label: "Stock Máximo" },
+  { key: "stock_min", label: "Stock MÃ­nimo" },
+  { key: "stock_max", label: "Stock MÃ¡ximo" },
   { key: "estado", label: "Estado" },
-  { key: "fecha", label: "Fecha Creación" },
+  { key: "fecha", label: "Fecha CreaciÃ³n" },
 ];
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
+const MAX_DESCRIPCION_PRODUCTO = 250;
 
 export default function Productos() {
-  // 🎨 Colores
+  // ðŸŽ¨ Colores
   const accent = useColorModeValue("#009e73", "teal.300");
   const pageBg = useColorModeValue("#f7faf8", "#020617");
   const cardBg = useColorModeValue("white", "#0b1120");
@@ -101,7 +103,7 @@ export default function Productos() {
   const [estados, setEstados] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -118,14 +120,14 @@ export default function Productos() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // 🔹 Cargar datos
+  // ðŸ”¹ Cargar datos
   // ============================================================
   const cargarProductos = useCallback(async () => {
     try {
       const res = await api.get("/produccion/productos");
       setData(res.data);
     } catch (err) {
-      console.error("❌ Error cargando productos:", err);
+      console.error("âŒ Error cargando productos:", err);
       toast({ title: "Error al cargar productos", description: err.message, status: "error", duration: 4000, isClosable: true });
     }
   }, [toast]);
@@ -135,7 +137,7 @@ export default function Productos() {
       const res = await api.get("/mantenimiento/estado-producto");
       setEstados(res.data);
     } catch (err) {
-      console.error("❌ Error cargando estados de producto:", err);
+      console.error("âŒ Error cargando estados de producto:", err);
       setEstados([]);
     }
   }, []);
@@ -145,7 +147,7 @@ export default function Productos() {
   }, [cargarProductos, cargarEstados]);
 
   // ============================================================
-  // 🔹 Estadísticas Dashboard
+  // ðŸ”¹ EstadÃ­sticas Dashboard
   // ============================================================
   const { totalProductos, prodActivos, prodInactivos } = React.useMemo(() => {
     const total = data.length;
@@ -157,7 +159,7 @@ export default function Productos() {
   }, [data]);
 
   // ============================================================
-  // 🔹 Validaciones
+  // ðŸ”¹ Validaciones
   // ============================================================
   const validarRequerido = (valor, campo) => {
     if (!valor || String(valor).trim() === "") return `El campo ${campo} es obligatorio.`;
@@ -167,32 +169,56 @@ export default function Productos() {
   const validarSoloLetras = (valor, campo) => {
     const errorReq = validarRequerido(valor, campo);
     if (errorReq) return errorReq;
-    const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
-    if (!regex.test(valor)) return `El campo ${campo} solo debe contener letras y espacios (sin números ni símbolos).`;
+    const regex = /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]+$/;
+    if (!regex.test(valor)) return `El campo ${campo} solo permite letras y espacios. No se permiten numeros ni caracteres especiales.`;
     if (String(valor).trim().length > 100) return `El campo ${campo} no puede exceder los 100 caracteres.`;
     return null;
   };
 
   const sanitizeTexto = (valor) => {
     if (!valor) return "";
-    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "").slice(0, 100);
+    return valor.replace(/[^a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]/g, "").slice(0, 100);
+  };
+
+  const validarDescripcion = (valor) => {
+    if (!valor) return null;
+    if (String(valor).trim().length > MAX_DESCRIPCION_PRODUCTO) {
+      return `La descripcion no puede exceder los ${MAX_DESCRIPCION_PRODUCTO} caracteres.`;
+    }
+    return null;
+  };
+
+  const sanitizeDescripcion = (valor) => {
+    if (!valor) return "";
+    return String(valor)
+      .replace(/[\u0000-\u001F\u007F<>]/g, "")
+      .slice(0, MAX_DESCRIPCION_PRODUCTO);
   };
 
   // ============================================================
-  // 🔹 Campos del formulario CRUD
+  // ðŸ”¹ Campos del formulario CRUD
   // ============================================================
   const fields = [
-    { name: "nombre_producto", label: "Nombre del Producto", type: "text", required: true, maxLength: 100, placeholderText: "Ej. Jugo de Naranja", validate: (v) => validarSoloLetras(v, "Nombre del Producto"), sanitize: sanitizeTexto },
-    { name: "descripcion", label: "Descripción", type: "textarea", placeholderText: "Opcional: detalles del producto" },
-    { name: "unidad_medida", label: "Unidad de Medida", type: "select", required: true, options: [{ value: "Litro", label: "Litro" }, { value: "Galón", label: "Galón" }], validate: (v) => { if (!v) return "Debe seleccionar una unidad de medida."; return null; } },
+    { name: "nombre_producto", label: "Nombre del Producto", type: "text", required: true, maxLength: 100, placeholderText: "Ej. Jugo de Naranja", validate: (v) => validarSoloLetras(v, "Nombre del Producto"), sanitize: sanitizeTexto, sanitizeWarning: "Solo se permiten letras y espacios. No se permiten numeros ni caracteres especiales." },
+    {
+      name: "descripcion",
+      label: "Descripcion",
+      type: "textarea",
+      maxLength: MAX_DESCRIPCION_PRODUCTO,
+      placeholderText: "Opcional: detalle breve del producto",
+      validate: validarDescripcion,
+      sanitize: sanitizeDescripcion,
+      sanitizeWarning: "Se eliminaron caracteres no permitidos.",
+    },
+    { name: "unidad_medida", label: "Unidad de Medida", type: "select", required: true, options: [{ value: "Litro", label: "Litro" }, { value: "GalÃ³n", label: "GalÃ³n" }], validate: (v) => { if (!v) return "Debe seleccionar una unidad de medida."; return null; } },
     { name: "precio_unitario", label: "Precio Unitario (Lps)", type: "number", step: "0.01", min: "0.01", required: true, placeholderText: "Mayor a 0", validate: (v) => { if (!v || Number(v) <= 0) return "El precio debe ser mayor a 0."; return null; } },
-    { name: "stock_minimo", label: "Stock Mínimo", type: "number", min: 0, required: true, placeholderText: "Ej. 10", validate: (v) => { if (v === "" || v === undefined) return "El Stock Mínimo es obligatorio"; if (Number(v) < 0) return "El stock no puede ser negativo"; return null; } },
+    { name: "stock_minimo", label: "Stock MÃ­nimo", type: "number", min: 0, required: true, placeholderText: "Ej. 10", validate: (v) => { if (v === "" || v === undefined) return "El Stock MÃ­nimo es obligatorio"; if (Number(v) < 0) return "El stock no puede ser negativo"; return null; } },
     { name: "stock_maximo", label: "Stock Máximo", type: "number", min: 0, required: true, placeholderText: "Ej. 100", validate: (v, formData) => { if (v === "" || v === undefined) return "El Stock Máximo es obligatorio"; const valMax = Number(v); const valMin = Number(formData.stock_minimo); if (valMax < 0) return "El stock no puede ser negativo"; if (valMax < valMin) return `El Stock Máximo (${valMax}) no puede ser menor al Mínimo (${valMin}).`; return null; } },
     { name: "id_estado_producto", label: "Estado del Producto", type: "select", required: true, options: estados.filter((e) => e.nombre_estado.toLowerCase() === "activo" || e.nombre_estado.toLowerCase() === "inactivo").map((e) => ({ value: e.id_estado_producto, label: e.nombre_estado })), validate: (v) => { if (!v) return "Debe seleccionar un estado."; return null; } },
   ];
 
   // ============================================================
-  // 🔹 Columnas
+  // ðŸ”¹ Columnas
   // ============================================================
   const columns = ["ID", "Nombre", "Unidad", "Precio", "Stock Min", "Stock Max", "Estado", "Fecha"];
 
@@ -203,19 +229,19 @@ export default function Productos() {
     Precio: (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}`,
     "Stock Min": (r) => r.stock_minimo,
     "Stock Max": (r) => r.stock_maximo,
-    Estado: (r) => r.estado_producto || "—",
-    Fecha: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleString("es-HN", { timeZone: "America/Tegucigalpa" }) : "—",
+    Estado: (r) => r.estado_producto || "â€”",
+    Fecha: (r) => r.fecha_creacion ? formatDateTime(r.fecha_creacion) : "â€”",
   };
 
   // ============================================================
-  // 🔹 CRUD
+  // ðŸ”¹ CRUD
   // ============================================================
   const handleInsert = async (nuevo) => {
     try {
       await api.post("/produccion/productos", nuevo);
       await cargarProductos();
       toast({ title: "Producto agregado", status: "success" });
-    } catch (err) { console.error(err); toast({ title: "Error al agregar", description: err.message, status: "error" }); }
+    } catch (err) { console.error(err); toast({ title: "Error al agregar", description: err.response?.data?.error || err.message, status: "error" }); }
   };
 
   const handleUpdate = async (editado) => {
@@ -223,7 +249,7 @@ export default function Productos() {
       await api.put(`/produccion/productos/${editado.id_producto}`, editado);
       await cargarProductos();
       toast({ title: "Producto actualizado", status: "success" });
-    } catch (err) { console.error(err); toast({ title: "Error al actualizar", description: err.message, status: "error" }); }
+    } catch (err) { console.error(err); toast({ title: "Error al actualizar", description: err.response?.data?.error || err.message, status: "error" }); }
   };
 
   const handleDelete = async (id) => {
@@ -231,11 +257,11 @@ export default function Productos() {
       await api.delete(`/produccion/productos/${id}`);
       await cargarProductos();
       toast({ title: "Producto eliminado", status: "info" });
-    } catch (err) { console.error(err); toast({ title: "Error al eliminar", description: err.message, status: "error" }); }
+    } catch (err) { console.error(err); toast({ title: "Error al eliminar", description: err.response?.data?.error || err.message, status: "error" }); }
   };
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -277,7 +303,7 @@ export default function Productos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -293,7 +319,7 @@ export default function Productos() {
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
       doc.text("REPORTE DE PRODUCTOS", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -305,8 +331,8 @@ export default function Productos() {
         precio: (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}`,
         stock_min: (r) => r.stock_minimo,
         stock_max: (r) => r.stock_maximo,
-        estado: (r) => r.estado_producto || "—",
-        fecha: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
+        estado: (r) => r.estado_producto || "â€”",
+        fecha: (r) => r.fecha_creacion ? formatDate(r.fecha_creacion) : "",
       };
 
       const activeFields = EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key));
@@ -317,7 +343,7 @@ export default function Productos() {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -333,13 +359,13 @@ export default function Productos() {
       doc.save(`Productos_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -355,23 +381,23 @@ export default function Productos() {
         { key: "nombre", header: "Nombre", width: 25, extract: (r) => r.nombre_producto || "" },
         { key: "unidad", header: "Unidad de Medida", width: 16, extract: (r) => r.unidad_medida || "" },
         { key: "precio", header: "Precio Unitario", width: 16, extract: (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}` },
-        { key: "stock_min", header: "Stock Mínimo", width: 14, extract: (r) => r.stock_minimo },
-        { key: "stock_max", header: "Stock Máximo", width: 14, extract: (r) => r.stock_maximo },
-        { key: "estado", header: "Estado", width: 12, extract: (r) => r.estado_producto || "—" },
-        { key: "fecha", header: "Fecha Creación", width: 14, extract: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "" },
+        { key: "stock_min", header: "Stock MÃ­nimo", width: 14, extract: (r) => r.stock_minimo },
+        { key: "stock_max", header: "Stock MÃ¡ximo", width: 14, extract: (r) => r.stock_maximo },
+        { key: "estado", header: "Estado", width: 12, extract: (r) => r.estado_producto || "â€”" },
+        { key: "fecha", header: "Fecha CreaciÃ³n", width: 14, extract: (r) => r.fecha_creacion ? formatDate(r.fecha_creacion) : "" },
       ];
       const columns_exp = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns_exp.length);
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Productos — Extractus";
+      titleCell.value = "Reporte de Productos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -405,13 +431,13 @@ export default function Productos() {
       saveAs(new Blob([buffer]), `Productos_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // 🔹 Loader
+  // ðŸ”¹ Loader
   // ============================================================
   if (loading) {
     return (
@@ -423,8 +449,8 @@ export default function Productos() {
 
   return (
     <Box bg={pageBg} minH="100vh" p={4}>
-      {/* Botón Atrás */}
-      <Tooltip label="Volver al menú Producción" placement="bottom-start">
+      {/* BotÃ³n AtrÃ¡s */}
+      <Tooltip label="Volver al menÃº ProducciÃ³n" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
           bg={btnBackBg}
@@ -496,7 +522,7 @@ export default function Productos() {
                 <StatLabel fontWeight="bold" color="red.800">Prod. Inactivos</StatLabel>
               </HStack>
               <StatNumber fontSize="3xl" color={inactivosNumberColor}>{prodInactivos}</StatNumber>
-              <StatHelpText m={0} color="red.700">Confección/Venta detenida</StatHelpText>
+              <StatHelpText m={0} color="red.700">ConfecciÃ³n/Venta detenida</StatHelpText>
             </Stat>
           </SimpleGrid>
         </CardHeader>
@@ -518,7 +544,7 @@ export default function Productos() {
         </CardBody>
       </Card>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -537,13 +563,13 @@ export default function Productos() {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
@@ -597,3 +623,4 @@ export default function Productos() {
     </Box>
   );
 }
+

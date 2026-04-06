@@ -1,5 +1,5 @@
-// ============================================================
-// 📂 src/components/Seguridad/Bitacora.js
+﻿// ============================================================
+// ðŸ“‚ src/components/Seguridad/Bitacora.js
 // ============================================================
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
@@ -17,38 +17,39 @@ import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
 // ============================================================
-// 🔧 Helpers
+// ðŸ”§ Helpers
 // ============================================================
 
-// Convierte "seguridad.tbl_ms_bitacora" → "Bitácora", "tbl_permisos" → "Permisos"
+// Convierte "seguridad.tbl_ms_bitacora" â†’ "BitÃ¡cora", "tbl_permisos" â†’ "Permisos"
 const limpiarTabla = (raw) => {
-  if (!raw) return "—";
+  if (!raw) return "â€”";
   let name = raw
     .replace(/^[a-z]+\./i, "")      // quitar esquema (seguridad., ventasyreserva.)
     .replace(/^tbl_ms_/i, "")        // quitar prefijo tbl_ms_
     .replace(/^tbl_/i, "")           // quitar prefijo tbl_
-    .replace(/_/g, " ");             // guiones bajos → espacios
+    .replace(/_/g, " ");             // guiones bajos â†’ espacios
   return name.charAt(0).toUpperCase() + name.slice(1);
 };
 
-// Traduce la acción a texto amigable
+// Traduce la acciÃ³n a texto amigable
 const accionTexto = (accion) => {
   const map = { INSERT: "Creación", UPDATE: "Actualización", DELETE: "Eliminación", LOGIN: "Inicio de sesión" };
   return map[accion] || accion;
 };
 
-// Limpia descripciones técnicas a lenguaje natural
+// Limpia descripciones tÃ©cnicas a lenguaje natural
 const limpiarDescripcion = (desc, accion) => {
-  if (!desc) return "—";
+  if (!desc) return "â€”";
 
-  // Patrón: "Operación INSERT en la tabla tbl_permisos"
-  const match = desc.match(/^Operación\s+(INSERT|UPDATE|DELETE)\s+en la tabla\s+(.+)$/i);
+  // PatrÃ³n: "OperaciÃ³n INSERT en la tabla tbl_permisos"
+  const match = desc.match(/^OperaciÃ³n\s+(INSERT|UPDATE|DELETE)\s+en la tabla\s+(.+)$/i);
   if (match) {
     const tabla = limpiarTabla(match[2]);
-    const verbos = { INSERT: "Se creó un registro en", UPDATE: "Se actualizó un registro en", DELETE: "Se eliminó un registro de" };
-    return `${verbos[match[1].toUpperCase()] || "Operación en"} ${tabla}`;
+    const verbos = { INSERT: "Se creÃ³ un registro en", UPDATE: "Se actualizÃ³ un registro en", DELETE: "Se eliminÃ³ un registro de" };
+    return `${verbos[match[1].toUpperCase()] || "OperaciÃ³n en"} ${tabla}`;
   }
 
   // Limpiar nombres de tabla dentro de descripciones existentes
@@ -64,36 +65,36 @@ const limpiarDescripcion = (desc, accion) => {
   return cleaned;
 };
 
-// Formatea el objeto detalle para mostrar en el modal — user-friendly
+// Formatea el objeto detalle para mostrar en el modal â€” user-friendly
 const LABELS = {
   // Permisos
   can_create: "Puede crear", can_read: "Puede ver", can_update: "Puede editar", can_delete: "Puede eliminar",
   id_rol: "Rol", id_objeto: "Objeto", nombre_objeto: "Objeto",
   // Facturas / Pedidos
-  numero_factura: "N° de factura", id_cliente: "ID Cliente", id_factura: "ID Factura",
+  numero_factura: "NÂ° de factura", id_cliente: "ID Cliente", id_factura: "ID Factura",
   total: "Total", items: "Cantidad de productos", productos: "Cantidad de productos",
   id_pedido: "ID Pedido", id_estado_pedido: "Estado del pedido", productos_devueltos: "Productos devueltos",
   // Usuarios
   nombre_usuario: "Nombre", username: "Correo",
   estado_usuario: "Estado", firebase_uid: "UID Firebase",
   // Roles
-  nombre_rol: "Nombre del rol", descripcion: "Descripción",
+  nombre_rol: "Nombre del rol", descripcion: "DescripciÃ³n",
   // General
   antes: "Datos anteriores", despues: "Datos nuevos",
 };
 
-// Campos técnicos que NO se muestran al usuario
+// Campos tÃ©cnicos que NO se muestran al usuario
 const CAMPOS_OCULTOS = new Set([
   "id_usuario_creado", "id_usuario_modificado", "fecha_creado", "fecha_modificado",
   "id_permiso", "id_estado_objeto", "id_rol", "id_objeto",
 ]);
 
 const formatearValor = (key, val) => {
-  if (val === null || val === undefined) return "—";
-  if (typeof val === "boolean") return val ? "✅ Sí" : "❌ No";
+  if (val === null || val === undefined) return "â€”";
+  if (typeof val === "boolean") return val ? "âœ… SÃ­" : "âŒ No";
   if (typeof val === "number") return String(val);
   if (typeof val === "string" && val.match(/^\d{4}-\d{2}-\d{2}T/)) {
-    return new Date(val).toLocaleString();
+    return formatDateTime(val);
   }
   if (typeof val === "object") return null; // Will be handled as sub-section
   return String(val);
@@ -101,7 +102,7 @@ const formatearValor = (key, val) => {
 
 const getLabel = (key) => LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "usuario", label: "Usuario" },
@@ -116,7 +117,7 @@ const ALL_FIELD_KEYS = EXPORT_FIELDS.map(f => f.key);
 
 export default function Bitacora() {
   // ============================================================
-  // 🎨 Paleta de colores (modo claro / oscuro)
+  // ðŸŽ¨ Paleta de colores (modo claro / oscuro)
   // ============================================================
   const cardBg = useColorModeValue("white", "gray.800");
   const filterBg = useColorModeValue("gray.50", "gray.700");
@@ -130,7 +131,7 @@ export default function Bitacora() {
   const borderClr = useColorModeValue("gray.200", "gray.600");
 
   // ============================================================
-  // 🎯 Estados
+  // ðŸŽ¯ Estados
   // ============================================================
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -140,8 +141,10 @@ export default function Bitacora() {
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [error, setError] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(false); // ðŸ”„ Estado para polling
+  const pollingRef = useRef(null);
 
-  // Paginación
+  // PaginaciÃ³n
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -151,7 +154,7 @@ export default function Bitacora() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedRow, setSelectedRow] = useState(null);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expUsuario, setExpUsuario] = useState("");
@@ -162,7 +165,7 @@ export default function Bitacora() {
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
 
-  // Selector de campos para exportación
+  // Selector de campos para exportaciÃ³n
   const [selectedFields, setSelectedFields] = useState([...ALL_FIELD_KEYS]);
   const toggleField = (key) =>
     setSelectedFields((prev) =>
@@ -173,7 +176,7 @@ export default function Bitacora() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // 🔄 Cargar datos desde backend
+  // ðŸ”„ Cargar datos desde backend
   // ============================================================
   const load = useCallback(async (currentPage = 1, filters = {}) => {
     try {
@@ -201,14 +204,14 @@ export default function Bitacora() {
       }
     } catch (e) {
       console.error(e);
-      setError("No se pudo cargar la bitácora");
+      setError("No se pudo cargar la bitÃ¡cora");
       setRows([]);
     } finally {
       setLoading(false);
     }
   }, [limit]);
 
-  // 🔍 Auto-búsqueda con debounce (400ms)
+  // ðŸ” Auto-bÃºsqueda con debounce (400ms)
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -223,22 +226,37 @@ export default function Bitacora() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario, tabla, accion, desde, hasta, limit]);
 
-  // Paginación: cargar al cambiar de página
+  // PaginaciÃ³n: cargar al cambiar de pÃ¡gina
   useEffect(() => {
     load(page, { usuario, tabla, accion, desde, hasta });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // âŒš Polling para "Tiempo Real"
+  useEffect(() => {
+    if (autoRefresh) {
+      pollingRef.current = setInterval(() => {
+        // Solo refrescar si no se estÃ¡ cargando ya y estamos en la pÃ¡g 1 (para ver lo nuevo)
+        if (!loading && page === 1) {
+          load(1, { usuario, tabla, accion, desde, hasta });
+        }
+      }, 30000); // 30 segundos
+    } else {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    }
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [autoRefresh, loading, page, usuario, tabla, accion, desde, hasta, load]);
+
   const handleSearch = () => { setPage(1); load(1, { usuario, tabla, accion, desde, hasta }); };
   const handleClear = () => {
     setUsuario(""); setTabla(""); setAccion(""); setDesde(""); setHasta("");
-    // El useEffect con debounce se encargará de recargar automáticamente
+    // El useEffect con debounce se encargarÃ¡ de recargar automÃ¡ticamente
   };
 
   const openDetalle = (row) => { setSelectedRow(row); onOpen(); };
 
   // ============================================================
-  // 🔧 Helper: construir texto de filtros activos
+  // ðŸ”§ Helper: construir texto de filtros activos
   // ============================================================
   const buildFilterText = (overrides = {}) => {
     const u = overrides.usuario ?? usuario;
@@ -292,7 +310,7 @@ export default function Bitacora() {
     });
 
   // ============================================================
-  // 📤 Exportar a PDF — Estilo profesional con logo y filtros
+  // ðŸ“¤ Exportar a PDF â€” Estilo profesional con logo y filtros
   // ============================================================
   const exportPDF = async (filters = {}) => {
     try {
@@ -307,44 +325,44 @@ export default function Bitacora() {
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
       const pageWidth = doc.internal.pageSize.width;
 
-      // ── Logo ──
+      // â”€â”€ Logo â”€â”€
       try {
         const logoMod = await import("../login/log.png");
         const dataURL = await imgToDataURL(logoMod.default || logoMod);
         doc.addImage(dataURL, "PNG", 40, 20, 45, 45);
       } catch (e) { /* sin logo */ }
 
-      // ── Título ──
+      // â”€â”€ TÃ­tulo â”€â”€
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.setTextColor(25, 55, 80);
-      doc.text("REPORTE DE BITÁCORA DEL SISTEMA", pageWidth / 2, 45, { align: "center" });
+      doc.text("REPORTE DE BITÃCORA DEL SISTEMA", pageWidth / 2, 45, { align: "center" });
 
-      // ── Fecha generación ──
+      // â”€â”€ Fecha generaciÃ³n â”€â”€
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
-      // ── Filtros aplicados ──
+      // â”€â”€ Filtros aplicados â”€â”€
       doc.setFontSize(9);
       doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
 
-      // ── Línea separadora ──
+      // â”€â”€ LÃ­nea separadora â”€â”€
       doc.setDrawColor(20, 120, 110);
       doc.setLineWidth(1);
       doc.line(40, 90, pageWidth - 40, 90);
 
-      // ── Tabla (dinámica por campos seleccionados) ──
+      // â”€â”€ Tabla (dinÃ¡mica por campos seleccionados) â”€â”€
       const fieldExtractors = {
-        id: r => r.id_bitacora || "—",
+        id: r => r.id_bitacora || "â€”",
         usuario: r => r.usuario || "Sistema",
         modulo: r => limpiarTabla(r.tabla),
         accion: r => accionTexto(r.accion),
         descripcion: r => limpiarDescripcion(r.descripcion, r.accion),
-        detalle: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "—",
-        fecha: r => r.fecha ? new Date(r.fecha).toLocaleString() : "—",
+        detalle: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "â€”",
+        fecha: r => r.fecha ? formatDateTime(r.fecha) : "â€”",
       };
 
       const activeFields = EXPORT_FIELDS.filter(f => selectedFields.includes(f.key));
@@ -366,14 +384,14 @@ export default function Bitacora() {
           doc.setFontSize(8);
           doc.setTextColor(120);
           doc.text(
-            `Página ${doc.getNumberOfPages()}`,
+            `PÃ¡gina ${doc.getNumberOfPages()}`,
             ps.getWidth() - 80,
             ps.getHeight() - 20
           );
         },
       });
 
-      // ── Resumen ──
+      // â”€â”€ Resumen â”€â”€
       const finalY = doc.lastAutoTable.finalY + 25;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
@@ -395,7 +413,7 @@ export default function Bitacora() {
       if (inserts) { doc.text(`Creaciones: ${inserts}`, 50, y); y += 16; }
       if (updates) { doc.text(`Actualizaciones: ${updates}`, 50, y); y += 16; }
       if (deletes) { doc.text(`Eliminaciones: ${deletes}`, 50, y); y += 16; }
-      if (logins) { doc.text(`Inicios de sesión: ${logins}`, 50, y); }
+      if (logins) { doc.text(`Inicios de sesiÃ³n: ${logins}`, 50, y); }
 
       doc.save(`Bitacora_Extractus_${new Date().toISOString().split('T')[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
@@ -410,7 +428,7 @@ export default function Bitacora() {
   };
 
   // ============================================================
-  // 📊 Exportar a Excel — Estilo profesional con filtros y auto-width
+  // ðŸ“Š Exportar a Excel â€” Estilo profesional con filtros y auto-width
   // ============================================================
   const exportExcel = async (filters = {}) => {
     try {
@@ -428,20 +446,20 @@ export default function Bitacora() {
 
       const ws = wb.addWorksheet("Bitácora");
 
-      // ── Columnas dinámicas por campos seleccionados ──
+      // â”€â”€ Columnas dinÃ¡micas por campos seleccionados â”€â”€
       const allCols = [
         { key: "id", header: "ID", width: 10, extract: r => r.id_bitacora },
         { key: "usuario", header: "Usuario", width: 25, extract: r => r.usuario || "Sistema" },
         { key: "modulo", header: "Módulo", width: 20, extract: r => limpiarTabla(r.tabla) },
         { key: "accion", header: "Acción", width: 18, extract: r => accionTexto(r.accion) },
         { key: "descripcion", header: "Descripción", width: 50, extract: r => limpiarDescripcion(r.descripcion, r.accion) },
-        { key: "detalle", header: "Detalle", width: 55, extract: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "—" },
-        { key: "fecha", header: "Fecha", width: 22, extract: r => r.fecha ? new Date(r.fecha).toLocaleString() : "—" },
+        { key: "detalle", header: "Detalle", width: 55, extract: r => r.detalle ? (typeof r.detalle === "object" ? JSON.stringify(r.detalle) : r.detalle) : "â€”" },
+        { key: "fecha", header: "Fecha", width: 22, extract: r => r.fecha ? formatDateTime(r.fecha) : "â€”" },
       ];
       const columns = allCols.filter(c => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns.length);
 
-      // ── Header con filtros ──
+      // â”€â”€ Header con filtros â”€â”€
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleRow = ws.getCell("A1");
       titleRow.value = "Reporte de Bitácora — Extractus";
@@ -450,7 +468,7 @@ export default function Bitacora() {
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterRow = ws.getCell("A2");
-      filterRow.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterRow.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterRow.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterRow.alignment = { horizontal: "center" };
 
@@ -467,7 +485,7 @@ export default function Bitacora() {
         };
       });
 
-      // ── Datos ──
+      // â”€â”€ Datos â”€â”€
       rowsToExport.forEach((r, idx) => {
         const rowNum = headerRowNum + 1 + idx;
         columns.forEach((col, i) => {
@@ -483,7 +501,7 @@ export default function Bitacora() {
         }
       });
 
-      // ── Auto-width ──
+      // â”€â”€ Auto-width â”€â”€
       columns.forEach((col, i) => {
         let maxLen = col.header.length;
         rowsToExport.forEach(r => {
@@ -507,12 +525,31 @@ export default function Bitacora() {
   };
 
   // ============================================================
-  // 🎨 Renderizado
+  // ðŸŽ¨ Renderizado
   // ============================================================
   return (
     <Box p={6} bg={cardBg} boxShadow="md" borderRadius="lg">
       <Flex justify="space-between" align="center" mb={6}>
-        <Heading size="md" color={accent}>Bitácora del Sistema</Heading>
+        <HStack spacing={4}>
+          <Heading size="md" color={accent}>Bitácora del Sistema</Heading>
+          <IconButton
+            icon={<RepeatIcon />}
+            aria-label="Refrescar ahora"
+            size="sm"
+            colorScheme="teal"
+            variant="ghost"
+            onClick={() => load(page, { usuario, tabla, accion, desde, hasta })}
+            isLoading={loading}
+          />
+          <Checkbox
+            size="sm"
+            colorScheme="teal"
+            isChecked={autoRefresh}
+            onChange={(e) => setAutoRefresh(e.target.checked)}
+          >
+            <Text fontSize="xs" fontWeight="bold" color={subtleText}>Auto-refresco (30s)</Text>
+          </Checkbox>
+        </HStack>
         <Button
           leftIcon={<FaFileExport />}
           colorScheme="teal"
@@ -529,7 +566,7 @@ export default function Bitacora() {
         </Button>
       </Flex>
 
-      {/* 🔍 Filtros */}
+      {/* ðŸ” Filtros */}
       <Box mb={6} p={4} bg={filterBg} borderRadius="md" borderWidth="1px" borderColor={borderClr}>
         <Flex direction={{ base: "column", md: "row" }} gap={4} mb={4}>
           <Input placeholder="Usuario" value={usuario} onChange={e => setUsuario(e.target.value)} bg={inputBg} />
@@ -549,7 +586,7 @@ export default function Bitacora() {
         </Flex>
       </Box>
 
-      {/* 🧾 Tabla */}
+      {/* ðŸ§¾ Tabla */}
       {loading ? (
         <Flex justify="center" py={10}><Spinner size="xl" color="teal.500" /></Flex>
       ) : error ? (
@@ -605,10 +642,10 @@ export default function Bitacora() {
                             onClick={() => openDetalle(r)}
                           />
                         ) : (
-                          <Text fontSize="xs" color="gray.400">—</Text>
+                          <Text fontSize="xs" color="gray.400">â€”</Text>
                         )}
                       </Td>
-                      <Td fontSize="xs" whiteSpace="nowrap">{new Date(r.fecha).toLocaleString()}</Td>
+                      <Td fontSize="xs" whiteSpace="nowrap">{formatDateTime(r.fecha)}</Td>
                     </Tr>
                   ))
                 )}
@@ -616,7 +653,7 @@ export default function Bitacora() {
             </Table>
           </Box>
 
-          {/* Paginación */}
+          {/* PaginaciÃ³n */}
           {rows.length > 0 && (
             <Flex justify="space-between" align="center" mt={4} p={2}>
               <HStack>
@@ -633,7 +670,7 @@ export default function Bitacora() {
 
               <HStack>
                 <IconButton icon={<ChevronLeftIcon />} onClick={() => setPage(p => Math.max(1, p - 1))} isDisabled={page === 1} size="sm" aria-label="Anterior" />
-                <Text fontSize="sm">Página {page} de {totalPages}</Text>
+                <Text fontSize="sm">PÃ¡gina {page} de {totalPages}</Text>
                 <IconButton icon={<ChevronRightIcon />} onClick={() => setPage(p => Math.min(totalPages, p + 1))} isDisabled={page === totalPages} size="sm" aria-label="Siguiente" />
               </HStack>
             </Flex>
@@ -641,7 +678,7 @@ export default function Bitacora() {
         </>
       )}
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -655,20 +692,20 @@ export default function Bitacora() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los registros.
+              Si no aplicas filtros, se exportarÃ¡n todos los registros.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={e => setExportFormat(e.target.value)}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por usuario</FormLabel>
@@ -681,7 +718,7 @@ export default function Bitacora() {
             </FormControl>
 
             <FormControl mb={3}>
-              <FormLabel fontSize="sm">Por acción</FormLabel>
+              <FormLabel fontSize="sm">Por acciÃ³n</FormLabel>
               <Select placeholder="Todas las acciones" value={expAccion} onChange={e => setExpAccion(e.target.value)} size="sm">
                 <option value="INSERT">Creación</option>
                 <option value="UPDATE">Actualización</option>
@@ -703,7 +740,7 @@ export default function Bitacora() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -767,7 +804,7 @@ export default function Bitacora() {
                 } else {
                   success = await exportExcel(filters);
                 }
-                // Solo cerrar modal si la exportación fue exitosa
+                // Solo cerrar modal si la exportaciÃ³n fue exitosa
                 if (success) {
                   exportModal.onClose();
                 }
@@ -780,7 +817,7 @@ export default function Bitacora() {
         </ModalContent>
       </Modal>
 
-      {/* 📋 Modal de Detalle */}
+      {/* ðŸ“‹ Modal de Detalle */}
       <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
         <ModalOverlay bg="blackAlpha.400" />
         <ModalContent>
@@ -810,7 +847,7 @@ export default function Bitacora() {
                     <Badge colorScheme="cyan">{limpiarTabla(selectedRow.tabla)}</Badge>
                   </HStack>
                   <Text fontSize="sm" color={subtleText}>{limpiarDescripcion(selectedRow.descripcion, selectedRow.accion)}</Text>
-                  <Text fontSize="xs" color={mutedText} mt={1}>{new Date(selectedRow.fecha).toLocaleString()}</Text>
+                  <Text fontSize="xs" color={mutedText} mt={1}>{formatDateTime(selectedRow.fecha)}</Text>
                 </Box>
 
                 {/* Datos del detalle */}
@@ -820,7 +857,7 @@ export default function Bitacora() {
                     const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
                     if (!obj) return null;
 
-                    // Renderiza una sección de campos
+                    // Renderiza una secciÃ³n de campos
                     const renderFields = (data, title) => {
                       const entries = Object.entries(data).filter(
                         ([k]) => !CAMPOS_OCULTOS.has(k) && typeof data[k] !== "object"
@@ -851,14 +888,14 @@ export default function Bitacora() {
                     if (obj.antes && obj.despues) {
                       return (
                         <VStack spacing={3} align="stretch">
-                          {renderFields(obj.antes, "📋 Datos anteriores")}
-                          {renderFields(obj.despues, "✏️ Datos nuevos")}
+                          {renderFields(obj.antes, "ðŸ“‹ Datos anteriores")}
+                          {renderFields(obj.despues, "âœï¸ Datos nuevos")}
                         </VStack>
                       );
                     }
 
                     // Si no, mostrar campos planos
-                    return renderFields(obj, "📋 Datos del cambio");
+                    return renderFields(obj, "ðŸ“‹ Datos del cambio");
                   } catch (e) {
                     return <Code p={3} borderRadius="md" whiteSpace="pre-wrap" fontSize="xs">{String(selectedRow.detalle)}</Code>;
                   }
@@ -871,3 +908,4 @@ export default function Bitacora() {
     </Box>
   );
 }
+

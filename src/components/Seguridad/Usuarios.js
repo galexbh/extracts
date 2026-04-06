@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Seguridad/Usuarios.js
-// ✅ Versión con dashboard, export modal PDF/Excel y sin botón refrescar
+﻿// ============================================================
+// ðŸ“ src/components/Seguridad/Usuarios.js
+// âœ… VersiÃ³n con dashboard, export modal PDF/Excel y sin botÃ³n refrescar
 // ============================================================
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
@@ -20,6 +20,7 @@ import {
   SimpleGrid,
   Text,
   HStack,
+  Tooltip,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -40,17 +41,18 @@ import { FaArrowLeft, FaFileExport } from "react-icons/fa";
 import { DownloadIcon } from "@chakra-ui/icons";
 import CrudTabla from "./CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-// 🖼️ Logo SOLO para el PDF
+// ðŸ–¼ï¸ Logo SOLO para el PDF
 import extractusLogo from "../login/log.png";
 
-// ✅ Validaciones
+// âœ… Validaciones
 import {
   validarRequerido,
   validarEmailSeguridad,
@@ -58,7 +60,7 @@ import {
   validarPassword,
 } from "../../utils/validaciones";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
@@ -74,7 +76,7 @@ export default function Usuarios() {
   const toast = useToast();
 
   // ============================================================
-  // ✅ Paleta unificada claro/oscuro
+  // âœ… Paleta unificada claro/oscuro
   // ============================================================
   const accent = useColorModeValue("#0D9488", "#2DD4BF");
   const cardBg = useColorModeValue("#FFFFFF", "#1E293B");
@@ -88,14 +90,14 @@ export default function Usuarios() {
   const inputBg = useColorModeValue("white", "gray.600");
 
   // ============================================================
-  // ✅ Estados
+  // âœ… Estados
   // ============================================================
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [estados, setEstados] = useState([]);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -114,7 +116,7 @@ export default function Usuarios() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // ✅ Cargar datos
+  // âœ… Cargar datos
   // ============================================================
   const cargarTodo = async () => {
     try {
@@ -145,7 +147,7 @@ export default function Usuarios() {
   }, []);
 
   // ============================================================
-  // ✅ Dashboard estadísticas
+  // âœ… Dashboard estadÃ­sticas
   // ============================================================
   const totalUsuarios = usuarios.length;
 
@@ -162,7 +164,7 @@ export default function Usuarios() {
   ).length;
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -218,7 +220,7 @@ export default function Usuarios() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -233,42 +235,42 @@ export default function Usuarios() {
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
       const pageWidth = doc.internal.pageSize.width;
 
-      // ── Logo ──
+      // â”€â”€ Logo â”€â”€
       try {
         const dataURL = await imgToDataURL(extractusLogo);
         doc.addImage(dataURL, "PNG", 40, 20, 45, 45);
       } catch (e) { /* sin logo */ }
 
-      // ── Título ──
+      // â”€â”€ TÃ­tulo â”€â”€
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.setTextColor(25, 55, 80);
       doc.text("REPORTE DE USUARIOS", pageWidth / 2, 45, { align: "center" });
 
-      // ── Fecha/hora ──
+      // â”€â”€ Fecha/hora â”€â”€
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
 
-      // ── Filtros ──
+      // â”€â”€ Filtros â”€â”€
       doc.setFontSize(9);
       doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
 
-      // ── Línea separadora ──
+      // â”€â”€ LÃ­nea separadora â”€â”€
       doc.setDrawColor(0, 158, 115);
       doc.setLineWidth(1);
       doc.line(40, 90, pageWidth - 40, 90);
 
-      // ── Tabla ──
+      // â”€â”€ Tabla â”€â”€
       const fieldExtractors = {
         id: (r) => r.id_usuario,
         nombre: (r) => r.nombre_usuario || "",
         correo: (r) => r.username || "",
         rol: (r) => r.nombre_rol || "",
         estado: (r) => r.nombre_estado_usuario || "",
-        fecha: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
+        fecha: (r) => r.fecha_creacion ? formatDate(r.fecha_creacion) : "",
       };
 
       const activeFields = EXPORT_FIELDS.filter((f) => selectedFields.includes(f.key));
@@ -289,11 +291,11 @@ export default function Usuarios() {
           const ps = doc.internal.pageSize;
           doc.setFontSize(8);
           doc.setTextColor(120);
-          doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
+          doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20);
         },
       });
 
-      // ── Resumen ──
+      // â”€â”€ Resumen â”€â”€
       const finalY = doc.lastAutoTable.finalY + 25;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
@@ -314,7 +316,7 @@ export default function Usuarios() {
       doc.save(`Usuarios_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -322,7 +324,7 @@ export default function Usuarios() {
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -345,21 +347,21 @@ export default function Usuarios() {
         { key: "correo", header: "Correo", width: 28, extract: (r) => r.username || "" },
         { key: "rol", header: "Rol", width: 18, extract: (r) => r.nombre_rol || "" },
         { key: "estado", header: "Estado", width: 14, extract: (r) => r.nombre_estado_usuario || "" },
-        { key: "fecha", header: "Fecha Creación", width: 16, extract: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "" },
+        { key: "fecha", header: "Fecha Creación", width: 16, extract: (r) => r.fecha_creacion ? formatDate(r.fecha_creacion) : "" },
       ];
       const columns = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns.length);
 
-      // ── Título + Filtros ──
+      // â”€â”€ TÃ­tulo + Filtros â”€â”€
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Usuarios — Extractus";
+      titleCell.value = "Reporte de Usuarios â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -374,7 +376,7 @@ export default function Usuarios() {
         cell.border = { bottom: { style: "thin", color: { argb: "FF007A5A" } } };
       });
 
-      // ── Datos ──
+      // â”€â”€ Datos â”€â”€
       rows.forEach((r, idx) => {
         const rowNum = headerRow + 1 + idx;
         columns.forEach((col, i) => {
@@ -387,7 +389,7 @@ export default function Usuarios() {
         }
       });
 
-      // ── Auto-width ──
+      // â”€â”€ Auto-width â”€â”€
       columns.forEach((col, i) => {
         let maxLen = col.header.length;
         rows.forEach((r) => {
@@ -401,7 +403,7 @@ export default function Usuarios() {
       saveAs(new Blob([buffer]), `Usuarios_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally {
       setExporting(false);
@@ -409,7 +411,7 @@ export default function Usuarios() {
   };
 
   // ============================================================
-  // ✅ Campos CRUD
+  // âœ… Campos CRUD
   // ============================================================
   const fields = [
     {
@@ -417,21 +419,21 @@ export default function Usuarios() {
       label: "Nombre del Usuario",
       type: "text",
       required: true,
-      // Solo letras (con acentos y ñ), espacios, guion y punto
-      sanitize: (val) => val.replace(/[^A-Za-zÀ-ÖØ-öø-ɏ\s.'-]/g, ""),
+      // Solo letras (con acentos y Ã±), espacios, guion y punto
+      sanitize: (val) => val.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]/g, ""),
       validate: (valor) =>
         validarRequerido(valor, "El nombre de usuario") ||
         validarLongitudMinima(valor, "El nombre de usuario", 3) ||
         (valor?.trim().length > 80 ? "El nombre no puede superar 80 caracteres." : null),
-      placeholderText: "Ej. Juan Pérez",
+      placeholderText: "Ej. Juan PÃ©rez",
     },
     {
       name: "username",
-      label: "Correo electrónico",
+      label: "Correo electrÃ³nico",
       type: "text",
       required: true,
       validate: (valor) =>
-        validarRequerido(valor, "El correo electrónico") ||
+        validarRequerido(valor, "El correo electrÃ³nico") ||
         validarEmailSeguridad(valor),
       placeholderText: "Ej. usuario@dominio.com",
     },
@@ -443,14 +445,14 @@ export default function Usuarios() {
       validate: (valor, form) => {
         const esNuevo = !form?.id_usuario;
         if (esNuevo) {
-          // Creación: obligatoria + complejidad completa
+          // CreaciÃ³n: obligatoria + complejidad completa
           return validarPassword(valor, true);
         }
-        // Edición: solo validar si escribió algo
+        // EdiciÃ³n: solo validar si escribiÃ³ algo
         if (!valor || valor.trim() === "") return null;
         return validarPassword(valor, false);
       },
-      placeholderText: "Mín. 8 caracteres, mayúscula, número y símbolo",
+      placeholderText: "MÃ­n. 8 caracteres, mayÃºscula, nÃºmero y sÃ­mbolo",
     },
     {
       name: "id_rol",
@@ -489,20 +491,15 @@ export default function Usuarios() {
 
   const extractors = {
     "ID Usuario": (r) => r.id_usuario,
-    "Nombre del Usuario": (r) => r.nombre_usuario || "—",
+    "Nombre del Usuario": (r) => r.nombre_usuario || "â€”",
     Correo: (r) => r.username,
-    Rol: (r) => r.nombre_rol || "—",
-    Estado: (r) => r.nombre_estado_usuario || "—",
-    "Fecha Creación": (r) =>
-      r.fecha_creacion
-        ? new Date(r.fecha_creacion).toLocaleString("es-HN", {
-          timeZone: "America/Tegucigalpa",
-        })
-        : "—",
+    Rol: (r) => r.nombre_rol || "â€”",
+    Estado: (r) => r.nombre_estado_usuario || "â€”",
+    "Fecha Creación": (r) => r.fecha_creacion ? formatDateTime(r.fecha_creacion) : "—",
   };
 
   // ============================================================
-  // ✅ Loading
+  // âœ… Loading
   // ============================================================
   if (loading) {
     return (
@@ -513,24 +510,28 @@ export default function Usuarios() {
   }
 
   // ============================================================
-  // ✅ Render final
+  // âœ… Render final
   // ============================================================
   return (
     <Box p={4}>
       {/* Botón Atrás */}
-      <Button
-        leftIcon={<FaArrowLeft />}
-        bg={btnBackBg}
-        color="white"
-        _hover={{ bg: btnBackHover }}
-        size="sm"
-        mb={4}
-        onClick={() => window.history.back()}
-      >
-        Atrás
-      </Button>
+      <Tooltip label="Volver al menú Seguridad" placement="bottom-start">
+        <Button
+          leftIcon={<FaArrowLeft />}
+          bg={btnBackBg}
+          color="white"
+          _hover={{ bg: btnBackHover, transform: "scale(1.03)" }}
+          size="sm"
+          mb={4}
+          boxShadow="sm"
+          borderRadius="full"
+          onClick={() => window.history.back()}
+        >
+          Atrás
+        </Button>
+      </Tooltip>
 
-      {/* Título + Botón Exportar */}
+      {/* TÃ­tulo + BotÃ³n Exportar */}
       <Flex justify="space-between" align="center" mb={3}>
         <Heading size="lg" color={accent}>
           Usuarios
@@ -554,7 +555,7 @@ export default function Usuarios() {
       <Divider mb={4} borderColor={borderClr} />
 
       {/* ======================================================
-           ✅ DASHBOARD
+           âœ… DASHBOARD
       ====================================================== */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={6}>
 
@@ -615,7 +616,7 @@ export default function Usuarios() {
       </SimpleGrid>
 
       {/* ======================================================
-           ✅ TABLA CRUD (sin refrescar arriba)
+           âœ… TABLA CRUD (sin refrescar arriba)
       ====================================================== */}
       <Box
         bg={cardBg}
@@ -636,7 +637,7 @@ export default function Usuarios() {
         />
       </Box>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -650,25 +651,25 @@ export default function Usuarios() {
           <ModalBody py={5}>
             <Text fontSize="sm" color="gray.500" mb={4}>
               Selecciona el formato y los filtros para generar tu reporte.
-              Si no aplicas filtros, se exportarán todos los usuarios.
+              Si no aplicas filtros, se exportarÃ¡n todos los usuarios.
             </Text>
 
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={inputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
 
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
               <Input
-                placeholder="Ej: Juan Pérez"
+                placeholder="Ej: Juan PÃ©rez"
                 value={expNombre}
                 onChange={(e) => setExpNombre(e.target.value)}
                 size="sm"
@@ -696,7 +697,7 @@ export default function Usuarios() {
 
             <Divider my={4} />
 
-            {/* ── Checklist de campos ── */}
+            {/* â”€â”€ Checklist de campos â”€â”€ */}
             <Flex justify="space-between" align="center" mb={3}>
               <HStack spacing={2}>
                 <Text fontWeight="bold" color={accent}>Campos a exportar</Text>
@@ -764,3 +765,6 @@ export default function Usuarios() {
     </Box>
   );
 }
+
+
+

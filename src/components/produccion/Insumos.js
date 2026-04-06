@@ -1,6 +1,6 @@
-// ============================================================
-// 📁 src/components/Produccion/Insumos.js
-// 💎 Gestión de Insumos con control de stock, dashboard y export modal
+﻿// ============================================================
+// ðŸ“ src/components/Produccion/Insumos.js
+// ðŸ’Ž GestiÃ³n de Insumos con control de stock, dashboard y export modal
 // ============================================================
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -51,30 +51,31 @@ import { DownloadIcon } from "@chakra-ui/icons";
 import { useNavigate } from "react-router-dom";
 import CrudTabla from "../Seguridad/CrudTabla";
 import api from "../../api/apiClient";
+import { formatDate, formatDateTime, formatNow } from "../../utils/dateFormat";
 
-// 📦 Exportación
+// ðŸ“¦ ExportaciÃ³n
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import extractusLogo from "../login/log.png";
 
-// ── Campos disponibles para exportación ──
+// â”€â”€ Campos disponibles para exportaciÃ³n â”€â”€
 const EXPORT_FIELDS = [
   { key: "id", label: "ID" },
   { key: "nombre", label: "Nombre" },
   { key: "unidad", label: "Unidad de Medida" },
   { key: "precio", label: "Precio Unitario" },
-  { key: "stock_min", label: "Stock Mínimo" },
-  { key: "stock_max", label: "Stock Máximo" },
+  { key: "stock_min", label: "Stock MÃ­nimo" },
+  { key: "stock_max", label: "Stock MÃ¡ximo" },
   { key: "estado", label: "Estado" },
-  { key: "fecha", label: "Fecha Creación" },
+  { key: "fecha", label: "Fecha CreaciÃ³n" },
 ];
 const ALL_FIELD_KEYS = EXPORT_FIELDS.map((f) => f.key);
 
 export default function Insumos() {
   // ============================================================
-  // 🎨 Estilos Chakra
+  // ðŸŽ¨ Estilos Chakra
   // ============================================================
   const accent = useColorModeValue("#009e73", "teal.300");
   const pageBg = useColorModeValue("#f7faf8", "#020617");
@@ -103,7 +104,7 @@ export default function Insumos() {
   const [estados, setEstados] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal de exportación
+  // Modal de exportaciÃ³n
   const exportModal = useDisclosure();
   const [exportFormat, setExportFormat] = useState("excel");
   const [expNombre, setExpNombre] = useState("");
@@ -120,14 +121,14 @@ export default function Insumos() {
     setSelectedFields(allSelected ? [] : [...ALL_FIELD_KEYS]);
 
   // ============================================================
-  // 🔹 Cargar datos
+  // ðŸ”¹ Cargar datos
   // ============================================================
   const cargarInsumos = useCallback(async () => {
     try {
       const res = await api.get("/produccion/insumos");
       setData(res.data);
     } catch (err) {
-      console.error("❌ Error cargando insumos:", err);
+      console.error("âŒ Error cargando insumos:", err);
       toast({ title: "Error al cargar insumos", description: err.message, status: "error", duration: 4000, isClosable: true });
     }
   }, [toast]);
@@ -137,7 +138,7 @@ export default function Insumos() {
       const res = await api.get("/mantenimiento/estado-insumo");
       setEstados(res.data);
     } catch (err) {
-      console.warn("⚠️ No se pudieron cargar los estados:", err.message);
+      console.warn("âš ï¸ No se pudieron cargar los estados:", err.message);
       setEstados([]);
     }
   }, []);
@@ -147,7 +148,7 @@ export default function Insumos() {
   }, [cargarInsumos, cargarEstados]);
 
   // ============================================================
-  // 🔹 Estadísticas Dashboard
+  // ðŸ”¹ EstadÃ­sticas Dashboard
   // ============================================================
   const { totalInsumos, insActivos, insInactivos } = React.useMemo(() => {
     const total = data.length;
@@ -159,7 +160,7 @@ export default function Insumos() {
   }, [data]);
 
   // ============================================================
-  // 🔹 Validaciones
+  // ðŸ”¹ Validaciones
   // ============================================================
   const validarRequerido = (valor, campo) => {
     if (!valor || String(valor).trim() === "") return `El campo ${campo} es obligatorio.`;
@@ -169,55 +170,55 @@ export default function Insumos() {
   const validarSoloLetras = (valor, campo) => {
     const errorReq = validarRequerido(valor, campo);
     if (errorReq) return errorReq;
-    const regex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
-    if (!regex.test(valor)) return `El campo ${campo} solo debe contener letras y espacios.`;
+    const regex = /^[a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]+$/;
+    if (!regex.test(valor)) return `El campo ${campo} solo permite letras y espacios. No se permiten numeros ni caracteres especiales.`;
     return null;
   };
 
   const sanitizeTexto = (valor) => {
     if (!valor) return "";
-    return valor.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
+    return valor.replace(/[^a-zA-ZÃ¡Ã©Ã­Ã³ÃºÃÃ‰ÃÃ“ÃšÃ±Ã‘\s]/g, "");
   };
 
   // ============================================================
-  // 🔹 Campos del formulario CRUD
+  // ðŸ”¹ Campos del formulario CRUD
   // ============================================================
   const fields = [
-    { name: "nombre_insumo", label: "Nombre del Insumo", type: "text", required: true, placeholderText: "Ej. Sal, Azucar", validate: (v) => validarSoloLetras(v, "Nombre del Insumo"), sanitize: sanitizeTexto },
-    { name: "unidad_medida", label: "Unidad de Medida", type: "text", required: true, placeholderText: "Ej. Caja, Litro, Kilo", validate: (v) => { if (!v || v.trim() === "") return "Debe especificar una unidad de medida."; return null; }, sanitize: sanitizeTexto },
+    { name: "nombre_insumo", label: "Nombre del Insumo", type: "text", required: true, placeholderText: "Ej. Sal, Azucar", validate: (v) => validarSoloLetras(v, "Nombre del Insumo"), sanitize: sanitizeTexto, sanitizeWarning: "Solo se permiten letras y espacios. No se permiten numeros ni caracteres especiales." },
+    { name: "unidad_medida", label: "Unidad de Medida", type: "text", required: true, placeholderText: "Ej. Caja, Litro, Kilo", validate: (v) => { if (!v || v.trim() === "") return "Debe especificar una unidad de medida."; return null; }, sanitize: sanitizeTexto, sanitizeWarning: "Solo se permiten letras y espacios. No se permiten numeros ni caracteres especiales." },
     { name: "precio_unitario", label: "Precio Unitario (Lps)", type: "number", step: "0.01", min: "0.01", required: true, validate: (v) => { if (!v || Number(v) <= 0) return "El precio debe ser mayor a 0."; return null; } },
-    { name: "stock_minimo", label: "Stock Mínimo", type: "number", step: "0.01", min: "0", required: true, validate: (v) => { if (v === "" || v === undefined) return "El Stock Mínimo es obligatorio"; if (Number(v) < 0) return "El stock no puede ser negativo"; return null; } },
-    { name: "stock_maximo", label: "Stock Máximo", type: "number", step: "0.01", min: "0", required: true, validate: (v, formData) => { if (v === "" || v === undefined) return "El Stock Máximo es obligatorio"; const valMax = Number(v); const valMin = Number(formData.stock_minimo); if (valMax < 0) return "El stock no puede ser negativo"; if (valMax < valMin) return `El Stock Máximo (${valMax}) no puede ser menor al Mínimo (${valMin}).`; return null; } },
+    { name: "stock_minimo", label: "Stock MÃ­nimo", type: "number", step: "0.01", min: "0", required: true, validate: (v) => { if (v === "" || v === undefined) return "El Stock MÃ­nimo es obligatorio"; if (Number(v) < 0) return "El stock no puede ser negativo"; return null; } },
+    { name: "stock_maximo", label: "Stock MÃ¡ximo", type: "number", step: "0.01", min: "0", required: true, validate: (v, formData) => { if (v === "" || v === undefined) return "El Stock MÃ¡ximo es obligatorio"; const valMax = Number(v); const valMin = Number(formData.stock_minimo); if (valMax < 0) return "El stock no puede ser negativo"; if (valMax < valMin) return `El Stock MÃ¡ximo (${valMax}) no puede ser menor al MÃ­nimo (${valMin}).`; return null; } },
     { name: "id_estado_insumo", label: "Estado del Insumo", type: "select", required: true, options: estados.filter((e) => e.nombre_estado.toLowerCase() === "activo" || e.nombre_estado.toLowerCase() === "inactivo").map((e) => ({ value: e.id_estado_insumo, label: e.nombre_estado })), validate: (v) => { if (!v) return "Debe seleccionar un estado."; return null; } },
   ];
 
   // ============================================================
-  // 🔹 Columnas y extractores
+  // ðŸ”¹ Columnas y extractores
   // ============================================================
-  const columns = ["ID Insumo", "Nombre", "Unidad", "Precio Unitario", "Stock Mínimo", "Stock Máximo", "Estado", "Fecha Creación"];
+  const columns = ["ID Insumo", "Nombre", "Unidad", "Precio Unitario", "Stock MÃ­nimo", "Stock MÃ¡ximo", "Estado", "Fecha CreaciÃ³n"];
 
   const extractors = {
     "ID Insumo": (r) => r.id_insumo,
     Nombre: (r) => r.nombre_insumo,
     Unidad: (r) => r.unidad_medida,
     "Precio Unitario": (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}`,
-    "Stock Mínimo": (r) => parseFloat(r.stock_minimo || 0).toFixed(2),
-    "Stock Máximo": (r) => parseFloat(r.stock_maximo || 0).toFixed(2),
-    Estado: (r) => r.nombre_estado_insumo || "—",
-    "Fecha Creación": (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleString("es-HN", { timeZone: "America/Tegucigalpa", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "—",
+    "Stock MÃ­nimo": (r) => parseFloat(r.stock_minimo || 0).toFixed(2),
+    "Stock MÃ¡ximo": (r) => parseFloat(r.stock_maximo || 0).toFixed(2),
+    Estado: (r) => r.nombre_estado_insumo || "â€”",
+    "Fecha CreaciÃ³n": (r) => r.fecha_creacion ? formatDateTime(r.fecha_creacion) : "â€”",
   };
 
   // ============================================================
-  // 🔹 CRUD
+  // ðŸ”¹ CRUD
   // ============================================================
   const handleInsert = async (nuevo) => {
     try {
       await api.post("/produccion/insumos", { ...nuevo, stock_minimo: parseFloat(nuevo.stock_minimo) || 0, stock_maximo: parseFloat(nuevo.stock_maximo) || 0 });
       const res = await api.get("/produccion/insumos");
       setData(res.data);
-      toast({ title: "✅ Insumo agregado correctamente", status: "success", duration: 3000, isClosable: true });
+      toast({ title: "âœ… Insumo agregado correctamente", status: "success", duration: 3000, isClosable: true });
     } catch (err) {
-      console.error("❌ Error al insertar insumo:", err);
+      console.error("âŒ Error al insertar insumo:", err);
       toast({ title: "Error al agregar insumo", description: err.response?.data?.error || err.message, status: "error", duration: 4000, isClosable: true });
     }
   };
@@ -227,9 +228,9 @@ export default function Insumos() {
       await api.put(`/produccion/insumos/${editado.id_insumo}`, { ...editado, stock_minimo: parseFloat(editado.stock_minimo) || 0, stock_maximo: parseFloat(editado.stock_maximo) || 0 });
       const res = await api.get("/produccion/insumos");
       setData(res.data);
-      toast({ title: "✏️ Insumo actualizado correctamente", status: "success", duration: 3000, isClosable: true });
+      toast({ title: "âœï¸ Insumo actualizado correctamente", status: "success", duration: 3000, isClosable: true });
     } catch (err) {
-      console.error("❌ Error al actualizar insumo:", err);
+      console.error("âŒ Error al actualizar insumo:", err);
       toast({ title: "Error al actualizar insumo", description: err.response?.data?.error || err.message, status: "error", duration: 4000, isClosable: true });
     }
   };
@@ -239,15 +240,15 @@ export default function Insumos() {
       await api.delete(`/produccion/insumos/${id}`);
       const res = await api.get("/produccion/insumos");
       setData(res.data);
-      toast({ title: "🗑️ Insumo eliminado correctamente", status: "info", duration: 3000, isClosable: true });
+      toast({ title: "ðŸ—‘ï¸ Insumo eliminado correctamente", status: "info", duration: 3000, isClosable: true });
     } catch (err) {
-      console.error("❌ Error al eliminar insumo:", err);
+      console.error("âŒ Error al eliminar insumo:", err);
       toast({ title: "Error al eliminar insumo", description: err.response?.data?.error || err.message, status: "error", duration: 4000, isClosable: true });
     }
   };
 
   // ============================================================
-  // 🔧 Helpers de exportación
+  // ðŸ”§ Helpers de exportaciÃ³n
   // ============================================================
   const buildFilterText = (filters = {}) => {
     const parts = [];
@@ -289,7 +290,7 @@ export default function Insumos() {
     });
 
   // ============================================================
-  // 📤 Exportar PDF
+  // ðŸ“¤ Exportar PDF
   // ============================================================
   const handleExportPDF = async (filters = {}) => {
     try {
@@ -305,7 +306,7 @@ export default function Insumos() {
       doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(25, 55, 80);
       doc.text("REPORTE DE INSUMOS", pageWidth / 2, 45, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
-      doc.text(`Generado: ${new Date().toLocaleString()}`, pageWidth / 2, 62, { align: "center" });
+      doc.text(`Generado: ${formatNow()}`, pageWidth / 2, 62, { align: "center" });
       doc.setFontSize(9); doc.setTextColor(120);
       doc.text(`Filtros: ${buildFilterText(filters)}`, pageWidth / 2, 78, { align: "center" });
       doc.setDrawColor(0, 158, 115); doc.setLineWidth(1); doc.line(40, 90, pageWidth - 40, 90);
@@ -317,7 +318,7 @@ export default function Insumos() {
         precio: (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}`,
         stock_min: (r) => parseFloat(r.stock_minimo || 0).toFixed(2),
         stock_max: (r) => parseFloat(r.stock_maximo || 0).toFixed(2),
-        estado: (r) => r.nombre_estado_insumo || "—",
+        estado: (r) => r.nombre_estado_insumo || "â€”",
         fecha: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "",
       };
 
@@ -329,7 +330,7 @@ export default function Insumos() {
         startY: 105, head: [headers], body: tableData,
         styles: { fontSize: 8, cellPadding: 4, valign: "middle" },
         headStyles: { fillColor: [0, 158, 115], textColor: 255, fontStyle: "bold" },
-        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
+        didDrawPage: () => { const ps = doc.internal.pageSize; doc.setFontSize(8); doc.setTextColor(120); doc.text(`PÃ¡gina ${doc.getNumberOfPages()}`, ps.getWidth() - 80, ps.getHeight() - 20); },
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -345,13 +346,13 @@ export default function Insumos() {
       doc.save(`Insumos_Extractus_${new Date().toISOString().split("T")[0]}.pdf`);
       toast({ title: "PDF generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando PDF:", err);
+      console.error("âŒ Error exportando PDF:", err);
       toast({ title: "Error al generar PDF", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // 📊 Exportar Excel
+  // ðŸ“Š Exportar Excel
   // ============================================================
   const handleExportExcel = async (filters = {}) => {
     try {
@@ -367,23 +368,23 @@ export default function Insumos() {
         { key: "nombre", header: "Nombre", width: 25, extract: (r) => r.nombre_insumo || "" },
         { key: "unidad", header: "Unidad de Medida", width: 16, extract: (r) => r.unidad_medida || "" },
         { key: "precio", header: "Precio Unitario", width: 16, extract: (r) => `L. ${parseFloat(r.precio_unitario || 0).toFixed(2)}` },
-        { key: "stock_min", header: "Stock Mínimo", width: 14, extract: (r) => parseFloat(r.stock_minimo || 0).toFixed(2) },
-        { key: "stock_max", header: "Stock Máximo", width: 14, extract: (r) => parseFloat(r.stock_maximo || 0).toFixed(2) },
-        { key: "estado", header: "Estado", width: 12, extract: (r) => r.nombre_estado_insumo || "—" },
-        { key: "fecha", header: "Fecha Creación", width: 14, extract: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "" },
+        { key: "stock_min", header: "Stock MÃ­nimo", width: 14, extract: (r) => parseFloat(r.stock_minimo || 0).toFixed(2) },
+        { key: "stock_max", header: "Stock MÃ¡ximo", width: 14, extract: (r) => parseFloat(r.stock_maximo || 0).toFixed(2) },
+        { key: "estado", header: "Estado", width: 12, extract: (r) => r.nombre_estado_insumo || "â€”" },
+        { key: "fecha", header: "Fecha CreaciÃ³n", width: 14, extract: (r) => r.fecha_creacion ? new Date(r.fecha_creacion).toISOString().split("T")[0] : "" },
       ];
       const columns_exp = allCols.filter((c) => selectedFields.includes(c.key));
       const lastColLetter = String.fromCharCode(64 + columns_exp.length);
 
       ws.mergeCells(`A1:${lastColLetter}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = "Reporte de Insumos — Extractus";
+      titleCell.value = "Reporte de Insumos â€” Extractus";
       titleCell.font = { bold: true, size: 14, color: { argb: "FF009E73" } };
       titleCell.alignment = { horizontal: "center" };
 
       ws.mergeCells(`A2:${lastColLetter}2`);
       const filterCell = ws.getCell("A2");
-      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${new Date().toLocaleString()}`;
+      filterCell.value = `Filtros: ${buildFilterText(filters)}  |  Generado: ${formatNow()}`;
       filterCell.font = { size: 9, italic: true, color: { argb: "FF666666" } };
       filterCell.alignment = { horizontal: "center" };
 
@@ -417,13 +418,13 @@ export default function Insumos() {
       saveAs(new Blob([buffer]), `Insumos_Extractus_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast({ title: "Excel generado correctamente", status: "success", duration: 2500, isClosable: true });
     } catch (err) {
-      console.error("❌ Error exportando Excel:", err);
+      console.error("âŒ Error exportando Excel:", err);
       toast({ title: "Error al generar Excel", description: err.message, status: "error", duration: 4000, isClosable: true });
     } finally { setExporting(false); }
   };
 
   // ============================================================
-  // 🔹 Loader
+  // ðŸ”¹ Loader
   // ============================================================
   if (loading) {
     return (
@@ -434,11 +435,11 @@ export default function Insumos() {
   }
 
   // ============================================================
-  // 🔹 Render principal
+  // ðŸ”¹ Render principal
   // ============================================================
   return (
     <Box bg={pageBg} minH="100vh" p={4}>
-      {/* Botón Atrás */}
+      {/* BotÃ³n AtrÃ¡s */}
       <Tooltip label="Volver al menú Producción" placement="bottom-start">
         <Button
           leftIcon={<Icon as={FaArrowLeft} />}
@@ -535,7 +536,7 @@ export default function Insumos() {
         </CardBody>
       </Card>
 
-      {/* 📤 Modal de Exportación */}
+      {/* ðŸ“¤ Modal de ExportaciÃ³n */}
       <Modal isOpen={exportModal.isOpen} onClose={exportModal.onClose} isCentered size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -554,17 +555,17 @@ export default function Insumos() {
             <FormControl mb={4}>
               <FormLabel fontWeight="bold">Formato</FormLabel>
               <Select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} bg={modalInputBg}>
-                <option value="excel">📊 Excel (.xlsx)</option>
-                <option value="pdf">📄 PDF (.pdf)</option>
+                <option value="excel">ðŸ“Š Excel (.xlsx)</option>
+                <option value="pdf">ðŸ“„ PDF (.pdf)</option>
               </Select>
             </FormControl>
 
             <Divider my={4} />
-            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportación</Text>
+            <Text fontWeight="bold" mb={3} color={accent}>Filtros de exportaciÃ³n</Text>
 
             <FormControl mb={3}>
               <FormLabel fontSize="sm">Por nombre</FormLabel>
-              <Input placeholder="Ej: Sal, Azúcar" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
+              <Input placeholder="Ej: Sal, AzÃºcar" value={expNombre} onChange={(e) => setExpNombre(e.target.value)} size="sm" bg={modalInputBg} />
             </FormControl>
 
             <FormControl mb={3}>
@@ -614,3 +615,5 @@ export default function Insumos() {
     </Box>
   );
 }
+
+

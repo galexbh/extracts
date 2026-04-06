@@ -157,6 +157,20 @@ const insertUsuario = async (req, res) => {
   const { nombre_usuario, username, password, id_rol, id_estado_usuario } = req.body;
 
   try {
+    // 🛡️ Validaciones previas (Backend)
+    if (!username || !username.trim()) {
+      return res.status(400).json({ error: "El correo electrónico es obligatorio." });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: "La contraseña es obligatoria (mín. 6 caracteres)." });
+    }
+    if (!id_rol) {
+      return res.status(400).json({ error: "El rol es obligatorio." });
+    }
+    if (!id_estado_usuario) {
+      return res.status(400).json({ error: "El estado del usuario es obligatorio." });
+    }
+
     // 🔥 Crear usuario en Firebase
     const userRecord = await admin.auth().createUser({
       email: username,
@@ -201,8 +215,19 @@ const updateUsuario = async (req, res) => {
   const { username, password, id_rol, id_estado_usuario, mfa_secret, mfa_enabled } = req.body;
 
   try {
+    // 🛡️ Validaciones previas
+    if (password && password.length < 6) {
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres." });
+    }
+    if (!id_rol) {
+      return res.status(400).json({ error: "El rol es obligatorio." });
+    }
+    if (!id_estado_usuario) {
+      return res.status(400).json({ error: "El estado del usuario es obligatorio." });
+    }
+
     const result = await pool.query(
-      `SELECT uid_firebase, username FROM seguridad.tbl_usuarios WHERE id_usuario = $1;`,
+      `SELECT uid_firebase, username, id_rol, id_estado_usuario FROM seguridad.tbl_usuarios WHERE id_usuario = $1;`,
       [id_usuario]
     );
 
@@ -293,7 +318,11 @@ const updateUsuario = async (req, res) => {
       accion: "UPDATE",
       descripcion: `Usuario ID ${id_usuario} actualizado por ${modEmail}`,
       detalle: JSON.stringify({
-        antes: { username: emailActual },
+        antes: {
+          username: emailActual,
+          id_rol: result.rows[0].id_rol,
+          id_estado_usuario: result.rows[0].id_estado_usuario
+        },
         despues: { username: newEmail, id_rol, id_estado_usuario },
       }),
     });
@@ -311,7 +340,7 @@ const deleteUsuario = async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT uid_firebase FROM seguridad.tbl_usuarios WHERE id_usuario = $1;`,
+      `SELECT * FROM seguridad.tbl_usuarios WHERE id_usuario = $1;`,
       [id]
     );
 
@@ -333,6 +362,7 @@ const deleteUsuario = async (req, res) => {
       }
     } else {
       console.warn(`[API] ⚠️ No existe usuario con id_usuario=${id} en PostgreSQL`);
+      return res.status(404).json({ error: "Usuario no encontrado para eliminar." });
     }
 
     await pool.query(`CALL seguridad.sp_usuarios_delete($1);`, [parseInt(id)]);
@@ -345,7 +375,7 @@ const deleteUsuario = async (req, res) => {
       tabla: "seguridad.tbl_usuarios",
       accion: "DELETE",
       descripcion: `Usuario ID ${id} eliminado por ${delEmail}`,
-      detalle: JSON.stringify({ id_usuario: id, uid_firebase: result.rows[0]?.uid_firebase }),
+      detalle: JSON.stringify({ antes: result.rows[0], despues: null }),
     });
 
     res.json({
